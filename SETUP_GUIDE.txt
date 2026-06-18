@@ -1,0 +1,193 @@
+# Smiles Fleet Manager — Setup Guide
+# Follow these steps in order. Should take about 30–45 minutes.
+
+═══════════════════════════════════════════════
+STEP 1 — SET UP YOUR GOOGLE SHEET
+═══════════════════════════════════════════════
+
+1. Go to sheets.google.com and create a new spreadsheet.
+   Name it: "Smiles Fleet Manager"
+
+2. You will need THREE tabs (sheets) inside it:
+   - Fleet
+   - History
+   - Config
+
+   (Click the + button at the bottom to add tabs. Name them exactly as above.)
+
+3. In the Fleet tab, add these headers in Row 1:
+   A1: Plate
+   B1: Type
+   C1: Location
+   D1: Status
+   E1: Current Client
+   F1: Client Phone
+   G1: Return Date
+   H1: Remarks
+
+4. Copy your 380 cars from your existing spreadsheet into
+   columns A and B (Plate and Type). Leave the rest blank for now.
+
+5. In the History tab, add these headers in Row 1:
+   A1: Timestamp
+   B1: Plate
+   C1: Type
+   D1: Action
+   E1: Client
+   F1: Client Phone
+   G1: Return Date
+   H1: Location
+   I1: Remarks
+   J1: Staff Name
+
+6. In the Config tab, add these headers in Row 1:
+   A1: Type
+   B1: Value
+
+   Then add the following rows:
+   A2: Staff    B2: Ramadhan Karim
+   A3: Staff    B3: Neema Sawaya
+   A4: Staff    B4: Rahma Mkali
+   A5: Staff    B5: Farhiya Ahmed
+   A6: Staff    B6: Menhal Kassam
+   A7: Location B7: Dar es Salaam
+   A8: Location B8: Arusha
+   A9: Location B9: Mwanza
+
+
+═══════════════════════════════════════════════
+STEP 2 — ADD THE GOOGLE APPS SCRIPT (BACKEND)
+═══════════════════════════════════════════════
+
+1. Inside your Google Sheet, click:
+   Extensions → Apps Script
+
+2. Delete ALL the existing code in the editor.
+
+3. Open the file "Code.gs" from this project folder.
+   Copy its entire contents and paste it into the Apps Script editor.
+
+4. Click Save (💾 icon or Ctrl+S).
+
+5. Deploy as a Web App:
+   a. Click "Deploy" → "New deployment"
+   b. Click the gear icon ⚙ next to "Type" → select "Web app"
+   c. Set these options:
+      - Description: Smiles Fleet v1
+      - Execute as: Me
+      - Who has access: Anyone
+   d. Click "Deploy"
+   e. It will ask you to authorize — click "Authorize access" and allow it.
+   f. COPY the Web App URL — it looks like:
+      https://script.google.com/macros/s/ABC123.../exec
+   
+   ⚠️  Save this URL — you will need it in Step 3.
+
+6. Test the script is working:
+   Open a browser and visit:
+   https://script.google.com/macros/s/YOUR_ID/exec?action=getConfig
+   
+   You should see JSON like: {"success":true,"staff":[...],"locations":[...]}
+
+
+═══════════════════════════════════════════════
+STEP 3 — SET UP THE WEB APP (REACT)
+═══════════════════════════════════════════════
+
+Prerequisites: Node.js installed (download from nodejs.org if needed)
+
+1. Open a terminal / command prompt.
+
+2. Navigate to this project folder:
+   cd smiles-fleet-app
+
+3. Install dependencies:
+   npm install
+
+4. Create your environment file:
+   - Copy .env.example to a new file called .env.local
+   - Open .env.local and replace the URL with your Apps Script URL from Step 2:
+     VITE_SCRIPT_URL=https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec
+
+5. Run the app locally to test it:
+   npm run dev
+   
+   Open http://localhost:5173 in your browser.
+   You should see the staff name selection screen.
+
+
+═══════════════════════════════════════════════
+STEP 4 — DEPLOY TO VERCEL (FREE HOSTING)
+═══════════════════════════════════════════════
+
+1. Create a free account at vercel.com
+
+2. Push your project to GitHub:
+   git init
+   git add .
+   git commit -m "Smiles Fleet Manager v1"
+   git branch -M main
+   git remote add origin https://github.com/YOUR_USERNAME/smiles-fleet.git
+   git push -u origin main
+
+3. In Vercel:
+   a. Click "Add New Project"
+   b. Import your GitHub repo
+   c. In "Environment Variables" add:
+      Name:  VITE_SCRIPT_URL
+      Value: https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec
+   d. Click "Deploy"
+
+4. Vercel gives you a URL like: https://smiles-fleet.vercel.app
+   Share this URL with your staff!
+
+5. (Optional) Add a custom domain like fleet.smilesrental.co.tz
+   in Vercel → Project Settings → Domains.
+
+
+═══════════════════════════════════════════════
+STEP 5 — UPDATING THE SCRIPT IN FUTURE
+═══════════════════════════════════════════════
+
+If you ever change Code.gs:
+1. Go back to Apps Script editor
+2. Click Deploy → Manage deployments
+3. Click the pencil ✏ on your deployment
+4. Change version to "New version"
+5. Click Deploy
+
+⚠️  The URL stays the same — no need to update your web app.
+
+
+═══════════════════════════════════════════════
+PROJECT FILE STRUCTURE
+═══════════════════════════════════════════════
+
+smiles-fleet-app/
+├── Code.gs                        ← Google Apps Script (paste into Google Sheet)
+├── index.html                     ← App entry point
+├── package.json                   ← Dependencies
+├── vite.config.js                 ← Build config
+├── .env.example                   ← Copy to .env.local, add your script URL
+└── src/
+    ├── main.jsx                   ← React root
+    ├── App.jsx                    ← App shell + routing + staff gate
+    ├── lib/
+    │   └── api.js                 ← All Google Sheets API calls
+    ├── components/
+    │   ├── StaffGate.jsx          ← Name selection screen
+    │   ├── Layout.jsx             ← Top nav
+    │   └── ActionModal.jsx        ← Check out / return / maintenance modal
+    └── pages/
+        ├── FleetPage.jsx          ← Main fleet dashboard
+        └── HistoryPage.jsx        ← Activity history log
+
+
+═══════════════════════════════════════════════
+NEED HELP?
+═══════════════════════════════════════════════
+
+Common issues:
+- "Failed to load fleet" → Check your VITE_SCRIPT_URL is correct in .env.local
+- Apps Script authorization error → Re-deploy and re-authorize
+- Blank page → Run "npm run dev" and check the browser console for errors
