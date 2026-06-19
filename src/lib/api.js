@@ -28,6 +28,7 @@ export const api = {
   getFleet:       ()     => get("getFleet"),
   getHistory:     ()     => get("getHistory"),
   getConfig:      ()     => get("getConfig"),
+  verifyStaff:    (body) => post({ action: "verifyStaff",    ...body }),
   checkOut:       (body) => post({ action: "checkOut",       ...body }),
   markReturned:   (body) => post({ action: "markReturned",   ...body }),
   extendBooking:  (body) => post({ action: "extendBooking",  ...body }),
@@ -35,6 +36,6 @@ export const api = {
   setGarage:      (body) => post({ action: "setGarage",      ...body }),
   setAvailable:   (body) => post({ action: "setAvailable",   ...body }),
   updateLocation: (body) => post({ action: "updateLocation", ...body }),
-  addStaff:       (name) => post({ action: "addStaff",       name }),
+  addStaff:       (body) => post({ action: "addStaff",       ...body }),
   addLocation:    (name) => post({ action: "addLocation",    name }),
 };
