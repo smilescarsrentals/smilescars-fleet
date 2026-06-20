@@ -7,7 +7,6 @@ const ACTION_COLORS = {
   "Returned":           { bg: "#dcfce7", color: "#15803d" },
   "Booking Extended":   { bg: "#e0f2fe", color: "#0369a1" },
   "Sent to Maintenance":{ bg: "#ffedd5", color: "#c2410c" },
-  "Sent to Garage":     { bg: "#ede9fe", color: "#6d28d9" },
   "Marked Available":   { bg: "#dcfce7", color: "#15803d" },
   "Location Updated":   { bg: "#f3f4f6", color: "#374151" },
 };
@@ -102,7 +101,7 @@ export default function HistoryPage() {
         <table style={styles.table}>
           <thead>
             <tr>
-              {["Time","Plate","Type","Action","Client","Return Date","KM Out","KM In","Amount","Location","Remarks","Staff"].map(h => (
+              {["Time","Plate","Type","Action","Client","Return Date","Garage","KM/Fuel","Amount","Location","Remarks","Staff"].map(h => (
                 <th key={h} style={styles.th}>{h}</th>
               ))}
             </tr>
@@ -129,18 +128,27 @@ export default function HistoryPage() {
                         </div>
                       : <span style={{ color: "#ccc" }}>—</span>}
                   </td>
-                 <td style={{ ...styles.td, fontSize: 12, color: "#555", whiteSpace: "nowrap" }}>
-  {fmtDate(h.returnDate)}
-</td>
-                  <td style={{ ...styles.td, fontSize: 12, color: "#555" }}>{h.kmOut || "—"}</td>
-                  <td style={{ ...styles.td, fontSize: 12, color: "#555" }}>{h.kmIn  || "—"}</td>
+                  <td style={{ ...styles.td, fontSize: 12, color: "#555", whiteSpace: "nowrap" }}>
+                    {fmtDate(h.returnDate)}
+                  </td>
+                  <td style={{ ...styles.td, fontSize: 12, color: "#c2410c", fontWeight: 500 }}>{h.garage || "—"}</td>
+                  <td style={{ ...styles.td, fontSize: 12, color: "#555" }}>
+                    {h.fuelOut || h.fuelIn ? `${h.fuelOut || "—"} → ${h.fuelIn || "—"}` : "—"}
+                  </td>
                   <td style={{ ...styles.td, fontSize: 12, color: "#555", whiteSpace: "nowrap" }}>
                     {fmtMoney(h.amountCharged)}
+                    {(h.policeFine || h.parkingFine) && (
+                      <div style={{ fontSize: 10, color: "#dc2626", marginTop: 2 }}>
+                        {h.policeFine ? `Police: ${fmtMoney(h.policeFine)}` : ""}
+                        {h.policeFine && h.parkingFine ? " · " : ""}
+                        {h.parkingFine ? `Parking: ${fmtMoney(h.parkingFine)}` : ""}
+                      </div>
+                    )}
                   </td>
                   <td style={styles.td}>
                     {h.location ? <span style={styles.locChip}>{h.location}</span> : <span style={{ color: "#ccc" }}>—</span>}
                   </td>
-                  <td style={{ ...styles.td, fontSize: 12, color: "#777", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  <td style={{ ...styles.td, fontSize: 12, color: "#777", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                     title={h.remarks}>{h.remarks || "—"}</td>
                   <td style={{ ...styles.td, fontSize: 12, fontWeight: 500, color: "#374151" }}>{h.staffName || "—"}</td>
                 </tr>

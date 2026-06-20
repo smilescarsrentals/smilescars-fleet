@@ -1,5 +1,7 @@
 // ============================================================
-//  SMILES FLEET MANAGER — Google Apps Script Backend v4
+//  SMILES FLEET MANAGER — Google Apps Script Backend v5
+//  Maintenance + Garage merged into one status: "Maintenance"
+//  Garage is now a dropdown field, not a separate status
 // ============================================================
 
 const SPREADSHEET_ID = "1xK1tVQa1bHR-FVb1Tr2MjZdtm3_QHt1PdulfVLgoFtc";
@@ -35,11 +37,11 @@ function doPost(e) {
     if (action === "markReturned")    return respond(markReturned(body));
     if (action === "extendBooking")   return respond(extendBooking(body));
     if (action === "setMaintenance")  return respond(setMaintenance(body));
-    if (action === "setGarage")       return respond(setGarage(body));
     if (action === "setAvailable")    return respond(setAvailable(body));
     if (action === "updateLocation")  return respond(updateLocation(body));
     if (action === "addStaff")        return respond(addStaff(body));
     if (action === "addLocation")     return respond(addConfigItem("Location", body.name));
+    if (action === "addGarage")       return respond(addConfigItem("Garage",   body.name));
     return respond({ error: "Unknown action: " + action });
   } catch (err) {
     return respond({ error: err.message });
@@ -49,7 +51,7 @@ function doPost(e) {
 // ── Fleet Sheet ───────────────────────────────────────────────
 // Columns: A=Plate B=Type C=Location D=Status E=CurrentClient
 //          F=ClientPhone G=BookedFrom H=ReturnDate I=Remarks
-//          J=FuelOut K=AmountCharged
+//          J=FuelOut K=AmountCharged L=Garage
 
 function getFleet() {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(FLEET_SHEET);
@@ -67,6 +69,7 @@ function getFleet() {
     remarks:       row[8]  || "",
     fuelOut:       row[9]  || "",
     amountCharged: row[10] || "",
+    garage:        row[11] || "",
   }));
   return { success: true, data };
 }
@@ -90,12 +93,13 @@ function updateFleetRow(plate, fields) {
   if (fields.remarks       !== undefined) sheet.getRange(rowIndex, 9).setValue(fields.remarks);
   if (fields.fuelOut       !== undefined) sheet.getRange(rowIndex, 10).setValue(fields.fuelOut);
   if (fields.amountCharged !== undefined) sheet.getRange(rowIndex, 11).setValue(fields.amountCharged);
+  if (fields.garage        !== undefined) sheet.getRange(rowIndex, 12).setValue(fields.garage);
 }
 
 // ── History Sheet ─────────────────────────────────────────────
 // Columns: A=Timestamp B=Plate C=Type D=Action E=Client F=ClientPhone
-//          G=BookedFrom H=ReturnDate I=Location I=Remarks J=StaffName
-//          K=FuelOut L=FuelIn M=AmountCharged N=PoliceFine O=ParkingFine
+//          G=BookedFrom H=ReturnDate I=Location J=Remarks K=StaffName
+//          L=FuelOut M=FuelIn N=AmountCharged O=PoliceFine P=ParkingFine Q=Garage
 
 function addHistory(entry) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(HISTORY_SHEET);
@@ -108,14 +112,15 @@ function addHistory(entry) {
     entry.clientPhone   || "",
     entry.bookedFrom    || "",
     entry.returnDate    || "",
-    entry.location      || "",
-    entry.remarks       || "",
-    entry.staffName     || "",
-    entry.fuelOut       || "",
-    entry.fuelIn        || "",
-    entry.amountCharged || "",
-    entry.policeFine    || "",
-    entry.parkingFine   || "",
+    entry.location       || "",
+    entry.remarks        || "",
+    entry.staffName       || "",
+    entry.fuelOut          || "",
+    entry.fuelIn             || "",
+    entry.amountCharged       || "",
+    entry.policeFine            || "",
+    entry.parkingFine             || "",
+    entry.garage                    || "",
   ]);
 }
 
@@ -140,12 +145,13 @@ function getHistory() {
     amountCharged: row[13] || "",
     policeFine:    row[14] || "",
     parkingFine:   row[15] || "",
+    garage:        row[16] || "",
   }));
   return { success: true, data };
 }
 
 // ── Staff Login ───────────────────────────────────────────────
-// Config sheet: Col A = Type, Col B = Name/Value, Col C = Password (for Staff rows)
+// Config sheet: Col A = Type, Col B = Name/Value, Col C = Password (Staff rows)
 
 function verifyStaff(body) {
   if (!body.name || !body.password) throw new Error("Name and password required");
@@ -173,28 +179,19 @@ function checkOut(body) {
   if (!body.staffName) throw new Error("Staff name is required");
 
   updateFleetRow(body.plate, {
-    status:        "Rented",
-    currentClient: body.client,
-    clientPhone:   body.clientPhone   || "",
-    bookedFrom:    body.bookedFrom    || "",
-    returnDate:    body.returnDate    || "",
-    remarks:       body.remarks       || "",
-    location:      body.location      || "",
-    fuelOut:       body.fuelOut       || "",
-    amountCharged: body.amountCharged || "",
+    status: "Rented", currentClient: body.client,
+    clientPhone: body.clientPhone || "", bookedFrom: body.bookedFrom || "",
+    returnDate: body.returnDate || "", remarks: body.remarks || "",
+    location: body.location || "", fuelOut: body.fuelOut || "",
+    amountCharged: body.amountCharged || "", garage: "",
   });
 
   addHistory({
-    plate:         body.plate,        type:          body.type,
-    action:        "Checked Out",     client:        body.client,
-    clientPhone:   body.clientPhone   || "",
-    bookedFrom:    body.bookedFrom    || "",
-    returnDate:    body.returnDate    || "",
-    location:      body.location      || "",
-    remarks:       body.remarks       || "",
-    staffName:     body.staffName,
-    fuelOut:       body.fuelOut       || "",
-    amountCharged: body.amountCharged || "",
+    plate: body.plate, type: body.type, action: "Checked Out", client: body.client,
+    clientPhone: body.clientPhone || "", bookedFrom: body.bookedFrom || "",
+    returnDate: body.returnDate || "", location: body.location || "",
+    remarks: body.remarks || "", staffName: body.staffName,
+    fuelOut: body.fuelOut || "", amountCharged: body.amountCharged || "",
   });
 
   return { success: true };
@@ -205,24 +202,21 @@ function markReturned(body) {
   if (!body.staffName) throw new Error("Staff name is required");
 
   const { sheet, rowIndex } = findRow(body.plate);
-  const row = sheet.getRange(rowIndex, 1, 1, 11).getValues()[0];
+  const row = sheet.getRange(rowIndex, 1, 1, 12).getValues()[0];
 
   updateFleetRow(body.plate, {
     status: "Available", currentClient: "", clientPhone: "",
     bookedFrom: "", returnDate: "", remarks: body.remarks || "",
-    fuelOut: "", amountCharged: "",
+    fuelOut: "", amountCharged: "", garage: "",
   });
 
   addHistory({
-    plate:         body.plate,           type:          body.type || row[1],
-    action:        "Returned",           client:        row[4],
-    clientPhone:   row[5],              bookedFrom:    row[6],
-    returnDate:    row[7],              location:      body.location || row[2],
-    remarks:       body.remarks || "",  staffName:     body.staffName,
-    fuelOut:       row[9],              fuelIn:        body.fuelIn        || "",
+    plate: body.plate, type: body.type || row[1], action: "Returned",
+    client: row[4], clientPhone: row[5], bookedFrom: row[6], returnDate: row[7],
+    location: body.location || row[2], remarks: body.remarks || "", staffName: body.staffName,
+    fuelOut: row[9], fuelIn: body.fuelIn || "",
     amountCharged: body.amountCharged || row[10] || "",
-    policeFine:    body.policeFine    || "",
-    parkingFine:   body.parkingFine   || "",
+    policeFine: body.policeFine || "", parkingFine: body.parkingFine || "",
   });
 
   return { success: true };
@@ -234,40 +228,49 @@ function extendBooking(body) {
   if (!body.staffName)  throw new Error("Staff name is required");
 
   const { sheet, rowIndex } = findRow(body.plate);
-  const row = sheet.getRange(rowIndex, 1, 1, 11).getValues()[0];
+  const row = sheet.getRange(rowIndex, 1, 1, 12).getValues()[0];
   const oldReturnDate = row[7];
 
   updateFleetRow(body.plate, { returnDate: body.returnDate, remarks: body.remarks || "" });
 
   addHistory({
-    plate:      body.plate,       type:       body.type || row[1],
-    action:     "Booking Extended", client:   row[4],
-    clientPhone:row[5],           bookedFrom: row[6],
-    returnDate: body.returnDate,  location:   body.location || row[2],
-    remarks:    `Extended from ${oldReturnDate} to ${body.returnDate}. ${body.remarks || ""}`.trim(),
-    staffName:  body.staffName,
+    plate: body.plate, type: body.type || row[1], action: "Booking Extended",
+    client: row[4], clientPhone: row[5], bookedFrom: row[6], returnDate: body.returnDate,
+    location: body.location || row[2],
+    remarks: `Extended from ${oldReturnDate} to ${body.returnDate}. ${body.remarks || ""}`.trim(),
+    staffName: body.staffName,
   });
 
   return { success: true };
 }
 
 function setMaintenance(body) {
-  if (!body.plate || !body.staffName) throw new Error("Plate and staff required");
-  updateFleetRow(body.plate, { status: "Maintenance", currentClient: "", clientPhone: "", bookedFrom: "", returnDate: "", remarks: body.remarks || "", fuelOut: "", amountCharged: "" });
-  addHistory({ plate: body.plate, type: body.type || "", action: "Sent to Maintenance", remarks: body.remarks || "", location: body.location || "", staffName: body.staffName });
-  return { success: true };
-}
+  if (!body.plate)     throw new Error("Plate is required");
+  if (!body.staffName) throw new Error("Staff name is required");
+  if (!body.garage)    throw new Error("Garage is required");
 
-function setGarage(body) {
-  if (!body.plate || !body.staffName) throw new Error("Plate and staff required");
-  updateFleetRow(body.plate, { status: "Garage", currentClient: "", clientPhone: "", bookedFrom: "", returnDate: "", remarks: body.remarks || "", fuelOut: "", amountCharged: "" });
-  addHistory({ plate: body.plate, type: body.type || "", action: "Sent to Garage", remarks: body.remarks || "", location: body.location || "", staffName: body.staffName });
+  updateFleetRow(body.plate, {
+    status: "Maintenance", currentClient: "", clientPhone: "",
+    bookedFrom: "", returnDate: "", remarks: body.remarks || "",
+    fuelOut: "", amountCharged: "", garage: body.garage,
+  });
+
+  addHistory({
+    plate: body.plate, type: body.type || "", action: "Sent to Maintenance",
+    remarks: body.remarks || "", location: body.location || "",
+    staffName: body.staffName, garage: body.garage,
+  });
+
   return { success: true };
 }
 
 function setAvailable(body) {
   if (!body.plate || !body.staffName) throw new Error("Plate and staff required");
-  updateFleetRow(body.plate, { status: "Available", currentClient: "", clientPhone: "", bookedFrom: "", returnDate: "", remarks: body.remarks || "", fuelOut: "", amountCharged: "" });
+  updateFleetRow(body.plate, {
+    status: "Available", currentClient: "", clientPhone: "",
+    bookedFrom: "", returnDate: "", remarks: body.remarks || "",
+    fuelOut: "", amountCharged: "", garage: "",
+  });
   addHistory({ plate: body.plate, type: body.type || "", action: "Marked Available", remarks: body.remarks || "", location: body.location || "", staffName: body.staffName });
   return { success: true };
 }
@@ -286,7 +289,8 @@ function getConfig() {
   const rows      = sheet.getDataRange().getValues();
   const staff     = rows.filter(r => r[0] === "Staff").map(r => r[1]).filter(Boolean);
   const locations = rows.filter(r => r[0] === "Location").map(r => r[1]).filter(Boolean);
-  return { success: true, staff, locations };
+  const garages   = rows.filter(r => r[0] === "Garage").map(r => r[1]).filter(Boolean);
+  return { success: true, staff, locations, garages };
 }
 
 function addConfigItem(type, name) {
@@ -296,22 +300,28 @@ function addConfigItem(type, name) {
   return { success: true };
 }
 
-// ── Run once to update sheet headers ─────────────────────────
+// ── Run once: update headers + seed garages ───────────────────
 function updateHeaders() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-  ss.getSheetByName(FLEET_SHEET).getRange(1, 1, 1, 11).setValues([[
+  ss.getSheetByName(FLEET_SHEET).getRange(1, 1, 1, 12).setValues([[
     "Plate","Type","Location","Status","Current Client",
     "Client Phone","Booked From","Return Date","Remarks",
-    "Fuel Out","Amount Charged (TZS)"
+    "Fuel Out","Amount Charged (TZS)","Garage"
   ]]).setFontWeight("bold");
 
-  ss.getSheetByName(HISTORY_SHEET).getRange(1, 1, 1, 16).setValues([[
+  ss.getSheetByName(HISTORY_SHEET).getRange(1, 1, 1, 17).setValues([[
     "Timestamp","Plate","Type","Action","Client","Client Phone",
     "Booked From","Return Date","Location","Remarks","Staff Name",
-    "Fuel Out","Fuel In","Amount Charged (TZS)","Police Fine (TZS)","Parking Fine (TZS)"
+    "Fuel Out","Fuel In","Amount Charged (TZS)","Police Fine (TZS)","Parking Fine (TZS)","Garage"
   ]]).setFontWeight("bold");
 
-  // Add Password column header to Config
   ss.getSheetByName(CONFIG_SHEET).getRange(1, 3).setValue("Password").setFontWeight("bold");
+}
+
+// ── Run once: seed the garage list ─────────────────────────────
+function seedGarages() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
+  const garages = ["SmilesCars Garage", "Zain's Garage", "AutoExpress", "AutoINC", "AtTheWheel", "Waziri"];
+  garages.forEach(g => sheet.appendRow(["Garage", g]));
 }

@@ -33,9 +33,9 @@ export const api = {
   markReturned:   (body) => post({ action: "markReturned",   ...body }),
   extendBooking:  (body) => post({ action: "extendBooking",  ...body }),
   setMaintenance: (body) => post({ action: "setMaintenance", ...body }),
-  setGarage:      (body) => post({ action: "setGarage",      ...body }),
   setAvailable:   (body) => post({ action: "setAvailable",   ...body }),
   updateLocation: (body) => post({ action: "updateLocation", ...body }),
   addStaff:       (body) => post({ action: "addStaff",       ...body }),
   addLocation:    (name) => post({ action: "addLocation",    name }),
+  addGarage:      (name) => post({ action: "addGarage",      name }),
 };

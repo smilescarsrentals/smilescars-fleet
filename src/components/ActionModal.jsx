@@ -6,13 +6,12 @@ const ACTIONS = {
   extendBooking:  { title: "Extend Booking",     color: "#0284c7", btnLabel: "Confirm Extension" },
   markReturned:   { title: "Mark as Returned",   color: "#2563eb", btnLabel: "Confirm Return"    },
   setMaintenance: { title: "Send to Maintenance",color: "#d97706", btnLabel: "Confirm"           },
-  setGarage:      { title: "Send to Garage",     color: "#7c3aed", btnLabel: "Confirm"           },
   setAvailable:   { title: "Mark as Available",  color: "#16a34a", btnLabel: "Confirm"           },
 };
 
 const FUEL_LEVELS = ["Full", "3/4", "1/2", "1/4", "Empty"];
 
-export default function ActionModal({ car, action, locations, staffName, onConfirm, onClose, loading }) {
+export default function ActionModal({ car, action, locations, garages, staffName, onConfirm, onClose, loading }) {
   const cfg = ACTIONS[action];
   const today = new Date().toISOString().split("T")[0];
 
@@ -29,19 +28,34 @@ export default function ActionModal({ car, action, locations, staffName, onConfi
   const [parkingFine, setParkingFine] = useState("");
   const [newLoc,      setNewLoc]      = useState("");
   const [addingLoc,   setAddingLoc]   = useState(false);
+  const [garage,      setGarage]      = useState("");
+  const [newGarage,   setNewGarage]   = useState("");
+  const [addingGarage,setAddingGarage]= useState(false);
   const [err,         setErr]         = useState("");
 
-  const needsClient = action === "checkOut";
-  const isExtend    = action === "extendBooking";
-  const isReturn    = action === "markReturned";
+  const needsClient   = action === "checkOut";
+  const isExtend      = action === "extendBooking";
+  const isReturn      = action === "markReturned";
+  const isMaintenance = action === "setMaintenance";
 
   const handleSubmit = () => {
     setErr("");
     if (needsClient && !client.trim()) { setErr("Client name is required."); return; }
     if (needsClient && !bookedFrom)    { setErr("Booked from date is required."); return; }
     if ((needsClient || isExtend) && !returnDate) { setErr("Return date is required."); return; }
+    if (isMaintenance) {
+      const g = addingGarage ? newGarage.trim() : garage;
+      if (!g) { setErr("Please select or add a garage."); return; }
+    }
     const loc = addingLoc ? newLoc.trim() : location;
-    onConfirm({ client, clientPhone, bookedFrom, returnDate, location: loc, remarks, fuelOut, fuelIn, amount, policeFine, parkingFine, newLocation: addingLoc ? loc : null });
+    const gar = addingGarage ? newGarage.trim() : garage;
+    onConfirm({
+      client, clientPhone, bookedFrom, returnDate, location: loc, remarks,
+      fuelOut, fuelIn, amount, policeFine, parkingFine,
+      garage: gar,
+      newLocation: addingLoc ? loc : null,
+      newGarage: addingGarage ? gar : null,
+    });
   };
 
   return (
@@ -92,7 +106,7 @@ export default function ActionModal({ car, action, locations, staffName, onConfi
             </>
           )}
 
-          {/* Extend — show current client + new date */}
+          {/* Extend */}
           {isExtend && (
             <>
               <div style={styles.field}>
@@ -108,7 +122,7 @@ export default function ActionModal({ car, action, locations, staffName, onConfi
             </>
           )}
 
-          {/* Fuel Out — checkout only */}
+          {/* Fuel Out + Amount — checkout only */}
           {needsClient && (
             <div style={styles.twoCol}>
               <div style={styles.field}>
@@ -158,6 +172,30 @@ export default function ActionModal({ car, action, locations, staffName, onConfi
             </>
           )}
 
+          {/* Garage — maintenance only */}
+          {isMaintenance && (
+            <div style={styles.field}>
+              <label style={styles.label}>Garage *</label>
+              {!addingGarage ? (
+                <select style={styles.input} value={garage} onChange={e => {
+                  if (e.target.value === "__new__") setAddingGarage(true);
+                  else setGarage(e.target.value);
+                }}>
+                  <option value="">— Select garage —</option>
+                  {(garages || []).map(g => <option key={g} value={g}>{g}</option>)}
+                  <option value="__new__">+ Add new garage</option>
+                </select>
+              ) : (
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input style={{ ...styles.input, flex: 1 }}
+                    placeholder="New garage name"
+                    value={newGarage} onChange={e => setNewGarage(e.target.value)} autoFocus />
+                  <button style={styles.cancelSmall} onClick={() => setAddingGarage(false)}>✕</button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Location */}
           <div style={styles.field}>
             <label style={styles.label}>Location</label>
@@ -188,8 +226,7 @@ export default function ActionModal({ car, action, locations, staffName, onConfi
               placeholder={
                 action === "checkOut"       ? "e.g. Client heading to Mombasa" :
                 action === "extendBooking"  ? "e.g. Client requested 3 more days" :
-                action === "setMaintenance" ? "e.g. Engine oil leak" :
-                action === "setGarage"      ? "e.g. Taken to Mwangi Garage" :
+                action === "setMaintenance" ? "e.g. Engine oil leak, brake service" :
                 action === "markReturned"   ? "e.g. Returned with minor scratch" :
                 "Optional note"
               }
