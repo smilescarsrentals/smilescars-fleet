@@ -19,6 +19,7 @@ export default function Layout({ children, staffName, onSignOut, logo }) {
           <nav style={styles.nav}>
             <NavLink to="/"        style={navStyle} end>Fleet</NavLink>
             <NavLink to="/history" style={navStyle}>History</NavLink>
+            <NavLink to="/sold"    style={navStyle}>Sold</NavLink>
           </nav>
           <div style={styles.user}>
             <div style={styles.userAvatar}>{staffName.charAt(0).toUpperCase()}</div>

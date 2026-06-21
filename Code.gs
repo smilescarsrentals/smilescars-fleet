@@ -1,13 +1,14 @@
 // ============================================================
-//  SMILES FLEET MANAGER — Google Apps Script Backend v5
-//  Maintenance + Garage merged into one status: "Maintenance"
-//  Garage is now a dropdown field, not a separate status
+//  SMILES FLEET MANAGER — Google Apps Script Backend v6
+//  New: Currency, Checkout fines, Payment status, Sold cars,
+//       Move car (reuses Location Updated), Expiring/Unpaid views
 // ============================================================
 
 const SPREADSHEET_ID = "1xK1tVQa1bHR-FVb1Tr2MjZdtm3_QHt1PdulfVLgoFtc";
 const FLEET_SHEET    = "Fleet";
 const HISTORY_SHEET  = "History";
 const CONFIG_SHEET   = "Config";
+const SOLD_SHEET     = "Sold";
 
 function respond(data) {
   return ContentService
@@ -22,6 +23,7 @@ function doGet(e) {
     if (action === "getFleet")   return respond(getFleet());
     if (action === "getHistory") return respond(getHistory());
     if (action === "getConfig")  return respond(getConfig());
+    if (action === "getSold")    return respond(getSold());
     return respond({ error: "Unknown action: " + action });
   } catch (err) {
     return respond({ error: err.message });
@@ -39,6 +41,8 @@ function doPost(e) {
     if (action === "setMaintenance")  return respond(setMaintenance(body));
     if (action === "setAvailable")    return respond(setAvailable(body));
     if (action === "updateLocation")  return respond(updateLocation(body));
+    if (action === "updatePayment")   return respond(updatePayment(body));
+    if (action === "markSold")        return respond(markSold(body));
     if (action === "addStaff")        return respond(addStaff(body));
     if (action === "addLocation")     return respond(addConfigItem("Location", body.name));
     if (action === "addGarage")       return respond(addConfigItem("Garage",   body.name));
@@ -49,27 +53,33 @@ function doPost(e) {
 }
 
 // ── Fleet Sheet ───────────────────────────────────────────────
-// Columns: A=Plate B=Type C=Location D=Status E=CurrentClient
-//          F=ClientPhone G=BookedFrom H=ReturnDate I=Remarks
-//          J=FuelOut K=AmountCharged L=Garage
+// A=Plate B=Type C=Location D=Status E=CurrentClient F=ClientPhone
+// G=BookedFrom H=ReturnDate I=Remarks J=FuelOut K=Amount L=Currency
+// M=Garage N=PaymentStatus O=AmountPaid P=PoliceFineOut Q=ParkingFineOut R=KmOut
 
 function getFleet() {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(FLEET_SHEET);
   const rows  = sheet.getDataRange().getValues();
   const data  = rows.slice(1).map((row, i) => ({
-    rowIndex:      i + 2,
-    plate:         row[0]  || "",
-    type:          row[1]  || "",
-    location:      row[2]  || "",
-    status:        row[3]  || "Available",
-    currentClient: row[4]  || "",
-    clientPhone:   row[5]  || "",
-    bookedFrom:    row[6]  || "",
-    returnDate:    row[7]  || "",
-    remarks:       row[8]  || "",
-    fuelOut:       row[9]  || "",
-    amountCharged: row[10] || "",
-    garage:        row[11] || "",
+    rowIndex:       i + 2,
+    plate:          row[0]  || "",
+    type:           row[1]  || "",
+    location:       row[2]  || "",
+    status:         row[3]  || "Available",
+    currentClient:  row[4]  || "",
+    clientPhone:    row[5]  || "",
+    bookedFrom:     row[6]  || "",
+    returnDate:     row[7]  || "",
+    remarks:        row[8]  || "",
+    fuelOut:        row[9]  || "",
+    amount:         row[10] || "",
+    currency:       row[11] || "TZS",
+    garage:         row[12] || "",
+    paymentStatus:  row[13] || "",
+    amountPaid:     row[14] || "",
+    policeFineOut:  row[15] || "",
+    parkingFineOut: row[16] || "",
+    kmOut:          row[17] || "",
   }));
   return { success: true, data };
 }
@@ -84,43 +94,55 @@ function findRow(plate) {
 
 function updateFleetRow(plate, fields) {
   const { sheet, rowIndex } = findRow(plate);
-  if (fields.location      !== undefined) sheet.getRange(rowIndex, 3).setValue(fields.location);
-  if (fields.status        !== undefined) sheet.getRange(rowIndex, 4).setValue(fields.status);
-  if (fields.currentClient !== undefined) sheet.getRange(rowIndex, 5).setValue(fields.currentClient);
-  if (fields.clientPhone   !== undefined) sheet.getRange(rowIndex, 6).setValue(fields.clientPhone);
-  if (fields.bookedFrom    !== undefined) sheet.getRange(rowIndex, 7).setValue(fields.bookedFrom);
-  if (fields.returnDate    !== undefined) sheet.getRange(rowIndex, 8).setValue(fields.returnDate);
-  if (fields.remarks       !== undefined) sheet.getRange(rowIndex, 9).setValue(fields.remarks);
-  if (fields.fuelOut       !== undefined) sheet.getRange(rowIndex, 10).setValue(fields.fuelOut);
-  if (fields.amountCharged !== undefined) sheet.getRange(rowIndex, 11).setValue(fields.amountCharged);
-  if (fields.garage        !== undefined) sheet.getRange(rowIndex, 12).setValue(fields.garage);
+  const map = {
+    location: 3, status: 4, currentClient: 5, clientPhone: 6, bookedFrom: 7,
+    returnDate: 8, remarks: 9, fuelOut: 10, amount: 11, currency: 12, garage: 13,
+    paymentStatus: 14, amountPaid: 15, policeFineOut: 16, parkingFineOut: 17, kmOut: 18,
+  };
+  Object.keys(map).forEach(key => {
+    if (fields[key] !== undefined) sheet.getRange(rowIndex, map[key]).setValue(fields[key]);
+  });
+}
+
+function clearFleetRow(plate, status, extra) {
+  updateFleetRow(plate, Object.assign({
+    status, currentClient: "", clientPhone: "", bookedFrom: "", returnDate: "",
+    remarks: (extra && extra.remarks) || "", fuelOut: "", amount: "", currency: "",
+    garage: "", paymentStatus: "", amountPaid: "", policeFineOut: "", parkingFineOut: "", kmOut: "",
+  }, extra || {}));
 }
 
 // ── History Sheet ─────────────────────────────────────────────
-// Columns: A=Timestamp B=Plate C=Type D=Action E=Client F=ClientPhone
-//          G=BookedFrom H=ReturnDate I=Location J=Remarks K=StaffName
-//          L=FuelOut M=FuelIn N=AmountCharged O=PoliceFine P=ParkingFine Q=Garage
+// A=Timestamp B=Plate C=Type D=Action E=Client F=ClientPhone G=BookedFrom
+// H=ReturnDate I=Location J=Remarks K=StaffName L=FuelOut M=FuelIn
+// N=Amount O=Currency P=PoliceFine Q=ParkingFine R=Garage
+// S=PaymentStatus T=AmountPaid
 
 function addHistory(entry) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(HISTORY_SHEET);
   sheet.appendRow([
     new Date(),
-    entry.plate         || "",
-    entry.type          || "",
-    entry.action        || "",
-    entry.client        || "",
-    entry.clientPhone   || "",
-    entry.bookedFrom    || "",
-    entry.returnDate    || "",
-    entry.location       || "",
-    entry.remarks        || "",
-    entry.staffName       || "",
-    entry.fuelOut          || "",
-    entry.fuelIn             || "",
-    entry.amountCharged       || "",
-    entry.policeFine            || "",
-    entry.parkingFine             || "",
-    entry.garage                    || "",
+    entry.plate          || "",
+    entry.type            || "",
+    entry.action           || "",
+    entry.client             || "",
+    entry.clientPhone         || "",
+    entry.bookedFrom           || "",
+    entry.returnDate             || "",
+    entry.location                 || "",
+    entry.remarks                   || "",
+    entry.staffName                   || "",
+    entry.fuelOut                       || "",
+    entry.fuelIn                          || "",
+    entry.amount                            || "",
+    entry.currency                            || "",
+    entry.policeFine                            || "",
+    entry.parkingFine                             || "",
+    entry.garage                                    || "",
+    entry.paymentStatus                               || "",
+    entry.amountPaid                                    || "",
+    entry.kmOut                                           || "",
+    entry.kmIn                                              || "",
   ]);
 }
 
@@ -142,17 +164,64 @@ function getHistory() {
     staffName:     row[10] || "",
     fuelOut:       row[11] || "",
     fuelIn:        row[12] || "",
-    amountCharged: row[13] || "",
-    policeFine:    row[14] || "",
-    parkingFine:   row[15] || "",
-    garage:        row[16] || "",
+    amount:        row[13] || "",
+    currency:      row[14] || "",
+    policeFine:    row[15] || "",
+    parkingFine:   row[16] || "",
+    garage:        row[17] || "",
+    paymentStatus: row[18] || "",
+    amountPaid:    row[19] || "",
+    kmOut:         row[20] || "",
+    kmIn:          row[21] || "",
   }));
   return { success: true, data };
 }
 
-// ── Staff Login ───────────────────────────────────────────────
-// Config sheet: Col A = Type, Col B = Name/Value, Col C = Password (Staff rows)
+// ── Sold Sheet ────────────────────────────────────────────────
+// A=Timestamp B=Plate C=Type D=BuyerName E=BuyerPhone F=SalePrice
+// G=Currency H=SaleDate I=Remarks J=StaffName
 
+function getSold() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SOLD_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+  if (rows.length <= 1) return { success: true, data: [] };
+  const data = rows.slice(1).reverse().map(row => ({
+    timestamp:   row[0] ? new Date(row[0]).toISOString() : "",
+    plate:       row[1] || "",
+    type:        row[2] || "",
+    remarks:     row[3] || "",
+    staffName:   row[4] || "",
+  }));
+  return { success: true, data };
+}
+
+function markSold(body) {
+  if (!body.plate)      throw new Error("Plate is required");
+  if (!body.staffName)  throw new Error("Staff name is required");
+
+  const { sheet, rowIndex } = findRow(body.plate);
+  const row = sheet.getRange(rowIndex, 1, 1, 2).getValues()[0];
+  const type = row[1];
+
+  // Add to Sold sheet
+  const soldSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SOLD_SHEET);
+  soldSheet.appendRow([
+    new Date(), body.plate, type, body.remarks || "", body.staffName,
+  ]);
+
+  // Remove from Fleet sheet entirely
+  sheet.deleteRow(rowIndex);
+
+  // Log in history
+  addHistory({
+    plate: body.plate, type, action: "Sold",
+    remarks: body.remarks || "", staffName: body.staffName,
+  });
+
+  return { success: true };
+}
+
+// ── Staff Login ───────────────────────────────────────────────
 function verifyStaff(body) {
   if (!body.name || !body.password) throw new Error("Name and password required");
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
@@ -183,7 +252,11 @@ function checkOut(body) {
     clientPhone: body.clientPhone || "", bookedFrom: body.bookedFrom || "",
     returnDate: body.returnDate || "", remarks: body.remarks || "",
     location: body.location || "", fuelOut: body.fuelOut || "",
-    amountCharged: body.amountCharged || "", garage: "",
+    amount: body.amount || "", currency: body.currency || "TZS",
+    garage: "", paymentStatus: body.paymentStatus || "Unpaid",
+    amountPaid: body.amountPaid || "",
+    policeFineOut: body.policeFine || "", parkingFineOut: body.parkingFine || "",
+    kmOut: body.kmOut || "",
   });
 
   addHistory({
@@ -191,7 +264,10 @@ function checkOut(body) {
     clientPhone: body.clientPhone || "", bookedFrom: body.bookedFrom || "",
     returnDate: body.returnDate || "", location: body.location || "",
     remarks: body.remarks || "", staffName: body.staffName,
-    fuelOut: body.fuelOut || "", amountCharged: body.amountCharged || "",
+    fuelOut: body.fuelOut || "", amount: body.amount || "", currency: body.currency || "TZS",
+    policeFine: body.policeFine || "", parkingFine: body.parkingFine || "",
+    paymentStatus: body.paymentStatus || "Unpaid", amountPaid: body.amountPaid || "",
+    kmOut: body.kmOut || "",
   });
 
   return { success: true };
@@ -202,21 +278,21 @@ function markReturned(body) {
   if (!body.staffName) throw new Error("Staff name is required");
 
   const { sheet, rowIndex } = findRow(body.plate);
-  const row = sheet.getRange(rowIndex, 1, 1, 12).getValues()[0];
+  const row = sheet.getRange(rowIndex, 1, 1, 18).getValues()[0];
 
-  updateFleetRow(body.plate, {
-    status: "Available", currentClient: "", clientPhone: "",
-    bookedFrom: "", returnDate: "", remarks: body.remarks || "",
-    fuelOut: "", amountCharged: "", garage: "",
-  });
+  clearFleetRow(body.plate, "Available", { remarks: body.remarks || "" });
 
   addHistory({
     plate: body.plate, type: body.type || row[1], action: "Returned",
     client: row[4], clientPhone: row[5], bookedFrom: row[6], returnDate: row[7],
     location: body.location || row[2], remarks: body.remarks || "", staffName: body.staffName,
     fuelOut: row[9], fuelIn: body.fuelIn || "",
-    amountCharged: body.amountCharged || row[10] || "",
-    policeFine: body.policeFine || "", parkingFine: body.parkingFine || "",
+    amount: body.amount || row[10] || "", currency: row[11] || "TZS",
+    policeFine: body.policeFine || row[15] || "",
+    parkingFine: body.parkingFine || row[16] || "",
+    paymentStatus: body.paymentStatus || row[13] || "",
+    amountPaid: body.amountPaid || row[14] || "",
+    kmOut: row[17] || "", kmIn: body.kmIn || "",
   });
 
   return { success: true };
@@ -228,7 +304,7 @@ function extendBooking(body) {
   if (!body.staffName)  throw new Error("Staff name is required");
 
   const { sheet, rowIndex } = findRow(body.plate);
-  const row = sheet.getRange(rowIndex, 1, 1, 12).getValues()[0];
+  const row = sheet.getRange(rowIndex, 1, 1, 18).getValues()[0];
   const oldReturnDate = row[7];
 
   updateFleetRow(body.plate, { returnDate: body.returnDate, remarks: body.remarks || "" });
@@ -249,11 +325,7 @@ function setMaintenance(body) {
   if (!body.staffName) throw new Error("Staff name is required");
   if (!body.garage)    throw new Error("Garage is required");
 
-  updateFleetRow(body.plate, {
-    status: "Maintenance", currentClient: "", clientPhone: "",
-    bookedFrom: "", returnDate: "", remarks: body.remarks || "",
-    fuelOut: "", amountCharged: "", garage: body.garage,
-  });
+  clearFleetRow(body.plate, "Maintenance", { remarks: body.remarks || "", garage: body.garage });
 
   addHistory({
     plate: body.plate, type: body.type || "", action: "Sent to Maintenance",
@@ -266,11 +338,7 @@ function setMaintenance(body) {
 
 function setAvailable(body) {
   if (!body.plate || !body.staffName) throw new Error("Plate and staff required");
-  updateFleetRow(body.plate, {
-    status: "Available", currentClient: "", clientPhone: "",
-    bookedFrom: "", returnDate: "", remarks: body.remarks || "",
-    fuelOut: "", amountCharged: "", garage: "",
-  });
+  clearFleetRow(body.plate, "Available", { remarks: body.remarks || "" });
   addHistory({ plate: body.plate, type: body.type || "", action: "Marked Available", remarks: body.remarks || "", location: body.location || "", staffName: body.staffName });
   return { success: true };
 }
@@ -279,6 +347,28 @@ function updateLocation(body) {
   if (!body.plate || !body.location) throw new Error("Plate and location required");
   updateFleetRow(body.plate, { location: body.location });
   addHistory({ plate: body.plate, type: body.type || "", action: "Location Updated", location: body.location, staffName: body.staffName || "" });
+  return { success: true };
+}
+
+function updatePayment(body) {
+  if (!body.plate)         throw new Error("Plate is required");
+  if (!body.paymentStatus) throw new Error("Payment status is required");
+  if (!body.staffName)     throw new Error("Staff name is required");
+
+  updateFleetRow(body.plate, {
+    paymentStatus: body.paymentStatus,
+    amountPaid: body.amountPaid || "",
+  });
+
+  const { sheet, rowIndex } = findRow(body.plate);
+  const row = sheet.getRange(rowIndex, 1, 1, 18).getValues()[0];
+
+  addHistory({
+    plate: body.plate, type: body.type || row[1], action: "Payment Updated",
+    client: row[4], remarks: body.remarks || "", staffName: body.staffName,
+    paymentStatus: body.paymentStatus, amountPaid: body.amountPaid || "",
+  });
+
   return { success: true };
 }
 
@@ -300,28 +390,30 @@ function addConfigItem(type, name) {
   return { success: true };
 }
 
-// ── Run once: update headers + seed garages ───────────────────
+// ── One-time setup helpers ──────────────────────────────────────
+
 function updateHeaders() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-  ss.getSheetByName(FLEET_SHEET).getRange(1, 1, 1, 12).setValues([[
-    "Plate","Type","Location","Status","Current Client",
-    "Client Phone","Booked From","Return Date","Remarks",
-    "Fuel Out","Amount Charged (TZS)","Garage"
+  ss.getSheetByName(FLEET_SHEET).getRange(1, 1, 1, 18).setValues([[
+    "Plate","Type","Location","Status","Current Client","Client Phone",
+    "Booked From","Return Date","Remarks","Fuel Out","Amount","Currency",
+    "Garage","Payment Status","Amount Paid","Police Fine (Out)","Parking Fine (Out)","KM Out"
   ]]).setFontWeight("bold");
 
-  ss.getSheetByName(HISTORY_SHEET).getRange(1, 1, 1, 17).setValues([[
+  ss.getSheetByName(HISTORY_SHEET).getRange(1, 1, 1, 22).setValues([[
     "Timestamp","Plate","Type","Action","Client","Client Phone",
     "Booked From","Return Date","Location","Remarks","Staff Name",
-    "Fuel Out","Fuel In","Amount Charged (TZS)","Police Fine (TZS)","Parking Fine (TZS)","Garage"
+    "Fuel Out","Fuel In","Amount","Currency","Police Fine","Parking Fine",
+    "Garage","Payment Status","Amount Paid","KM Out","KM In"
   ]]).setFontWeight("bold");
 
   ss.getSheetByName(CONFIG_SHEET).getRange(1, 3).setValue("Password").setFontWeight("bold");
-}
 
-// ── Run once: seed the garage list ─────────────────────────────
-function seedGarages() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
-  const garages = ["SmilesCars Garage", "Zain's Garage", "AutoExpress", "AutoINC", "AtTheWheel", "Waziri"];
-  garages.forEach(g => sheet.appendRow(["Garage", g]));
+  // Create Sold sheet if missing
+  let sold = ss.getSheetByName(SOLD_SHEET);
+  if (!sold) sold = ss.insertSheet(SOLD_SHEET);
+  sold.getRange(1, 1, 1, 5).setValues([[
+    "Timestamp","Plate","Type","Remarks","Staff Name"
+  ]]).setFontWeight("bold");
 }

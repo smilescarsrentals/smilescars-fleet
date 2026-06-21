@@ -5,6 +5,7 @@ import StaffGate from "./components/StaffGate";
 import Layout from "./components/Layout";
 import FleetPage from "./pages/FleetPage";
 import HistoryPage from "./pages/HistoryPage";
+import SoldPage from "./pages/SoldPage";
 import logo from "./assets/logo.js";
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
         <Routes>
           <Route path="/"        element={<FleetPage staffName={staffName} />} />
           <Route path="/history" element={<HistoryPage />} />
+          <Route path="/sold"    element={<SoldPage />} />
           <Route path="*"        element={<Navigate to="/" />} />
         </Routes>
       </Layout>
