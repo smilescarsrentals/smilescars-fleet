@@ -29,6 +29,8 @@ export const api = {
   getHistory:     ()     => get("getHistory"),
   getConfig:      ()     => get("getConfig"),
   getSold:        ()     => get("getSold"),
+  getSubHire:     ()     => get("getSubHire"),
+  getDashboard:   ()     => get("getDashboard"),
   verifyStaff:    (body) => post({ action: "verifyStaff",    ...body }),
   checkOut:       (body) => post({ action: "checkOut",       ...body }),
   markReturned:   (body) => post({ action: "markReturned",   ...body }),
@@ -41,4 +43,7 @@ export const api = {
   addStaff:       (body) => post({ action: "addStaff",       ...body }),
   addLocation:    (name) => post({ action: "addLocation",    name }),
   addGarage:      (name) => post({ action: "addGarage",      name }),
+  addSubHire:           (body) => post({ action: "addSubHire",           ...body }),
+  returnSubHire:        (body) => post({ action: "returnSubHire",        ...body }),
+  updateSubHirePayment: (body) => post({ action: "updateSubHirePayment", ...body }),
 };

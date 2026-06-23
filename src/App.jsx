@@ -6,6 +6,7 @@ import Layout from "./components/Layout";
 import FleetPage from "./pages/FleetPage";
 import HistoryPage from "./pages/HistoryPage";
 import SoldPage from "./pages/SoldPage";
+import SubHirePage from "./pages/SubHirePage";
 import logo from "./assets/logo.js";
 
 export default function App() {
@@ -31,10 +32,11 @@ export default function App() {
     <BrowserRouter>
       <Layout staffName={staffName} onSignOut={handleSignOut} logo={logo}>
         <Routes>
-          <Route path="/"        element={<FleetPage staffName={staffName} />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/sold"    element={<SoldPage />} />
-          <Route path="*"        element={<Navigate to="/" />} />
+          <Route path="/"         element={<FleetPage staffName={staffName} />} />
+          <Route path="/history"  element={<HistoryPage />} />
+          <Route path="/sold"     element={<SoldPage />} />
+          <Route path="/sub-hire" element={<SubHirePage staffName={staffName} />} />
+          <Route path="*"         element={<Navigate to="/" />} />
         </Routes>
       </Layout>
     </BrowserRouter>

@@ -37,6 +37,7 @@ const PAYMENT_STYLES = {
   Paid:           { bg: "#dcfce7", color: "#15803d" },
   "Partial Paid": { bg: "#fef3c7", color: "#92400e" },
   Unpaid:         { bg: "#fee2e2", color: "#b91c1c" },
+  "Long Term":    { bg: "#ede9fe", color: "#6d28d9" },
 };
 
 export default function FleetPage({ staffName }) {
@@ -115,12 +116,14 @@ export default function FleetPage({ staffName }) {
 
   const handlePaymentUpdate = async (car, newStatus) => {
     let amountPaid = car.amountPaid;
-    if (newStatus !== "Unpaid") {
+    if (newStatus === "Unpaid" || newStatus === "Long Term") {
+      // No amount prompt needed for these statuses
+      amountPaid = newStatus === "Unpaid" ? "" : car.amountPaid;
+    } else {
+      // Paid or Partial Paid — ask for amount
       const entered = prompt(`Enter amount paid for ${car.plate} (${car.currency || "TZS"}):`, car.amountPaid || "");
       if (entered === null) return;
       amountPaid = entered;
-    } else {
-      amountPaid = "";
     }
     setSaving(true);
     try {
@@ -149,7 +152,7 @@ export default function FleetPage({ staffName }) {
     [fleet]
   );
   const unpaid = useMemo(() =>
-    fleet.filter(c => c.status === "Rented" && (c.paymentStatus === "Unpaid" || c.paymentStatus === "Partial Paid")),
+    fleet.filter(c => c.status === "Rented" && (c.paymentStatus === "Unpaid" || c.paymentStatus === "Partial Paid" || c.paymentStatus === "Long Term")),
     [fleet]
   );
 
@@ -191,13 +194,13 @@ export default function FleetPage({ staffName }) {
     <div>
       {toast && <div style={styles.toast}>{toast}</div>}
 
-      <div style={styles.statsRow}>
+      <div style={{ ...styles.statsRow, gridTemplateColumns: "repeat(5, 1fr)" }}>
         {[
           { label: "Available",   value: stats.available,   color: "#15803d", bg: "#dcfce7", view: "all" },
           { label: "Rented",      value: stats.rented,      color: "#854d0e", bg: "#fef9c3", view: "all" },
           { label: "Maintenance", value: stats.maintenance, color: "#c2410c", bg: "#ffedd5", view: "all" },
           { label: "Expiring/Expired", value: expired.length + expiringSoon.length, color: "#b91c1c", bg: "#fee2e2", view: "expiring" },
-          { label: "Unpaid",      value: unpaid.length,      color: "#b91c1c", bg: "#fee2e2", view: "unpaid" },
+          { label: "Unpaid", value: unpaid.length, color: "#b91c1c", bg: "#fee2e2", view: "unpaid" },
         ].map(s => (
           <div key={s.label} style={{ ...styles.statCard, background: s.bg, outline: view === s.view && s.view !== "all" ? `2px solid ${s.color}` : "none" }}
             onClick={() => {
@@ -289,6 +292,7 @@ export default function FleetPage({ staffName }) {
                         <option value="Paid">Paid</option>
                         <option value="Partial Paid">Partial Paid</option>
                         <option value="Unpaid">Unpaid</option>
+                        <option value="Long Term">Long Term</option>
                       </select>
                     ) : <span style={styles.dim}>—</span>}
                     {car.amountPaid && <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{fmtMoney(car.amountPaid, car.currency)}</div>}
@@ -390,7 +394,7 @@ const styles = {
   th:            { padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#888", borderBottom: "1px solid #e5e7eb", background: "#fafafa", textTransform: "uppercase", letterSpacing: ".4px", whiteSpace: "nowrap" },
   td:            { padding: "11px 12px", borderBottom: "1px solid #f3f4f6", verticalAlign: "middle" },
   badge:         { display: "inline-block", fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 99 },
-  paymentSelect: { fontSize: 11, fontWeight: 600, padding: "3px 6px", borderRadius: 6, border: "none", cursor: "pointer" },
+  paymentSelect: { fontSize: 11, fontWeight: 600, padding: "3px 6px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit" },
   locChip:       { fontSize: 12, color: "#374151", background: "#f3f4f6", borderRadius: 5, padding: "2px 8px" },
   dim:           { color: "#ccc", fontSize: 13 },
   empty:         { textAlign: "center", padding: "2.5rem", color: "#aaa", fontSize: 14 },
