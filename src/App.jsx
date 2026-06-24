@@ -43,11 +43,7 @@ export default function App() {
           <Route path="/"         element={<FleetPage staffName={staffName} role={role} />} />
           <Route path="/history"  element={<HistoryPage role={role} />} />
           <Route path="/clients"    element={<ClientsPage />} />
-          <Route path="/car/:plate" element={
-            (role === "Admin" || role === "Manager")
-              ? <CarProfilePage staffName={staffName} />
-              : <Navigate to="/" />
-          } />
+          <Route path="/car/:plate" element={<CarProfilePage staffName={staffName} role={role} />} />
           <Route path="/sub-hire" element={<SubHirePage staffName={staffName} />} />
           <Route path="/sold"     element={<SoldPage />} />
           <Route path="*"         element={<Navigate to="/" />} />

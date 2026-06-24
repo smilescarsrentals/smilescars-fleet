@@ -44,7 +44,8 @@ const ACTION_COLORS = {
   "Sold":                { bg: "#fee2e2", color: "#b91c1c" },
 };
 
-export default function CarProfilePage({ staffName }) {
+export default function CarProfilePage({ staffName, role }) {
+  const canSeeFullProfile = role === "Admin" || role === "Manager";
   const { plate } = useParams();
   const navigate  = useNavigate();
   const decodedPlate = decodeURIComponent(plate);
@@ -61,16 +62,20 @@ export default function CarProfilePage({ staffName }) {
   const load = async () => {
     setLoading(true); setError("");
     try {
-      const [fleetRes, histRes] = await Promise.all([api.getFleet(), api.getHistory()]);
+      const fleetRes = await api.getFleet();
       const found = (fleetRes.data || []).find(c =>
         c.plate.trim().toLowerCase() === decodedPlate.trim().toLowerCase()
       );
       if (!found) { setError(`Car "${decodedPlate}" not found in fleet.`); setLoading(false); return; }
       setCar(found);
-      const carHistory = (histRes.data || []).filter(h =>
-        h.plate.trim().toLowerCase() === decodedPlate.trim().toLowerCase()
-      );
-      setHistory(carHistory);
+      // Only load history for Admin/Manager
+      if (canSeeFullProfile) {
+        const histRes = await api.getHistory();
+        const carHistory = (histRes.data || []).filter(h =>
+          h.plate.trim().toLowerCase() === decodedPlate.trim().toLowerCase()
+        );
+        setHistory(carHistory);
+      }
     } catch (e) {
       setError("Failed to load car profile: " + e.message);
     } finally {
@@ -132,7 +137,59 @@ export default function CarProfilePage({ staffName }) {
 
   const ss = STATUS_COLORS[car.status] || STATUS_COLORS.Available;
 
-  return (
+  // ── Staff View — stripped down card ──────────────────────
+  if (!canSeeFullProfile) {
+    return (
+      <div>
+        <button style={styles.backBtn} onClick={() => navigate("/")}>← Back to Fleet</button>
+        <div style={styles.staffCard}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+            <div>
+              <div style={styles.plateHero}>{car.plate}</div>
+              <div style={styles.typeHero}>{car.type}</div>
+              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                <span style={{ ...styles.badge, background: ss.bg, color: ss.color }}>{car.status}</span>
+                {car.location && <span style={styles.locChip}>📍 {car.location}</span>}
+                {car.driver && <span style={styles.locChip}>🚗 {car.driver}</span>}
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {car.regCardUrl
+                ? <a href={car.regCardUrl} target="_blank" rel="noopener noreferrer" style={styles.docBtnLarge}>📄 Registration Card</a>
+                : <span style={styles.docBtnLargeOff}>📄 No Registration Card</span>}
+              {car.photosUrl
+                ? <a href={car.photosUrl} target="_blank" rel="noopener noreferrer" style={{ ...styles.docBtnLarge, background: "#eff6ff", color: "#2563eb", borderColor: "#bfdbfe" }}>📷 Car Photos</a>
+                : <span style={styles.docBtnLargeOff}>📷 No Photos</span>}
+            </div>
+          </div>
+
+          {/* Current rental info — useful for staff */}
+          {car.status === "Rented" && car.currentClient && (
+            <div style={styles.staffRentalBox}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "#111", marginBottom: 8 }}>Current Rental</div>
+              <div style={styles.staffInfoRow}><span style={styles.staffInfoLabel}>Client</span><span>{car.currentClient}</span></div>
+              {car.clientPhone && <div style={styles.staffInfoRow}><span style={styles.staffInfoLabel}>Phone</span><span>{car.clientPhone}</span></div>}
+              <div style={styles.staffInfoRow}><span style={styles.staffInfoLabel}>Booked From</span><span>{fmtDate(car.bookedFrom)}</span></div>
+              <div style={styles.staffInfoRow}><span style={styles.staffInfoLabel}>Return Date</span><span>{fmtDate(car.returnDate)}</span></div>
+              <div style={styles.staffInfoRow}><span style={styles.staffInfoLabel}>Payment</span>
+                <span style={{ fontWeight: 600, color: car.paymentStatus === "Unpaid" ? "#b91c1c" : "#15803d" }}>{car.paymentStatus || "—"}</span>
+              </div>
+            </div>
+          )}
+
+          {car.status === "Maintenance" && car.garage && (
+            <div style={styles.staffRentalBox}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "#c2410c", marginBottom: 4 }}>🔧 In Maintenance</div>
+              <div style={styles.staffInfoRow}><span style={styles.staffInfoLabel}>Garage</span><span>{car.garage}</span></div>
+              {car.remarks && <div style={styles.staffInfoRow}><span style={styles.staffInfoLabel}>Remarks</span><span>{car.remarks}</span></div>}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Admin / Manager Full Profile ──────────────────────────
     <div>
       {/* Back button */}
       <button style={styles.backBtn} onClick={() => navigate("/")}>← Back to Fleet</button>
@@ -371,7 +428,12 @@ export default function CarProfilePage({ staffName }) {
 }
 
 const styles = {
-  center:       { textAlign: "center", padding: "3rem", color: "#666" },
+  staffCard:        { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "1.5rem", display: "flex", flexDirection: "column", gap: 16 },
+  staffRentalBox:   { background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "1rem", marginTop: 4 },
+  staffInfoRow:     { display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f3f4f6", fontSize: 13 },
+  staffInfoLabel:   { fontSize: 12, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".3px" },
+  docBtnLarge:      { display: "block", padding: "12px 20px", fontSize: 14, fontWeight: 600, background: "#f0fdf4", color: "#15803d", border: "1.5px solid #bbf7d0", borderRadius: 10, textDecoration: "none", textAlign: "center", minWidth: 200 },
+  docBtnLargeOff:   { display: "block", padding: "12px 20px", fontSize: 14, background: "#f9fafb", color: "#aaa", border: "1.5px solid #e5e7eb", borderRadius: 10, textAlign: "center", minWidth: 200 },
   backBtn:      { fontSize: 13, color: "#1d4ed8", background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: "1.25rem", fontWeight: 500, display: "block" },
   heroCard:     { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "1.5rem", marginBottom: "1rem", display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "flex-start" },
   heroLeft:     { minWidth: 160 },

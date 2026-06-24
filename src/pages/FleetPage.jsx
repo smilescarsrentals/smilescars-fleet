@@ -270,12 +270,12 @@ export default function FleetPage({ staffName, role }) {
       <div className="sc-table-wrap">
         <table style={styles.table}>
           <thead>
-            <tr>{["Plate","Type","Location","Status","Client","Return Date","Docs","Payment","Action"].map(h =>
+            <tr>{["Plate","Type","Location","Status","Client","Return Date","Payment","Action"].map(h =>
               <th key={h} style={styles.th}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
-            {paginated.length === 0 && <tr><td colSpan={9} style={styles.empty}>No vehicles match your filters.</td></tr>}
+            {paginated.length === 0 && <tr><td colSpan={8} style={styles.empty}>No vehicles match your filters.</td></tr>}
             {paginated.map(car => {
               const ss = STATUS_STYLES[car.status] || STATUS_STYLES.Available;
               const du = car.status === "Rented" ? daysUntil(car.returnDate) : null;
@@ -285,12 +285,10 @@ export default function FleetPage({ staffName, role }) {
               return (
                 <tr key={car.plate} style={isExpired ? { background: "#fef2f2" } : isExpiringSoon ? { background: "#fffbeb" } : {}}>
                   <td data-label="Plate" style={{ ...styles.td, fontWeight: 600, fontSize: 13 }}>
-                    {canExportOrSell ? (
-                      <span style={{ cursor: "pointer", color: "#1d4ed8", textDecoration: "underline" }}
-                        onClick={() => navigate(`/car/${encodeURIComponent(car.plate)}`)}>
-                        {car.plate}
-                      </span>
-                    ) : car.plate}
+                    <span style={{ cursor: "pointer", color: "#1d4ed8", textDecoration: "underline" }}
+                      onClick={() => navigate(`/car/${encodeURIComponent(car.plate)}`)}>
+                      {car.plate}
+                    </span>
                   </td>
                   <td data-label="Type" style={styles.td}>{car.type}</td>
                   <td data-label="Location" style={styles.td}>
@@ -312,14 +310,6 @@ export default function FleetPage({ staffName, role }) {
                     {fmtDate(car.returnDate)}
                     {isExpired && <div style={{ fontSize: 10, fontWeight: 600 }}>OVERDUE</div>}
                     {isExpiringSoon && <div style={{ fontSize: 10, fontWeight: 600 }}>DUE SOON</div>}
-                  </td>
-                  <td data-label="Docs" style={{ ...styles.td, whiteSpace: "nowrap" }}>
-                    {car.regCardUrl
-                      ? <a href={car.regCardUrl} target="_blank" rel="noopener noreferrer" style={styles.docBtn}>📄 Reg</a>
-                      : <span style={styles.docBtnOff}>📄</span>}
-                    {car.photosUrl
-                      ? <a href={car.photosUrl} target="_blank" rel="noopener noreferrer" style={{ ...styles.docBtn, marginLeft: 4, background: "#eff6ff", color: "#2563eb", borderColor: "#bfdbfe" }}>📷 Pics</a>
-                      : <span style={{ ...styles.docBtnOff, marginLeft: 4 }}>📷</span>}
                   </td>
                   <td data-label="Payment" style={styles.td}>
                     {car.status === "Rented" && car.paymentStatus ? (
