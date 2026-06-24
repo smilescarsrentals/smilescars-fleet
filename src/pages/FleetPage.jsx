@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { cache } from "../lib/cache";
 import { exportToExcel } from "../lib/exportExcel";
 import ActionModal from "../components/ActionModal";
 import MoveCarModal from "../components/MoveCarModal";
@@ -32,7 +33,6 @@ const STATUS_STYLES = {
   Available:   { bg: "#dcfce7", color: "#15803d" },
   Rented:      { bg: "#fef9c3", color: "#854d0e" },
   Maintenance: { bg: "#ffedd5", color: "#c2410c" },
-  Reserved:    { bg: "#ede9fe", color: "#6d28d9" },
 };
 
 const PAYMENT_STYLES = {
@@ -61,12 +61,26 @@ export default function FleetPage({ staffName, role }) {
   const [page,      setPage]      = useState(1);
   const PER_PAGE = 25;
 
-  const load = async () => {
+  const load = async (forceRefresh = false) => {
+    // Use cache unless forced refresh (after actions or manual ↻)
+    if (!forceRefresh) {
+      const cached = cache.get("fleet");
+      const cachedConfig = cache.get("config");
+      if (cached && cachedConfig) {
+        setFleet(cached);
+        setConfig(cachedConfig);
+        setLoading(false);
+        return;
+      }
+    }
     setLoading(true); setError("");
     try {
       const [f, c] = await Promise.all([api.getFleet(), api.getConfig()]);
-      setFleet(f.data || []);
+      const fleetData = f.data || [];
+      setFleet(fleetData);
       setConfig(c);
+      cache.set("fleet", fleetData);
+      cache.set("config", c);
     } catch (e) {
       setError("Failed to load fleet: " + e.message);
     } finally {
@@ -85,21 +99,18 @@ export default function FleetPage({ staffName, role }) {
       const { car, action } = modal;
       const payload = { plate: car.plate, type: car.type, staffName, ...fields };
       if (action === "checkOut")             await api.checkOut(payload);
-      if (action === "reserveCar")           { const res = await api.reserveCar(payload); if (res.warning) showToast("⚠️ " + res.warning); }
       if (action === "markReturned")         await api.markReturned(payload);
       if (action === "extendBooking")        await api.extendBooking(payload);
       if (action === "setMaintenance")       await api.setMaintenance(payload);
       if (action === "setAvailable")         await api.setAvailable(payload);
       if (action === "markSold")             await api.markSold(payload);
-      if (action === "activateReservation")  await api.activateReservation(payload);
-      if (action === "cancelReservation")    await api.cancelReservation(payload);
       if (fields.newLocation) await api.addLocation(fields.newLocation);
       if (fields.newGarage)   await api.addGarage(fields.newGarage);
       if (fields.newDriver)   await api.addDriver(fields.newDriver);
       setModal(null);
-      if (action !== "reserveCar") showToast("✅ Saved successfully");
-      else showToast("✅ Reservation confirmed");
-      await load();
+      showToast("✅ Saved successfully");
+      cache.clear();
+      await load(true);
     } catch (e) {
       showToast("❌ Error: " + e.message);
     } finally {
@@ -115,7 +126,8 @@ export default function FleetPage({ staffName, role }) {
       if (fields.newLocation) await api.addLocation(fields.newLocation);
       setMoveCar(null);
       showToast(`✅ ${moveCar.plate} moved to ${fields.location}`);
-      await load();
+      cache.clear();
+      await load(true);
     } catch (e) {
       showToast("❌ Error: " + e.message);
     } finally {
@@ -137,7 +149,8 @@ export default function FleetPage({ staffName, role }) {
     try {
       await api.updatePayment({ plate: car.plate, type: car.type, staffName, paymentStatus: newStatus, amountPaid });
       showToast("✅ Payment status updated");
-      await load();
+      cache.clear();
+      await load(true);
     } catch (e) {
       showToast("❌ Error: " + e.message);
     } finally {
@@ -148,7 +161,6 @@ export default function FleetPage({ staffName, role }) {
   const stats = useMemo(() => ({
     available:   fleet.filter(c => c.status === "Available").length,
     rented:      fleet.filter(c => c.status === "Rented").length,
-    reserved:    fleet.filter(c => c.status === "Reserved").length,
     maintenance: fleet.filter(c => c.status === "Maintenance").length,
   }), [fleet]);
 
@@ -197,17 +209,16 @@ export default function FleetPage({ staffName, role }) {
   };
 
   if (loading) return <div style={styles.center}>Loading fleet…</div>;
-  if (error)   return <div style={styles.center}><p style={{ color: "#dc2626" }}>{error}</p><button onClick={load} style={styles.retryBtn}>Retry</button></div>;
+  if (error)   return <div style={styles.center}><p style={{ color: "#dc2626" }}>{error}</p><button onClick={() => { cache.clear(); load(true); }} style={styles.retryBtn}>Retry</button></div>;
 
   return (
     <div>
       {toast && <div style={styles.toast}>{toast}</div>}
 
-      <div className="sc-stats" style={{ gridTemplateColumns: "repeat(6, 1fr)" }}>
+      <div className="sc-stats" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
         {[
           { label: "Available",        value: stats.available,                      color: "#15803d", bg: "#dcfce7", view: "all"      },
           { label: "Rented",           value: stats.rented,                         color: "#854d0e", bg: "#fef9c3", view: "all"      },
-          { label: "Reserved",         value: stats.reserved,                       color: "#6d28d9", bg: "#f5f3ff", view: "all"      },
           { label: "Maintenance",      value: stats.maintenance,                    color: "#c2410c", bg: "#ffedd5", view: "all"      },
           { label: "Expiring/Expired", value: expired.length + expiringSoon.length, color: "#b91c1c", bg: "#fee2e2", view: "expiring" },
           { label: "Unpaid",           value: unpaid.length,                        color: "#b91c1c", bg: "#fee2e2", view: "unpaid"   },
@@ -236,7 +247,7 @@ export default function FleetPage({ staffName, role }) {
           value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         <select style={styles.sel} value={fStatus} onChange={e => { setFStatus(e.target.value); setPage(1); }}>
           <option value="">All statuses</option>
-          {["Available","Rented","Reserved","Maintenance"].map(s => <option key={s}>{s}</option>)}
+          {["Available","Rented","Maintenance"].map(s => <option key={s}>{s}</option>)}
         </select>
         <select style={styles.sel} value={fLocation} onChange={e => { setFLocation(e.target.value); setPage(1); }}>
           <option value="">All locations</option>
@@ -264,7 +275,7 @@ export default function FleetPage({ staffName, role }) {
           }
         </span>
         {canExportOrSell && <button style={styles.exportBtn} onClick={handleExport}>⬇ Export</button>}
-        <button style={styles.refreshBtn} onClick={load}>↻</button>
+        <button style={styles.refreshBtn} onClick={() => { cache.clear(); load(true); }}>↻</button>
       </div>
 
       <div className="sc-table-wrap">
@@ -385,7 +396,6 @@ function ActionButtons({ car, onAction, onMove, canSell }) {
   if (car.status === "Available") return (
     <div style={row}>
       {btn("Check Out",   "checkOut",       "#15803d", "#dcfce7")}
-      {btn("Reserve",     "reserveCar",     "#6d28d9", "#f5f3ff")}
       {btn("Maintenance", "setMaintenance", "#c2410c", "#fff7ed")}
       {btn("Move",        "move",           "#1d4ed8", "#eff6ff", () => onMove(car))}
       {canSell && btn("Sold", "markSold",   "#dc2626", "#fef2f2")}
@@ -395,13 +405,6 @@ function ActionButtons({ car, onAction, onMove, canSell }) {
     <div style={row}>
       {btn("Returned",       "markReturned",  "#2563eb", "#eff6ff")}
       {btn("Extend Booking", "extendBooking", "#0284c7", "#e0f2fe")}
-    </div>
-  );
-  if (car.status === "Reserved") return (
-    <div style={row}>
-      {btn("Activate",   "activateReservation", "#15803d", "#dcfce7")}
-      {btn("Cancel",     "cancelReservation",   "#dc2626", "#fef2f2")}
-      {btn("Extend",     "extendBooking",       "#0284c7", "#e0f2fe")}
     </div>
   );
   if (car.status === "Maintenance") return (
@@ -418,7 +421,7 @@ const styles = {
   retryBtn:      { marginTop: 12, padding: "8px 20px", background: "#16a34a", color: "#fff", border: "none", borderRadius: 7, cursor: "pointer" },
   toast:         { position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: "#111", color: "#fff", padding: "10px 20px", borderRadius: 8, fontSize: 14, zIndex: 200, boxShadow: "0 4px 16px rgba(0,0,0,0.2)" },
   statsRow:      { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: "1rem" },
-  statCard:      { borderRadius: 10, padding: "14px 10px", textAlign: "center", cursor: "pointer" },
+  statCard:      { borderRadius: 10, padding: "18px 10px", textAlign: "center", cursor: "pointer", width: "100%" },
   viewBanner:    { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#92400e", marginBottom: "1rem" },
   viewClearBtn:  { fontSize: 12, border: "1px solid #92400e", background: "none", color: "#92400e", padding: "4px 10px", borderRadius: 6, cursor: "pointer" },
   filterRow:     { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: "1rem" },

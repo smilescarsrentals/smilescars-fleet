@@ -62,19 +62,12 @@ export default function CarProfilePage({ staffName, role }) {
   const load = async () => {
     setLoading(true); setError("");
     try {
-      const fleetRes = await api.getFleet();
-      const found = (fleetRes.data || []).find(c =>
-        c.plate.trim().toLowerCase() === decodedPlate.trim().toLowerCase()
-      );
-      if (!found) { setError(`Car "${decodedPlate}" not found in fleet.`); setLoading(false); return; }
-      setCar(found);
-      // Only load history for Admin/Manager
+      const fleetRes = await api.getCarByPlate(decodedPlate);
+      if (!fleetRes.success) { setError(fleetRes.error || `Car "${decodedPlate}" not found.`); setLoading(false); return; }
+      setCar(fleetRes.data);
       if (canSeeFullProfile) {
-        const histRes = await api.getHistory();
-        const carHistory = (histRes.data || []).filter(h =>
-          h.plate.trim().toLowerCase() === decodedPlate.trim().toLowerCase()
-        );
-        setHistory(carHistory);
+        const histRes = await api.getCarHistory(decodedPlate);
+        setHistory(histRes.data || []);
       }
     } catch (e) {
       setError("Failed to load car profile: " + e.message);

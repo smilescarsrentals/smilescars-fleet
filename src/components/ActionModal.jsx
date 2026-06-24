@@ -3,7 +3,6 @@ import { useState } from "react";
 
 const ACTIONS = {
   checkOut:       { title: "Check Out Car",      color: "#16a34a", btnLabel: "Confirm Check Out"   },
-  reserveCar:     { title: "Reserve Car",         color: "#7c3aed", btnLabel: "Confirm Reservation" },
   extendBooking:  { title: "Extend Booking",      color: "#0284c7", btnLabel: "Confirm Extension"   },
   markReturned:   { title: "Mark as Returned",    color: "#2563eb", btnLabel: "Confirm Return"      },
   setMaintenance: { title: "Send to Maintenance", color: "#d97706", btnLabel: "Confirm"             },
@@ -71,13 +70,12 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const [addingGarage,  setAddingGarage] = useState(false);
   const [err,           setErr]          = useState("");
 
-  const needsClient   = action === "checkOut" || action === "reserveCar";
+  const needsClient   = action === "checkOut";
   const isExtend       = action === "extendBooking";
   const isReturn        = action === "markReturned";
   const isMaintenance    = action === "setMaintenance";
   const isAvailable       = action === "setAvailable";
   const isSold              = action === "markSold";
-  const isReserve            = action === "reserveCar";
 
   const handleSubmit = () => {
     setErr("");
@@ -116,7 +114,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
         <div style={{ ...styles.modalHeader, background: cfg.color }}>
           <div>
             <p style={styles.modalPlate}>{car.plate}</p>
-            <p style={styles.modalType}>{car.type}{isReserve ? " · Reservation" : ""}</p>
+            <p style={styles.modalType}>{car.type}</p>
           </div>
           <button style={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
@@ -129,7 +127,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
             <div style={styles.readOnly}>{staffName}</div>
           </div>
 
-          {/* ── Check Out / Reserve ── */}
+          {/* ── Check Out ── */}
           {needsClient && (<>
             <div style={styles.field}>
               <label style={styles.label}>Client Name *</label>
@@ -141,7 +139,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
             </div>
             <div style={styles.twoCol}>
               <div style={styles.field}>
-                <label style={styles.label}>{isReserve ? "Reserved From *" : "Booked From *"}</label>
+                <label style={styles.label}>Booked From *</label>
                 <input style={styles.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} />
               </div>
               <div style={styles.field}>
@@ -221,12 +219,10 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                   onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" />
               </div>
             </div>
-            {!isReserve && (
-              <div style={styles.twoCol}>
+                <div style={styles.twoCol}>
                 <FineInput label="Police Fine"  value={policeFine}  onChange={setPoliceFine}  />
                 <FineInput label="Parking Fine" value={parkingFine} onChange={setParkingFine} />
               </div>
-            )}
           </>)}
 
           {/* ── Extend ── */}
@@ -346,7 +342,6 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
             <textarea style={styles.textarea} rows={2} value={remarks} onChange={e => setRemarks(e.target.value)}
               placeholder={
                 action === "checkOut"       ? "e.g. Client heading to Mombasa" :
-                action === "reserveCar"     ? "e.g. Client will pick up on Monday morning" :
                 action === "extendBooking"  ? "e.g. Client requested 3 more days" :
                 action === "setMaintenance" ? "e.g. Engine oil leak, brake service" :
                 action === "markReturned"   ? "e.g. Returned with minor scratch" :

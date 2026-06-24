@@ -1,14 +1,15 @@
 // ============================================================
-//  SMILES FLEET MANAGER — Google Apps Script Backend v6
-//  New: Currency, Checkout fines, Payment status, Sold cars,
-//       Move car (reuses Location Updated), Expiring/Unpaid views
+//  SMILES FLEET MANAGER — Google Apps Script Backend v8
+//  Performance: getCarByPlate, getCarHistory, paginated history
+//  Reservations: separate sheet, date-aware, hard overlap block
 // ============================================================
 
-const SPREADSHEET_ID = "1xK1tVQa1bHR-FVb1Tr2MjZdtm3_QHt1PdulfVLgoFtc";
-const FLEET_SHEET    = "Fleet";
-const HISTORY_SHEET  = "History";
-const CONFIG_SHEET   = "Config";
-const SOLD_SHEET     = "Sold";
+const SPREADSHEET_ID   = "1xK1tVQa1bHR-FVb1Tr2MjZdtm3_QHt1PdulfVLgoFtc";
+const FLEET_SHEET      = "Fleet";
+const HISTORY_SHEET    = "History";
+const CONFIG_SHEET     = "Config";
+const SOLD_SHEET       = "Sold";
+const RESERVATIONS_SHEET = "Reservations";
 
 function respond(data) {
   return ContentService
@@ -20,14 +21,16 @@ function respond(data) {
 function doGet(e) {
   const action = e.parameter.action;
   try {
-    if (action === "getFleet")     return respond(getFleet());
-    if (action === "getHistory")   return respond(getHistory());
-    if (action === "getConfig")    return respond(getConfigV7());
-    if (action === "getSold")      return respond(getSold());
-    if (action === "getSubHire")   return respond(getSubHire());
-    if (action === "getClients")   return respond(getClients());
-    if (action === "getDashboard") return respond(getDashboard());
-    if (action === "testRole")     return respond(testRole(e.parameter.name || ""));
+    if (action === "getFleet")        return respond(getFleet());
+    if (action === "getHistory")      return respond(getHistory());
+    if (action === "getConfig")       return respond(getConfigV7());
+    if (action === "getSold")         return respond(getSold());
+    if (action === "getSubHire")      return respond(getSubHire());
+    if (action === "getClients")      return respond(getClients());
+    if (action === "getDashboard")    return respond(getDashboard());
+    if (action === "getCarByPlate")   return respond(getCarByPlate(e.parameter.plate || ""));
+    if (action === "getCarHistory")   return respond(getCarHistory(e.parameter.plate || ""));
+    if (action === "testRole")        return respond(testRole(e.parameter.name || ""));
     return respond({ error: "Unknown action: " + action });
   } catch (err) {
     return respond({ error: err.message });
@@ -38,23 +41,20 @@ function doPost(e) {
   const body = JSON.parse(e.postData.contents);
   const action = body.action;
   try {
-    if (action === "verifyStaff")     return respond(verifyStaff(body));
-    if (action === "checkOut")        return respond(checkOut(body));
-    if (action === "markReturned")    return respond(markReturned(body));
-    if (action === "extendBooking")   return respond(extendBooking(body));
-    if (action === "setMaintenance")  return respond(setMaintenance(body));
-    if (action === "setAvailable")    return respond(setAvailable(body));
-    if (action === "updateLocation")  return respond(updateLocation(body));
-    if (action === "updatePayment")   return respond(updatePayment(body));
-    if (action === "markSold")        return respond(markSold(body));
-    if (action === "addStaff")        return respond(addStaff(body));
-    if (action === "addLocation")     return respond(addConfigItem("Location", body.name));
-    if (action === "addGarage")       return respond(addConfigItem("Garage",   body.name));
-    if (action === "addDriver")       return respond(addConfigItem("Driver",   body.name));
-    if (action === "addCarNote")      return respond(addCarNote(body));
-    if (action === "reserveCar")           return respond(reserveCar(body));
-    if (action === "activateReservation")  return respond(activateReservation(body));
-    if (action === "cancelReservation")    return respond(cancelReservation(body));
+    if (action === "verifyStaff")          return respond(verifyStaff(body));
+    if (action === "checkOut")             return respond(checkOut(body));
+    if (action === "markReturned")         return respond(markReturned(body));
+    if (action === "extendBooking")        return respond(extendBooking(body));
+    if (action === "setMaintenance")       return respond(setMaintenance(body));
+    if (action === "setAvailable")         return respond(setAvailable(body));
+    if (action === "updateLocation")       return respond(updateLocation(body));
+    if (action === "updatePayment")        return respond(updatePayment(body));
+    if (action === "markSold")             return respond(markSold(body));
+    if (action === "addStaff")             return respond(addStaff(body));
+    if (action === "addLocation")          return respond(addConfigItem("Location", body.name));
+    if (action === "addGarage")            return respond(addConfigItem("Garage",   body.name));
+    if (action === "addDriver")            return respond(addConfigItem("Driver",   body.name));
+    if (action === "addCarNote")           return respond(addCarNote(body));
     if (action === "addSubHire")           return respond(addSubHire(body));
     if (action === "returnSubHire")        return respond(returnSubHire(body));
     if (action === "updateSubHirePayment") return respond(updateSubHirePayment(body));
@@ -87,30 +87,7 @@ function fmtDate(val) {
 function getFleet() {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(FLEET_SHEET);
   const rows  = sheet.getDataRange().getValues();
-  const data  = rows.slice(1).map((row, i) => ({
-    rowIndex:       i + 2,
-    plate:          row[0]  || "",
-    type:           row[1]  || "",
-    location:       row[2]  || "",
-    status:         row[3]  || "Available",
-    currentClient:  row[4]  || "",
-    clientPhone:    row[5]  || "",
-    bookedFrom:     fmtDate(row[6]),
-    returnDate:     fmtDate(row[7]),
-    remarks:        row[8]  || "",
-    fuelOut:        row[9]  || "",
-    amount:         row[10] || "",
-    currency:       row[11] || "TZS",
-    garage:         row[12] || "",
-    paymentStatus:  row[13] || "",
-    amountPaid:     row[14] || "",
-    policeFineOut:  row[15] || "",
-    parkingFineOut: row[16] || "",
-    kmOut:          row[17] || "",
-    driver:         row[18] || "",
-    regCardUrl:     row[19] || "",
-    photosUrl:      row[20] || "",
-  }));
+  const data  = rows.slice(1).map((row, i) => mapFleetRow(row, i));
   return { success: true, data };
 }
 
@@ -177,12 +154,49 @@ function addHistory(entry) {
   ]);
 }
 
+// Returns last N history entries (default 300) — avoids sending entire log
 function getHistory() {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(HISTORY_SHEET);
   const rows  = sheet.getDataRange().getValues();
+  if (rows.length <= 1) return { success: true, data: [], total: 0 };
+  const tz      = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
+  const dataRows = rows.slice(1);
+  const total    = dataRows.length;
+  // Send newest 300 rows — enough for the History tab UI
+  const sliced   = dataRows.slice(-300).reverse();
+  const data = sliced.map(row => mapHistoryRow(row, tz));
+  return { success: true, data, total };
+}
+
+// Fetch full history for one specific plate — used by Car Profile page
+function getCarHistory(plate) {
+  if (!plate) return { success: true, data: [] };
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(HISTORY_SHEET);
+  const rows  = sheet.getDataRange().getValues();
   if (rows.length <= 1) return { success: true, data: [] };
-  const tz = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
-  const data = rows.slice(1).reverse().map(row => ({
+  const tz   = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
+  const norm = plate.trim().toLowerCase();
+  const data = rows.slice(1)
+    .filter(row => (row[1] || "").toString().trim().toLowerCase() === norm)
+    .reverse()
+    .map(row => mapHistoryRow(row, tz));
+  return { success: true, data };
+}
+
+// Fetch single car from Fleet by plate — used by Car Profile page
+function getCarByPlate(plate) {
+  if (!plate) return { success: false, error: "Plate required" };
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(FLEET_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+  const norm  = plate.trim().toLowerCase();
+  const row   = rows.slice(1).find(r => (r[0] || "").toString().trim().toLowerCase() === norm);
+  if (!row) return { success: false, error: "Car not found: " + plate };
+  return { success: true, data: mapFleetRow(row, 0) };
+}
+
+// Shared row mapper for History rows
+function mapHistoryRow(row, tz) {
+  return {
     timestamp:     row[0]  ? Utilities.formatDate(new Date(row[0]), tz, "yyyy-MM-dd'T'HH:mm:ss") : "",
     plate:         row[1]  || "",
     type:          row[2]  || "",
@@ -206,8 +220,35 @@ function getHistory() {
     kmOut:         row[20] || "",
     kmIn:          row[21] || "",
     driver:        row[22] || "",
-  }));
-  return { success: true, data };
+  };
+}
+
+// Shared row mapper for Fleet rows
+function mapFleetRow(row, i) {
+  return {
+    rowIndex:       i + 2,
+    plate:          row[0]  || "",
+    type:           row[1]  || "",
+    location:       row[2]  || "",
+    status:         row[3]  || "Available",
+    currentClient:  row[4]  || "",
+    clientPhone:    row[5]  || "",
+    bookedFrom:     fmtDate(row[6]),
+    returnDate:     fmtDate(row[7]),
+    remarks:        row[8]  || "",
+    fuelOut:        row[9]  || "",
+    amount:         row[10] || "",
+    currency:       row[11] || "TZS",
+    garage:         row[12] || "",
+    paymentStatus:  row[13] || "",
+    amountPaid:     row[14] || "",
+    policeFineOut:  row[15] || "",
+    parkingFineOut: row[16] || "",
+    kmOut:          row[17] || "",
+    driver:         row[18] || "",
+    regCardUrl:     row[19] || "",
+    photosUrl:      row[20] || "",
+  };
 }
 
 // ── Sold Sheet ────────────────────────────────────────────────
@@ -977,118 +1018,109 @@ function getSharedLink(path) {
   return created.url;
 }
 
-// ── Main sync function — run this manually from Apps Script ──
+// ── Main sync function — run repeatedly until log shows "ALL DONE" ──
+// Each run processes one type-folder to stay under the 6-min time limit.
 function syncDropboxLinks() {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(FLEET_SHEET);
   const rows  = sheet.getDataRange().getValues();
+  const props = PropertiesService.getScriptProperties();
 
-  // Build normalised plate → row index map
   const plateMap = {};
   rows.slice(1).forEach((row, i) => {
     const plate = (row[0] || "").toString().trim();
     if (plate) plateMap[normPlate(plate)] = { rowIndex: i + 2, plate };
   });
+  Logger.log(`Fleet: ${Object.keys(plateMap).length} cars.`);
 
-  const totalCars = Object.keys(plateMap).length;
-  Logger.log(`Fleet has ${totalCars} cars. Starting Dropbox sync...`);
+  const doneReg  = JSON.parse(props.getProperty("SYNC_DONE_REG")  || "[]");
+  const donePics = JSON.parse(props.getProperty("SYNC_DONE_PICS") || "[]");
 
-  let regMatched = 0, picsMatched = 0, regFailed = 0, picsFailed = 0;
-
-  // ── Helper: get all plate-level folders from a two-level structure ──
-  // Level 1: car type folders (Alphard, Harrier, etc.)
-  // Level 2: plate folders inside each type folder
-  function getAllPlateFolders(rootPath) {
-    const plateFolders = [];
-    try {
-      const typeEntries = listDropboxFolder(rootPath);
-      typeEntries.forEach(typeEntry => {
-        if (typeEntry[".tag"] !== "folder") return;
-        try {
-          const plateEntries = listDropboxFolder(typeEntry.path_lower);
-          plateEntries.forEach(plateEntry => {
-            if (plateEntry[".tag"] === "folder") {
-              plateFolders.push(plateEntry);
-            }
-          });
-        } catch (e) {
-          Logger.log(`Could not read subfolder ${typeEntry.name}: ${e.message}`);
-        }
-      });
-    } catch (e) {
-      Logger.log(`Could not read root folder ${rootPath}: ${e.message}`);
-    }
-    return plateFolders;
-  }
-
-  // ── Registration Cards ────────────────────────────────────
-  Logger.log("Fetching Registration Cards folders (2 levels)...");
-  const regFolders = getAllPlateFolders(REG_CARDS_PATH);
-  Logger.log(`Found ${regFolders.length} plate-level folders in Registration Cards.`);
-
-  regFolders.forEach(folder => {
-    const normName = normPlate(folder.name);
-    const match    = plateMap[normName];
-    if (!match) return;
-    try {
-      const link = getSharedLink(folder.path_lower);
-      sheet.getRange(match.rowIndex, 20).setValue(link);
-      regMatched++;
-      Logger.log(`✅ Reg Card: ${match.plate}`);
-    } catch (e) {
-      regFailed++;
-      Logger.log(`❌ Reg Card failed for ${match.plate}: ${e.message}`);
-    }
-  });
-
-  // ── Car Pics ─────────────────────────────────────────────
-  // Car Pics may be one level (plate folders directly) or two levels
-  // Try one level first, fall back to two levels
-  Logger.log("Fetching Car Pics folders...");
-  let picsFolders = [];
+  // ── Process one Reg Cards type folder ──
+  let regMatched = 0, regFailed = 0;
   try {
-    const topLevel = listDropboxFolder(CAR_PICS_PATH);
-    // Check if top-level entries look like plates or like type names
-    const looksLikePlates = topLevel.filter(e =>
-      e[".tag"] === "folder" && normPlate(e.name) in plateMap
-    );
-    if (looksLikePlates.length > 0) {
-      // Top level IS plates — use directly
-      picsFolders = topLevel.filter(e => e[".tag"] === "folder");
-      Logger.log(`Car Pics: found ${picsFolders.length} plate folders at top level.`);
+    const typeEntries = listDropboxFolder(REG_CARDS_PATH).filter(e => e[".tag"] === "folder");
+    const pending = typeEntries.filter(e => !doneReg.includes(e.name));
+    if (pending.length > 0) {
+      const tf = pending[0];
+      Logger.log(`Reg Cards: processing "${tf.name}" (${pending.length - 1} remaining after this)...`);
+      listDropboxFolder(tf.path_lower).filter(e => e[".tag"] === "folder").forEach(folder => {
+        const match = plateMap[normPlate(folder.name)];
+        if (!match) return;
+        try {
+          sheet.getRange(match.rowIndex, 20).setValue(getSharedLink(folder.path_lower));
+          regMatched++;
+          Logger.log(`✅ Reg Card: ${match.plate}`);
+        } catch (e) { regFailed++; Logger.log(`❌ ${match.plate}: ${e.message}`); }
+      });
+      doneReg.push(tf.name);
+      props.setProperty("SYNC_DONE_REG", JSON.stringify(doneReg));
     } else {
-      // Top level is type folders — go two levels deep
-      picsFolders = getAllPlateFolders(CAR_PICS_PATH);
-      Logger.log(`Car Pics: found ${picsFolders.length} plate folders at second level.`);
+      Logger.log("Reg Cards: all done ✅");
     }
-  } catch (e) {
-    Logger.log(`❌ Could not read Car Pics folder: ${e.message}`);
-  }
+  } catch(e) { Logger.log(`❌ Reg Cards: ${e.message}`); }
 
-  picsFolders.forEach(folder => {
-    const normName = normPlate(folder.name);
-    const match    = plateMap[normName];
-    if (!match) return;
-    try {
-      const link = getSharedLink(folder.path_lower);
-      sheet.getRange(match.rowIndex, 21).setValue(link);
-      picsMatched++;
-      Logger.log(`✅ Car Pics: ${match.plate}`);
-    } catch (e) {
-      picsFailed++;
-      Logger.log(`❌ Car Pics failed for ${match.plate}: ${e.message}`);
+  // ── Process one Car Pics type folder ──
+  let picsMatched = 0, picsFailed = 0;
+  try {
+    const topLevel = listDropboxFolder(CAR_PICS_PATH).filter(e => e[".tag"] === "folder");
+    const isFlat = topLevel.filter(e => normPlate(e.name) in plateMap).length > 5;
+    if (isFlat) {
+      if (donePics.length === 0) {
+        topLevel.forEach(folder => {
+          const match = plateMap[normPlate(folder.name)];
+          if (!match) return;
+          try {
+            sheet.getRange(match.rowIndex, 21).setValue(getSharedLink(folder.path_lower));
+            picsMatched++;
+            Logger.log(`✅ Car Pics: ${match.plate}`);
+          } catch (e) { picsFailed++; Logger.log(`❌ ${match.plate}: ${e.message}`); }
+        });
+        props.setProperty("SYNC_DONE_PICS", JSON.stringify(["done"]));
+        Logger.log("Car Pics: flat structure done ✅");
+      } else { Logger.log("Car Pics: already done ✅"); }
+    } else {
+      const pending = topLevel.filter(e => !donePics.includes(e.name));
+      if (pending.length > 0) {
+        const tf = pending[0];
+        Logger.log(`Car Pics: processing "${tf.name}" (${pending.length - 1} remaining after this)...`);
+        listDropboxFolder(tf.path_lower).filter(e => e[".tag"] === "folder").forEach(folder => {
+          const match = plateMap[normPlate(folder.name)];
+          if (!match) return;
+          try {
+            sheet.getRange(match.rowIndex, 21).setValue(getSharedLink(folder.path_lower));
+            picsMatched++;
+            Logger.log(`✅ Car Pics: ${match.plate}`);
+          } catch (e) { picsFailed++; Logger.log(`❌ ${match.plate}: ${e.message}`); }
+        });
+        donePics.push(tf.name);
+        props.setProperty("SYNC_DONE_PICS", JSON.stringify(donePics));
+      } else { Logger.log("Car Pics: all done ✅"); }
     }
-  });
+  } catch(e) { Logger.log(`❌ Car Pics: ${e.message}`); }
 
-  // ── Summary ───────────────────────────────────────────────
-  const summary = [
-    `✅ Sync complete!`,
-    `Registration Cards: ${regMatched} matched, ${regFailed} failed`,
-    `Car Pics: ${picsMatched} matched, ${picsFailed} failed`,
-    `Cars with no Dropbox folder: ${totalCars - Math.max(regMatched, picsMatched)}`,
-  ].join("\n");
+  // Check completion
+  try {
+    const regTotal = listDropboxFolder(REG_CARDS_PATH).filter(e => e[".tag"] === "folder").length;
+    const regDone  = JSON.parse(props.getProperty("SYNC_DONE_REG") || "[]").length;
+    const picsDone = JSON.parse(props.getProperty("SYNC_DONE_PICS") || "[]").length;
+    if (regDone >= regTotal && picsDone > 0) {
+      Logger.log("🎉 ALL DONE — run syncDropboxReset() to clear cursor for next time.");
+      props.deleteProperty("SYNC_DONE_REG");
+      props.deleteProperty("SYNC_DONE_PICS");
+    } else {
+      Logger.log(`▶ Run again to continue. (Reg: ${regDone}/${regTotal} done, Pics: ${picsDone > 0 ? "done" : "pending"})`);
+    }
+  } catch(e) {}
 
-  Logger.log(summary);
+  Logger.log(`This run: Reg +${regMatched} matched +${regFailed} failed | Pics +${picsMatched} matched +${picsFailed} failed`);
+}
+
+// Reset sync cursor to re-sync everything from scratch
+function syncDropboxReset() {
+  PropertiesService.getScriptProperties().deleteProperty("SYNC_DONE_REG");
+  PropertiesService.getScriptProperties().deleteProperty("SYNC_DONE_PICS");
+  Logger.log("✅ Reset. Run syncDropboxLinks() to start fresh.");
 }
 
 // ── Update Fleet sheet headers to include new URL columns ──

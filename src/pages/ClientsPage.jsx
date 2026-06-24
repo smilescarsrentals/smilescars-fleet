@@ -1,6 +1,7 @@
 // src/pages/ClientsPage.jsx
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../lib/api";
+import { cache } from "../lib/cache";
 
 function fmtDate(val) {
   if (!val) return "—";
@@ -29,11 +30,17 @@ export default function ClientsPage() {
   const [search,   setSearch]   = useState("");
   const [selected, setSelected] = useState(null); // client detail view
 
-  const load = async () => {
+  const load = async (forceRefresh = false) => {
+    if (!forceRefresh) {
+      const cached = cache.get("clients", 300000); // 5 min cache — clients rarely change
+      if (cached) { setClients(cached); setLoading(false); return; }
+    }
     setLoading(true); setError("");
     try {
       const res = await api.getClients();
-      setClients(res.data || []);
+      const data = res.data || [];
+      setClients(data);
+      cache.set("clients", data);
     } catch (e) {
       setError("Failed to load clients: " + e.message);
     } finally {
@@ -64,7 +71,7 @@ export default function ClientsPage() {
               <h2 style={styles.pageTitle}>Client Directory</h2>
               <p style={styles.pageSubtitle}>{clients.length} clients · auto-built from rental history</p>
             </div>
-            <button style={styles.refreshBtn} onClick={load}>↻ Refresh</button>
+            <button style={styles.refreshBtn} onClick={() => { cache.clear("clients"); load(true); }}>↻ Refresh</button>
           </div>
 
           <div className="sc-filter-row" style={{ marginBottom: "1rem" }}>

@@ -1,6 +1,7 @@
 // src/pages/HistoryPage.jsx
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../lib/api";
+import { cache } from "../lib/cache";
 import { exportToExcel } from "../lib/exportExcel";
 
 const ACTION_COLORS = {
@@ -51,6 +52,7 @@ export default function HistoryPage({ role }) {
   const [fLocation,  setFLocation]  = useState("");
   const [fType,      setFType]      = useState("");
   const [fStaff,     setFStaff]     = useState("");
+  const [fDate,      setFDate]      = useState("");
   const [showExport, setShowExport] = useState(false);
   // export-only filters
   const [exPlate,    setExPlate]    = useState("");
@@ -61,11 +63,17 @@ export default function HistoryPage({ role }) {
   const [page,       setPage]       = useState(1);
   const PER_PAGE = 30;
 
-  const load = async () => {
+  const load = async (forceRefresh = false) => {
+    if (!forceRefresh) {
+      const cached = cache.get("history", 120000); // 2 min cache for history
+      if (cached) { setHistory(cached); setLoading(false); return; }
+    }
     setLoading(true); setError("");
     try {
       const res = await api.getHistory();
-      setHistory(res.data || []);
+      const data = res.data || [];
+      setHistory(data);
+      cache.set("history", data);
     } catch (e) {
       setError("Failed to load history: " + e.message);
     } finally {
@@ -82,14 +90,18 @@ export default function HistoryPage({ role }) {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return history.filter(h =>
-      (!q || h.plate.toLowerCase().includes(q) || h.type.toLowerCase().includes(q) || (h.client||"").toLowerCase().includes(q)) &&
-      (!fAction   || h.action    === fAction) &&
-      (!fLocation || h.location  === fLocation) &&
-      (!fType     || h.type      === fType) &&
-      (!fStaff    || h.staffName === fStaff)
-    );
-  }, [history, search, fAction, fLocation, fType, fStaff]);
+    return history.filter(h => {
+      const ts = h.timestamp ? h.timestamp.split("T")[0] : "";
+      return (
+        (!q || h.plate.toLowerCase().includes(q) || h.type.toLowerCase().includes(q) || (h.client||"").toLowerCase().includes(q)) &&
+        (!fAction   || h.action    === fAction) &&
+        (!fLocation || h.location  === fLocation) &&
+        (!fType     || h.type      === fType) &&
+        (!fStaff    || h.staffName === fStaff) &&
+        (!fDate     || ts === fDate)
+      );
+    });
+  }, [history, search, fAction, fLocation, fType, fStaff, fDate]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const paginated  = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -173,7 +185,7 @@ export default function HistoryPage({ role }) {
         </div>
       )}
 
-      <div style={styles.filterRow}>
+      <div className="sc-filter-row">
         <input style={styles.search} placeholder="Search plate, type or client…"
           value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         <select style={styles.sel} value={fAction} onChange={e => { setFAction(e.target.value); setPage(1); }}>
@@ -192,12 +204,18 @@ export default function HistoryPage({ role }) {
           <option value="">All staff</option>
           {staff.map(s => <option key={s}>{s}</option>)}
         </select>
+        <input type="date" style={styles.sel} value={fDate}
+          onChange={e => { setFDate(e.target.value); setPage(1); }}
+          title="Filter by date" />
+        {(search || fAction || fLocation || fType || fStaff || fDate) && (
+          <button style={styles.clearBtn} onClick={() => { setSearch(""); setFAction(""); setFLocation(""); setFType(""); setFStaff(""); setFDate(""); setPage(1); }}>Clear</button>
+        )}
         <span style={styles.countLabel}>{filtered.length} of {history.length}</span>
         {canExport && <button style={styles.exportBtn} onClick={() => setShowExport(v => !v)}>⬇ Export</button>}
-        <button style={styles.refreshBtn} onClick={load}>↻</button>
+        <button style={styles.refreshBtn} onClick={() => { cache.clear("history"); load(true); }}>↻</button>
       </div>
 
-      <div style={styles.tableWrap}>
+      <div className="sc-table-wrap">
         <table style={styles.table}>
           <thead>
             <tr>
@@ -286,6 +304,7 @@ const styles = {
   sel:           { padding: "8px 10px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, background: "#fff", color: "#111" },
   exportSel:     { padding: "8px 10px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, background: "#fff", width: "100%", boxSizing: "border-box", color: "#111" },
   countLabel:    { fontSize: 12, color: "#888", marginLeft: "auto" },
+  clearBtn:      { padding: "8px 12px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, background: "#fff", cursor: "pointer", color: "#555" },
   exportBtn:     { padding: "8px 12px", fontSize: 13, border: "1.5px solid #16a34a", borderRadius: 7, background: "#f0fdf4", cursor: "pointer", color: "#15803d", fontWeight: 500 },
   refreshBtn:    { padding: "8px 12px", fontSize: 16, border: "1.5px solid #e5e7eb", borderRadius: 7, background: "#fff", cursor: "pointer", color: "#555" },
   tableWrap:     { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, overflow: "auto" },
