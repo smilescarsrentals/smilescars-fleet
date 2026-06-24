@@ -46,6 +46,7 @@ export const api = {
   addLocation:           (name) => post({ action: "addLocation",            name }),
   addGarage:             (name) => post({ action: "addGarage",              name }),
   addDriver:             (name) => post({ action: "addDriver",              name }),
+  addCarNote:            (body) => post({ action: "addCarNote",             ...body }),
   addSubHire:            (body) => post({ action: "addSubHire",             ...body }),
   returnSubHire:         (body) => post({ action: "returnSubHire",          ...body }),
   updateSubHirePayment:  (body) => post({ action: "updateSubHirePayment",   ...body }),

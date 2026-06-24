@@ -8,6 +8,7 @@ import HistoryPage from "./pages/HistoryPage";
 import SoldPage from "./pages/SoldPage";
 import SubHirePage from "./pages/SubHirePage";
 import ClientsPage from "./pages/ClientsPage";
+import CarProfilePage from "./pages/CarProfilePage";
 import logo from "./assets/logo.js";
 
 export default function App() {
@@ -41,7 +42,12 @@ export default function App() {
         <Routes>
           <Route path="/"         element={<FleetPage staffName={staffName} role={role} />} />
           <Route path="/history"  element={<HistoryPage role={role} />} />
-          <Route path="/clients"  element={<ClientsPage />} />
+          <Route path="/clients"    element={<ClientsPage />} />
+          <Route path="/car/:plate" element={
+            (role === "Admin" || role === "Manager")
+              ? <CarProfilePage staffName={staffName} />
+              : <Navigate to="/" />
+          } />
           <Route path="/sub-hire" element={<SubHirePage staffName={staffName} />} />
           <Route path="/sold"     element={<SoldPage />} />
           <Route path="*"         element={<Navigate to="/" />} />

@@ -1,5 +1,6 @@
 // src/pages/FleetPage.jsx
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { exportToExcel } from "../lib/exportExcel";
 import ActionModal from "../components/ActionModal";
@@ -42,6 +43,7 @@ const PAYMENT_STYLES = {
 };
 
 export default function FleetPage({ staffName, role }) {
+  const navigate = useNavigate();
   const canExportOrSell = role === "Admin" || role === "Manager";
   const [fleet,     setFleet]     = useState([]);
   const [config,    setConfig]    = useState({ staff: [], locations: [], garages: [] });
@@ -268,12 +270,12 @@ export default function FleetPage({ staffName, role }) {
       <div className="sc-table-wrap">
         <table style={styles.table}>
           <thead>
-            <tr>{["Plate","Type","Location","Status","Client","Return Date","Payment","Action"].map(h =>
+            <tr>{["Plate","Type","Location","Status","Client","Return Date","Docs","Payment","Action"].map(h =>
               <th key={h} style={styles.th}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
-            {paginated.length === 0 && <tr><td colSpan={8} style={styles.empty}>No vehicles match your filters.</td></tr>}
+            {paginated.length === 0 && <tr><td colSpan={9} style={styles.empty}>No vehicles match your filters.</td></tr>}
             {paginated.map(car => {
               const ss = STATUS_STYLES[car.status] || STATUS_STYLES.Available;
               const du = car.status === "Rented" ? daysUntil(car.returnDate) : null;
@@ -282,7 +284,14 @@ export default function FleetPage({ staffName, role }) {
               const ps = PAYMENT_STYLES[car.paymentStatus] || null;
               return (
                 <tr key={car.plate} style={isExpired ? { background: "#fef2f2" } : isExpiringSoon ? { background: "#fffbeb" } : {}}>
-                  <td data-label="Plate" style={{ ...styles.td, fontWeight: 600, fontSize: 13 }}>{car.plate}</td>
+                  <td data-label="Plate" style={{ ...styles.td, fontWeight: 600, fontSize: 13 }}>
+                    {canExportOrSell ? (
+                      <span style={{ cursor: "pointer", color: "#1d4ed8", textDecoration: "underline" }}
+                        onClick={() => navigate(`/car/${encodeURIComponent(car.plate)}`)}>
+                        {car.plate}
+                      </span>
+                    ) : car.plate}
+                  </td>
                   <td data-label="Type" style={styles.td}>{car.type}</td>
                   <td data-label="Location" style={styles.td}>
                     {car.location ? <span style={styles.locChip}>{car.location}</span> : <span style={styles.dim}>—</span>}
@@ -303,6 +312,14 @@ export default function FleetPage({ staffName, role }) {
                     {fmtDate(car.returnDate)}
                     {isExpired && <div style={{ fontSize: 10, fontWeight: 600 }}>OVERDUE</div>}
                     {isExpiringSoon && <div style={{ fontSize: 10, fontWeight: 600 }}>DUE SOON</div>}
+                  </td>
+                  <td data-label="Docs" style={{ ...styles.td, whiteSpace: "nowrap" }}>
+                    {car.regCardUrl
+                      ? <a href={car.regCardUrl} target="_blank" rel="noopener noreferrer" style={styles.docBtn}>📄 Reg</a>
+                      : <span style={styles.docBtnOff}>📄</span>}
+                    {car.photosUrl
+                      ? <a href={car.photosUrl} target="_blank" rel="noopener noreferrer" style={{ ...styles.docBtn, marginLeft: 4, background: "#eff6ff", color: "#2563eb", borderColor: "#bfdbfe" }}>📷 Pics</a>
+                      : <span style={{ ...styles.docBtnOff, marginLeft: 4 }}>📷</span>}
                   </td>
                   <td data-label="Payment" style={styles.td}>
                     {car.status === "Rented" && car.paymentStatus ? (
@@ -368,14 +385,15 @@ export default function FleetPage({ staffName, role }) {
 function ActionButtons({ car, onAction, onMove, canSell }) {
   const btn = (label, action, color, bg, onClick) => (
     <button key={action}
-      style={{ fontSize: 11, padding: "4px 9px", borderRadius: 6, border: `1px solid ${color}`,
-               background: bg, color, cursor: "pointer", marginRight: 4, marginBottom: 4, fontWeight: 500 }}
+      style={{ fontSize: 10, padding: "3px 7px", borderRadius: 5, border: `1px solid ${color}`,
+               background: bg, color, cursor: "pointer", marginRight: 3, fontWeight: 500, whiteSpace: "nowrap" }}
       onClick={onClick || (() => onAction(car, action))}>
       {label}
     </button>
   );
+  const row = { display: "flex", alignItems: "center", flexWrap: "nowrap", gap: 3 };
   if (car.status === "Available") return (
-    <div>
+    <div style={row}>
       {btn("Check Out",   "checkOut",       "#15803d", "#dcfce7")}
       {btn("Reserve",     "reserveCar",     "#6d28d9", "#f5f3ff")}
       {btn("Maintenance", "setMaintenance", "#c2410c", "#fff7ed")}
@@ -384,20 +402,20 @@ function ActionButtons({ car, onAction, onMove, canSell }) {
     </div>
   );
   if (car.status === "Rented") return (
-    <div>
+    <div style={row}>
       {btn("Returned",       "markReturned",  "#2563eb", "#eff6ff")}
       {btn("Extend Booking", "extendBooking", "#0284c7", "#e0f2fe")}
     </div>
   );
   if (car.status === "Reserved") return (
-    <div>
+    <div style={row}>
       {btn("Activate",   "activateReservation", "#15803d", "#dcfce7")}
       {btn("Cancel",     "cancelReservation",   "#dc2626", "#fef2f2")}
       {btn("Extend",     "extendBooking",       "#0284c7", "#e0f2fe")}
     </div>
   );
   if (car.status === "Maintenance") return (
-    <div>
+    <div style={row}>
       {btn("Mark Available", "setAvailable", "#15803d", "#dcfce7")}
       {btn("Move", "move", "#1d4ed8", "#eff6ff", () => onMove(car))}
     </div>
@@ -428,6 +446,8 @@ const styles = {
   paymentSelect: { fontSize: 11, fontWeight: 600, padding: "3px 6px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit" },
   locChip:       { fontSize: 12, color: "#374151", background: "#f3f4f6", borderRadius: 5, padding: "2px 8px" },
   dim:           { color: "#ccc", fontSize: 13 },
+  docBtn:        { fontSize: 11, fontWeight: 600, padding: "3px 7px", borderRadius: 5, border: "1px solid #bbf7d0", background: "#f0fdf4", color: "#15803d", textDecoration: "none", display: "inline-block" },
+  docBtnOff:     { fontSize: 13, color: "#ddd", display: "inline-block" },
   empty:         { textAlign: "center", padding: "2.5rem", color: "#aaa", fontSize: 14 },
   pager:         { display: "flex", alignItems: "center", justifyContent: "center", gap: 16, padding: "1rem 0" },
   pgBtn:         { padding: "7px 16px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, background: "#fff", cursor: "pointer" },

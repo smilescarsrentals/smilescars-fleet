@@ -51,6 +51,7 @@ function doPost(e) {
     if (action === "addLocation")     return respond(addConfigItem("Location", body.name));
     if (action === "addGarage")       return respond(addConfigItem("Garage",   body.name));
     if (action === "addDriver")       return respond(addConfigItem("Driver",   body.name));
+    if (action === "addCarNote")      return respond(addCarNote(body));
     if (action === "reserveCar")           return respond(reserveCar(body));
     if (action === "activateReservation")  return respond(activateReservation(body));
     if (action === "cancelReservation")    return respond(cancelReservation(body));
@@ -107,6 +108,8 @@ function getFleet() {
     parkingFineOut: row[16] || "",
     kmOut:          row[17] || "",
     driver:         row[18] || "",
+    regCardUrl:     row[19] || "",
+    photosUrl:      row[20] || "",
   }));
   return { success: true, data };
 }
@@ -908,4 +911,208 @@ function getConfigV7() {
   const garages   = rows.filter(r => r[0] === "Garage").map(r => r[1]).filter(Boolean);
   const drivers   = rows.filter(r => r[0] === "Driver").map(r => r[1]).filter(Boolean);
   return { success: true, staff, locations, garages, drivers };
+}
+
+// ============================================================
+//  DROPBOX SYNC — syncDropboxLinks()
+//  Run this once (and whenever new cars are added) to
+//  auto-fill Reg Card URL and Photos URL in the Fleet sheet.
+//
+//  Fleet columns added:
+//    T (col 20) = Reg Card URL
+//    U (col 21) = Photos URL
+//
+//  Folder paths in Dropbox:
+//    Registration Cards: /Cars/Vehicle Registration Cards
+//    Car Pics:           /Cars/Car Pics
+// ============================================================
+
+const REG_CARDS_PATH = "/Cars/Vehicle Registration Cards";
+const CAR_PICS_PATH  = "/Cars/Car Pics";
+
+// Strip all spaces and convert to uppercase for fuzzy plate matching
+function normPlate(p) {
+  return p.toString().replace(/\s+/g, "").toUpperCase();
+}
+
+// Call Dropbox API
+function dropboxPost(endpoint, payload) {
+  const token = PropertiesService.getScriptProperties().getProperty("DROPBOX_TOKEN");
+  if (!token) throw new Error("DROPBOX_TOKEN not set in Script Properties.");
+  const res = UrlFetchApp.fetch("https://api.dropboxapi.com/2/" + endpoint, {
+    method:  "POST",
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  });
+  const json = JSON.parse(res.getContentText());
+  if (json.error) throw new Error("Dropbox API error: " + JSON.stringify(json.error));
+  return json;
+}
+
+// List all entries (files + folders) in a Dropbox path, handling pagination
+function listDropboxFolder(path) {
+  let result = dropboxPost("files/list_folder", { path, recursive: false, limit: 2000 });
+  let entries = result.entries || [];
+  while (result.has_more) {
+    result  = dropboxPost("files/list_folder/continue", { cursor: result.cursor });
+    entries = entries.concat(result.entries || []);
+  }
+  return entries;
+}
+
+// Get or create a shared link for a Dropbox path
+function getSharedLink(path) {
+  try {
+    // Try to get existing shared link first
+    const existing = dropboxPost("sharing/list_shared_links", { path, direct_only: true });
+    if (existing.links && existing.links.length > 0) return existing.links[0].url;
+  } catch (e) {
+    // No existing link — create one
+  }
+  const created = dropboxPost("sharing/create_shared_link_with_settings", {
+    path,
+    settings: { requested_visibility: "public" },
+  });
+  return created.url;
+}
+
+// ── Main sync function — run this manually from Apps Script ──
+function syncDropboxLinks() {
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(FLEET_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+
+  // Build normalised plate → row index map
+  const plateMap = {};
+  rows.slice(1).forEach((row, i) => {
+    const plate = (row[0] || "").toString().trim();
+    if (plate) plateMap[normPlate(plate)] = { rowIndex: i + 2, plate };
+  });
+
+  const totalCars = Object.keys(plateMap).length;
+  Logger.log(`Fleet has ${totalCars} cars. Starting Dropbox sync...`);
+
+  let regMatched = 0, picsMatched = 0, regFailed = 0, picsFailed = 0;
+
+  // ── Helper: get all plate-level folders from a two-level structure ──
+  // Level 1: car type folders (Alphard, Harrier, etc.)
+  // Level 2: plate folders inside each type folder
+  function getAllPlateFolders(rootPath) {
+    const plateFolders = [];
+    try {
+      const typeEntries = listDropboxFolder(rootPath);
+      typeEntries.forEach(typeEntry => {
+        if (typeEntry[".tag"] !== "folder") return;
+        try {
+          const plateEntries = listDropboxFolder(typeEntry.path_lower);
+          plateEntries.forEach(plateEntry => {
+            if (plateEntry[".tag"] === "folder") {
+              plateFolders.push(plateEntry);
+            }
+          });
+        } catch (e) {
+          Logger.log(`Could not read subfolder ${typeEntry.name}: ${e.message}`);
+        }
+      });
+    } catch (e) {
+      Logger.log(`Could not read root folder ${rootPath}: ${e.message}`);
+    }
+    return plateFolders;
+  }
+
+  // ── Registration Cards ────────────────────────────────────
+  Logger.log("Fetching Registration Cards folders (2 levels)...");
+  const regFolders = getAllPlateFolders(REG_CARDS_PATH);
+  Logger.log(`Found ${regFolders.length} plate-level folders in Registration Cards.`);
+
+  regFolders.forEach(folder => {
+    const normName = normPlate(folder.name);
+    const match    = plateMap[normName];
+    if (!match) return;
+    try {
+      const link = getSharedLink(folder.path_lower);
+      sheet.getRange(match.rowIndex, 20).setValue(link);
+      regMatched++;
+      Logger.log(`✅ Reg Card: ${match.plate}`);
+    } catch (e) {
+      regFailed++;
+      Logger.log(`❌ Reg Card failed for ${match.plate}: ${e.message}`);
+    }
+  });
+
+  // ── Car Pics ─────────────────────────────────────────────
+  // Car Pics may be one level (plate folders directly) or two levels
+  // Try one level first, fall back to two levels
+  Logger.log("Fetching Car Pics folders...");
+  let picsFolders = [];
+  try {
+    const topLevel = listDropboxFolder(CAR_PICS_PATH);
+    // Check if top-level entries look like plates or like type names
+    const looksLikePlates = topLevel.filter(e =>
+      e[".tag"] === "folder" && normPlate(e.name) in plateMap
+    );
+    if (looksLikePlates.length > 0) {
+      // Top level IS plates — use directly
+      picsFolders = topLevel.filter(e => e[".tag"] === "folder");
+      Logger.log(`Car Pics: found ${picsFolders.length} plate folders at top level.`);
+    } else {
+      // Top level is type folders — go two levels deep
+      picsFolders = getAllPlateFolders(CAR_PICS_PATH);
+      Logger.log(`Car Pics: found ${picsFolders.length} plate folders at second level.`);
+    }
+  } catch (e) {
+    Logger.log(`❌ Could not read Car Pics folder: ${e.message}`);
+  }
+
+  picsFolders.forEach(folder => {
+    const normName = normPlate(folder.name);
+    const match    = plateMap[normName];
+    if (!match) return;
+    try {
+      const link = getSharedLink(folder.path_lower);
+      sheet.getRange(match.rowIndex, 21).setValue(link);
+      picsMatched++;
+      Logger.log(`✅ Car Pics: ${match.plate}`);
+    } catch (e) {
+      picsFailed++;
+      Logger.log(`❌ Car Pics failed for ${match.plate}: ${e.message}`);
+    }
+  });
+
+  // ── Summary ───────────────────────────────────────────────
+  const summary = [
+    `✅ Sync complete!`,
+    `Registration Cards: ${regMatched} matched, ${regFailed} failed`,
+    `Car Pics: ${picsMatched} matched, ${picsFailed} failed`,
+    `Cars with no Dropbox folder: ${totalCars - Math.max(regMatched, picsMatched)}`,
+  ].join("\n");
+
+  Logger.log(summary);
+}
+
+// ── Update Fleet sheet headers to include new URL columns ──
+// Run updateDropboxHeaders() once after pasting this code
+function updateDropboxHeaders() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(FLEET_SHEET);
+  sheet.getRange(1, 20, 1, 2).setValues([["Reg Card URL", "Photos URL"]]).setFontWeight("bold");
+  Logger.log("✅ Reg Card URL and Photos URL columns added to Fleet sheet.");
+}
+
+// ── Car Notes ─────────────────────────────────────────────────
+// Notes are stored in History sheet with action = "Note Added"
+function addCarNote(body) {
+  if (!body.plate)     throw new Error("Plate is required");
+  if (!body.note)      throw new Error("Note is required");
+  if (!body.staffName) throw new Error("Staff name is required");
+
+  addHistory({
+    plate:     body.plate,
+    type:      body.type || "",
+    action:    "Note Added",
+    remarks:   body.note,
+    staffName: body.staffName,
+  });
+
+  return { success: true };
 }
