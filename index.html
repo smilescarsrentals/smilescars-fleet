@@ -3,16 +3,115 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Smiles Fleet Manager</title>
+    <title>SmilesCars Fleet Manager</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#16a34a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="SmilesCars" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2316a34a'/><text y='.9em' font-size='70' x='15' fill='white'>S</text></svg>" />
     <style>
       * { box-sizing: border-box; }
       body { margin: 0; font-family: Inter, system-ui, -apple-system, sans-serif; }
       select, input, button, textarea { font-family: inherit; }
+
+      /* ── Responsive header ── */
+      .sc-header-inner {
+        max-width: 1200px; margin: 0 auto; padding: 0 1rem;
+        height: 62px; display: flex; align-items: center; gap: 16px;
+      }
+      .sc-brand-name { font-weight: 700; font-size: 15px; color: #111; line-height: 1.2; }
+      .sc-brand-sub  { font-size: 11px; color: #888; margin-top: 1px; }
+      .sc-nav        { display: flex; gap: 18px; }
+      .sc-user-name  { font-size: 13px; color: #555; font-weight: 500; }
+      .sc-sign-out   { font-size: 12px; color: #888; background: none; border: 1px solid #e5e7eb; cursor: pointer; padding: 4px 10px; border-radius: 6px; margin-left: 6px; white-space: nowrap; }
+
+      /* ── Stats grid ── */
+      .sc-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 1rem; }
+
+      /* ── Filter row ── */
+      .sc-filter-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+      .sc-filter-row input, .sc-filter-row select { padding: 8px 10px; font-size: 13px; border: 1.5px solid #e5e7eb; border-radius: 7px; background: #fff; color: #111; }
+      .sc-filter-row .sc-search { width: 220px; }
+
+      /* ── Table wrapper — horizontal scroll on mobile ── */
+      .sc-table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+      /* ── Modal ── */
+      .sc-modal { background: #fff; border-radius: 14px; width: 500px; max-width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
+
+      /* ── Mobile breakpoint ── */
+      @media (max-width: 640px) {
+        .sc-header-inner { height: auto; flex-wrap: wrap; padding: 10px 1rem; gap: 8px; }
+        .sc-brand-name   { font-size: 13px; }
+        .sc-brand-sub    { display: none; }
+        .sc-nav          { gap: 12px; order: 3; width: 100%; padding-bottom: 6px; border-top: 1px solid #f3f4f6; padding-top: 6px; overflow-x: auto; white-space: nowrap; }
+        .sc-nav a        { font-size: 13px; padding-bottom: 3px; }
+        .sc-user-name    { display: none; }
+        .sc-stats        { grid-template-columns: repeat(3, 1fr); }
+        .sc-stats .sc-stat-last-2 { display: none; }
+        .sc-filter-row   { flex-wrap: wrap; }
+        .sc-filter-row .sc-search { width: 100%; }
+        .sc-filter-row select { flex: 1; min-width: 120px; }
+        .sc-modal        { width: 100%; border-radius: 14px 14px 0 0; position: fixed; bottom: 0; left: 0; max-height: 90vh; }
+      }
+
+      @media (max-width: 400px) {
+        .sc-stats { grid-template-columns: repeat(2, 1fr); }
+      }
+
+      /* ── Mobile table cards ── */
+      @media (max-width: 640px) {
+        /* Hide table header on mobile */
+        .sc-table-wrap thead { display: none; }
+        /* Each row becomes a card */
+        .sc-table-wrap tbody tr {
+          display: block;
+          margin: 8px 12px;
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 10px;
+          padding: 12px;
+        }
+        .sc-table-wrap tbody td {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 4px 0;
+          border: none;
+          font-size: 13px;
+        }
+        .sc-table-wrap tbody td:before {
+          content: attr(data-label);
+          font-size: 11px;
+          font-weight: 600;
+          color: #888;
+          text-transform: uppercase;
+          letter-spacing: .3px;
+          margin-right: 8px;
+          flex-shrink: 0;
+        }
+        /* Hide empty cells on mobile */
+        .sc-table-wrap tbody td:empty { display: none; }
+        /* Action buttons full width on mobile */
+        .sc-table-wrap tbody td:last-child { flex-direction: column; align-items: flex-start; gap: 6px; padding-top: 8px; margin-top: 4px; border-top: 1px solid #f3f4f6; }
+        .sc-table-wrap tbody td:last-child:before { display: none; }
+        /* Stats - last 2 visible on mobile too but smaller */
+        .sc-stats { grid-template-columns: repeat(3, 1fr); }
+        /* Modal slides up from bottom on mobile */
+        .sc-overlay { align-items: flex-end !important; padding: 0 !important; }
+      }
     </style>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-  </body>
+    <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
 </html>

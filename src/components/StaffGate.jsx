@@ -24,10 +24,15 @@ export default function StaffGate({ onConfirm, logo }) {
     setSaving(true);
     try {
       const res = await api.verifyStaff({ name: selected, password });
+      console.log("verifyStaff response:", JSON.stringify(res));
       if (res.success) {
-        onConfirm(selected);
+        // Explicitly read role — fallback chain to handle any serialisation issue
+        const role = (res.role && res.role.trim().length > 0)
+          ? res.role.trim()
+          : "Staff";
+        onConfirm(selected, role);
       } else {
-        setError("Incorrect password. Please try again.");
+        setError(res.message || "Incorrect password. Please try again.");
       }
     } catch (e) {
       setError("Login failed: " + e.message);

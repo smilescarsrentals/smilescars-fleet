@@ -31,7 +31,6 @@ const STATUS_STYLES = {
   Available:   { bg: "#dcfce7", color: "#15803d" },
   Rented:      { bg: "#fef9c3", color: "#854d0e" },
   Maintenance: { bg: "#ffedd5", color: "#c2410c" },
-  Reserved:    { bg: "#ede9fe", color: "#6d28d9" },
 };
 
 const PAYMENT_STYLES = {
@@ -82,21 +81,16 @@ export default function FleetPage({ staffName, role }) {
     try {
       const { car, action } = modal;
       const payload = { plate: car.plate, type: car.type, staffName, ...fields };
-      if (action === "checkOut")             await api.checkOut(payload);
-      if (action === "reserveCar")           { const res = await api.reserveCar(payload); if (res.warning) showToast("⚠️ " + res.warning); }
-      if (action === "markReturned")         await api.markReturned(payload);
-      if (action === "extendBooking")        await api.extendBooking(payload);
-      if (action === "setMaintenance")       await api.setMaintenance(payload);
-      if (action === "setAvailable")         await api.setAvailable(payload);
-      if (action === "markSold")             await api.markSold(payload);
-      if (action === "activateReservation")  await api.activateReservation(payload);
-      if (action === "cancelReservation")    await api.cancelReservation(payload);
+      if (action === "checkOut")       await api.checkOut(payload);
+      if (action === "markReturned")   await api.markReturned(payload);
+      if (action === "extendBooking")  await api.extendBooking(payload);
+      if (action === "setMaintenance") await api.setMaintenance(payload);
+      if (action === "setAvailable")   await api.setAvailable(payload);
+      if (action === "markSold")       await api.markSold(payload);
       if (fields.newLocation) await api.addLocation(fields.newLocation);
       if (fields.newGarage)   await api.addGarage(fields.newGarage);
-      if (fields.newDriver)   await api.addDriver(fields.newDriver);
       setModal(null);
-      if (action !== "reserveCar") showToast("✅ Saved successfully");
-      else showToast("✅ Reservation confirmed");
+      showToast("✅ Saved successfully");
       await load();
     } catch (e) {
       showToast("❌ Error: " + e.message);
@@ -146,7 +140,6 @@ export default function FleetPage({ staffName, role }) {
   const stats = useMemo(() => ({
     available:   fleet.filter(c => c.status === "Available").length,
     rented:      fleet.filter(c => c.status === "Rented").length,
-    reserved:    fleet.filter(c => c.status === "Reserved").length,
     maintenance: fleet.filter(c => c.status === "Maintenance").length,
   }), [fleet]);
 
@@ -201,14 +194,13 @@ export default function FleetPage({ staffName, role }) {
     <div>
       {toast && <div style={styles.toast}>{toast}</div>}
 
-      <div className="sc-stats" style={{ gridTemplateColumns: "repeat(6, 1fr)" }}>
+      <div className="sc-stats">
         {[
-          { label: "Available",        value: stats.available,                      color: "#15803d", bg: "#dcfce7", view: "all"      },
-          { label: "Rented",           value: stats.rented,                         color: "#854d0e", bg: "#fef9c3", view: "all"      },
-          { label: "Reserved",         value: stats.reserved,                       color: "#6d28d9", bg: "#f5f3ff", view: "all"      },
-          { label: "Maintenance",      value: stats.maintenance,                    color: "#c2410c", bg: "#ffedd5", view: "all"      },
+          { label: "Available",   value: stats.available,   color: "#15803d", bg: "#dcfce7", view: "all" },
+          { label: "Rented",      value: stats.rented,      color: "#854d0e", bg: "#fef9c3", view: "all" },
+          { label: "Maintenance", value: stats.maintenance, color: "#c2410c", bg: "#ffedd5", view: "all" },
           { label: "Expiring/Expired", value: expired.length + expiringSoon.length, color: "#b91c1c", bg: "#fee2e2", view: "expiring" },
-          { label: "Unpaid",           value: unpaid.length,                        color: "#b91c1c", bg: "#fee2e2", view: "unpaid"   },
+          { label: "Unpaid", value: unpaid.length, color: "#b91c1c", bg: "#fee2e2", view: "unpaid" },
         ].map(s => (
           <div key={s.label} style={{ ...styles.statCard, background: s.bg, outline: view === s.view && s.view !== "all" ? `2px solid ${s.color}` : "none" }}
             onClick={() => {
@@ -234,7 +226,7 @@ export default function FleetPage({ staffName, role }) {
           value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         <select style={styles.sel} value={fStatus} onChange={e => { setFStatus(e.target.value); setPage(1); }}>
           <option value="">All statuses</option>
-          {["Available","Rented","Reserved","Maintenance"].map(s => <option key={s}>{s}</option>)}
+          {["Available","Rented","Maintenance"].map(s => <option key={s}>{s}</option>)}
         </select>
         <select style={styles.sel} value={fLocation} onChange={e => { setFLocation(e.target.value); setPage(1); }}>
           <option value="">All locations</option>
@@ -246,21 +238,7 @@ export default function FleetPage({ staffName, role }) {
         </select>
         {(search || fStatus || fLocation || fType) &&
           <button style={styles.clearBtn} onClick={() => { setSearch(""); setFStatus(""); setFLocation(""); setFType(""); setPage(1); }}>Clear</button>}
-        <span style={styles.countLabel}>
-          {(search || fStatus || fLocation || fType || view !== "all")
-            ? (() => {
-                const parts = [];
-                if (fStatus)   parts.push(fStatus);
-                if (fLocation) parts.push(fLocation);
-                if (fType)     parts.push(fType);
-                if (view === "expiring") parts.push("Expiring/Expired");
-                if (view === "unpaid")   parts.push("Unpaid");
-                const label = parts.length > 0 ? parts.join(" · ") : "filtered";
-                return `${filtered.length} ${label}`;
-              })()
-            : `${fleet.length} cars total`
-          }
-        </span>
+        <span style={styles.countLabel}>{filtered.length} of {fleet.length}</span>
         {canExportOrSell && <button style={styles.exportBtn} onClick={handleExport}>⬇ Export</button>}
         <button style={styles.refreshBtn} onClick={load}>↻</button>
       </div>
@@ -343,7 +321,6 @@ export default function FleetPage({ staffName, role }) {
           action={modal.action}
           locations={config.locations}
           garages={config.garages}
-          drivers={config.drivers || []}
           staffName={staffName}
           onConfirm={handleConfirm}
           onClose={() => !saving && setModal(null)}
@@ -377,7 +354,6 @@ function ActionButtons({ car, onAction, onMove, canSell }) {
   if (car.status === "Available") return (
     <div>
       {btn("Check Out",   "checkOut",       "#15803d", "#dcfce7")}
-      {btn("Reserve",     "reserveCar",     "#6d28d9", "#f5f3ff")}
       {btn("Maintenance", "setMaintenance", "#c2410c", "#fff7ed")}
       {btn("Move",        "move",           "#1d4ed8", "#eff6ff", () => onMove(car))}
       {canSell && btn("Sold", "markSold",   "#dc2626", "#fef2f2")}
@@ -387,13 +363,6 @@ function ActionButtons({ car, onAction, onMove, canSell }) {
     <div>
       {btn("Returned",       "markReturned",  "#2563eb", "#eff6ff")}
       {btn("Extend Booking", "extendBooking", "#0284c7", "#e0f2fe")}
-    </div>
-  );
-  if (car.status === "Reserved") return (
-    <div>
-      {btn("Activate",   "activateReservation", "#15803d", "#dcfce7")}
-      {btn("Cancel",     "cancelReservation",   "#dc2626", "#fef2f2")}
-      {btn("Extend",     "extendBooking",       "#0284c7", "#e0f2fe")}
     </div>
   );
   if (car.status === "Maintenance") return (

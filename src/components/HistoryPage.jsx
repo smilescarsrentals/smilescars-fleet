@@ -173,7 +173,7 @@ export default function HistoryPage({ role }) {
         </div>
       )}
 
-      <div style={styles.filterRow}>
+      <div className="sc-filter-row">
         <input style={styles.search} placeholder="Search plate, type or client…"
           value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         <select style={styles.sel} value={fAction} onChange={e => { setFAction(e.target.value); setPage(1); }}>
@@ -197,7 +197,7 @@ export default function HistoryPage({ role }) {
         <button style={styles.refreshBtn} onClick={load}>↻</button>
       </div>
 
-      <div style={styles.tableWrap}>
+      <div className="sc-table-wrap">
         <table style={styles.table}>
           <thead>
             <tr>

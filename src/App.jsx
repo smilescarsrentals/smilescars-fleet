@@ -7,21 +7,28 @@ import FleetPage from "./pages/FleetPage";
 import HistoryPage from "./pages/HistoryPage";
 import SoldPage from "./pages/SoldPage";
 import SubHirePage from "./pages/SubHirePage";
+import ClientsPage from "./pages/ClientsPage";
 import logo from "./assets/logo.js";
 
 export default function App() {
   const [staffName, setStaffName] = useState(
     () => sessionStorage.getItem("staffName") || ""
   );
+  const [role, setRole] = useState(
+    () => sessionStorage.getItem("role") || "Staff"
+  );
 
-  const handleStaffSet = (name) => {
+  const handleStaffSet = (name, userRole) => {
     sessionStorage.setItem("staffName", name);
+    sessionStorage.setItem("role", userRole || "Staff");
     setStaffName(name);
+    setRole(userRole || "Staff");
   };
 
   const handleSignOut = () => {
     sessionStorage.clear();
     setStaffName("");
+    setRole("Staff");
   };
 
   if (!staffName) {
@@ -30,12 +37,13 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Layout staffName={staffName} onSignOut={handleSignOut} logo={logo}>
+      <Layout staffName={staffName} role={role} onSignOut={handleSignOut} logo={logo}>
         <Routes>
-          <Route path="/"         element={<FleetPage staffName={staffName} />} />
-          <Route path="/history"  element={<HistoryPage />} />
-          <Route path="/sold"     element={<SoldPage />} />
+          <Route path="/"         element={<FleetPage staffName={staffName} role={role} />} />
+          <Route path="/history"  element={<HistoryPage role={role} />} />
+          <Route path="/clients"  element={<ClientsPage />} />
           <Route path="/sub-hire" element={<SubHirePage staffName={staffName} />} />
+          <Route path="/sold"     element={<SoldPage />} />
           <Route path="*"         element={<Navigate to="/" />} />
         </Routes>
       </Layout>

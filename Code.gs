@@ -22,10 +22,12 @@ function doGet(e) {
   try {
     if (action === "getFleet")     return respond(getFleet());
     if (action === "getHistory")   return respond(getHistory());
-    if (action === "getConfig")    return respond(getConfig());
+    if (action === "getConfig")    return respond(getConfigV7());
     if (action === "getSold")      return respond(getSold());
     if (action === "getSubHire")   return respond(getSubHire());
+    if (action === "getClients")   return respond(getClients());
     if (action === "getDashboard") return respond(getDashboard());
+    if (action === "testRole")     return respond(testRole(e.parameter.name || ""));
     return respond({ error: "Unknown action: " + action });
   } catch (err) {
     return respond({ error: err.message });
@@ -48,6 +50,10 @@ function doPost(e) {
     if (action === "addStaff")        return respond(addStaff(body));
     if (action === "addLocation")     return respond(addConfigItem("Location", body.name));
     if (action === "addGarage")       return respond(addConfigItem("Garage",   body.name));
+    if (action === "addDriver")       return respond(addConfigItem("Driver",   body.name));
+    if (action === "reserveCar")           return respond(reserveCar(body));
+    if (action === "activateReservation")  return respond(activateReservation(body));
+    if (action === "cancelReservation")    return respond(cancelReservation(body));
     if (action === "addSubHire")           return respond(addSubHire(body));
     if (action === "returnSubHire")        return respond(returnSubHire(body));
     if (action === "updateSubHirePayment") return respond(updateSubHirePayment(body));
@@ -100,6 +106,7 @@ function getFleet() {
     policeFineOut:  row[15] || "",
     parkingFineOut: row[16] || "",
     kmOut:          row[17] || "",
+    driver:         row[18] || "",
   }));
   return { success: true, data };
 }
@@ -117,7 +124,7 @@ function updateFleetRow(plate, fields) {
   const map = {
     location: 3, status: 4, currentClient: 5, clientPhone: 6, bookedFrom: 7,
     returnDate: 8, remarks: 9, fuelOut: 10, amount: 11, currency: 12, garage: 13,
-    paymentStatus: 14, amountPaid: 15, policeFineOut: 16, parkingFineOut: 17, kmOut: 18,
+    paymentStatus: 14, amountPaid: 15, policeFineOut: 16, parkingFineOut: 17, kmOut: 18, driver: 19,
   };
   Object.keys(map).forEach(key => {
     if (fields[key] !== undefined) sheet.getRange(rowIndex, map[key]).setValue(fields[key]);
@@ -128,7 +135,7 @@ function clearFleetRow(plate, status, extra) {
   updateFleetRow(plate, Object.assign({
     status, currentClient: "", clientPhone: "", bookedFrom: "", returnDate: "",
     remarks: (extra && extra.remarks) || "", fuelOut: "", amount: "", currency: "",
-    garage: "", paymentStatus: "", amountPaid: "", policeFineOut: "", parkingFineOut: "", kmOut: "",
+    garage: "", paymentStatus: "", amountPaid: "", policeFineOut: "", parkingFineOut: "", kmOut: "", driver: "",
   }, extra || {}));
 }
 
@@ -163,6 +170,7 @@ function addHistory(entry) {
     entry.amountPaid                                    || "",
     entry.kmOut                                           || "",
     entry.kmIn                                              || "",
+    entry.driver                                              || "",
   ]);
 }
 
@@ -194,6 +202,7 @@ function getHistory() {
     amountPaid:    row[19] || "",
     kmOut:         row[20] || "",
     kmIn:          row[21] || "",
+    driver:        row[22] || "",
   }));
   return { success: true, data };
 }
@@ -216,18 +225,18 @@ function getSold() {
   return { success: true, data };
 }
 
-function requireManager(staffName) {
+function requireManagerOrAdmin(staffName) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
   const rows  = sheet.getDataRange().getValues();
-  const match = rows.find(r => r[0] === "Staff" && r[1] === staffName);
-  const role  = match ? (match[3] || "Staff") : "Staff";
-  if (role !== "Manager") throw new Error("This action requires a Manager account.");
+  const match = rows.find(r => r[0] === "Staff" && r[1].toString().trim() === staffName.toString().trim());
+  const role  = match ? (match[3] || "Staff").toString().trim() : "Staff";
+  if (role !== "Manager" && role !== "Admin") throw new Error("This action requires a Manager or Admin account.");
 }
 
 function markSold(body) {
   if (!body.plate)      throw new Error("Plate is required");
   if (!body.staffName)  throw new Error("Staff name is required");
-  requireManager(body.staffName);
+  requireManagerOrAdmin(body.staffName);
 
   const { sheet, rowIndex } = findRow(body.plate);
   const row = sheet.getRange(rowIndex, 1, 1, 2).getValues()[0];
@@ -257,11 +266,11 @@ function verifyStaff(body) {
   if (!body.name || !body.password) throw new Error("Name and password required");
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
   const rows  = sheet.getDataRange().getValues();
-  const match = rows.find(r => r[0] === "Staff" && r[1] === body.name);
+  const match = rows.find(r => r[0] === "Staff" && r[1].toString().trim() === body.name.toString().trim());
   if (!match) return { success: false, message: "Staff not found" };
   if (!match[2]) return { success: false, message: "No password set for this account" };
-  if (match[2].toString() !== body.password.toString()) return { success: false, message: "Incorrect password" };
-  const role = match[3] || "Staff";
+  if (match[2].toString().trim() !== body.password.toString().trim()) return { success: false, message: "Incorrect password" };
+  const role = (match[3] || "Staff").toString().trim();
   return { success: true, role };
 }
 
@@ -289,6 +298,7 @@ function checkOut(body) {
     amountPaid: body.amountPaid || "",
     policeFineOut: body.policeFine || "", parkingFineOut: body.parkingFine || "",
     kmOut: body.kmOut || "",
+    driver: body.driver || "",
   });
 
   addHistory({
@@ -299,7 +309,7 @@ function checkOut(body) {
     fuelOut: body.fuelOut || "", amount: body.amount || "", currency: body.currency || "TZS",
     policeFine: body.policeFine || "", parkingFine: body.parkingFine || "",
     paymentStatus: body.paymentStatus || "Unpaid", amountPaid: body.amountPaid || "",
-    kmOut: body.kmOut || "",
+    kmOut: body.kmOut || "", driver: body.driver || "",
   });
 
   return { success: true };
@@ -310,7 +320,7 @@ function markReturned(body) {
   if (!body.staffName) throw new Error("Staff name is required");
 
   const { sheet, rowIndex } = findRow(body.plate);
-  const row = sheet.getRange(rowIndex, 1, 1, 18).getValues()[0];
+  const row = sheet.getRange(rowIndex, 1, 1, 19).getValues()[0];
 
   clearFleetRow(body.plate, "Available", { remarks: body.remarks || "" });
 
@@ -337,7 +347,7 @@ function extendBooking(body) {
   if (!body.staffName)  throw new Error("Staff name is required");
 
   const { sheet, rowIndex } = findRow(body.plate);
-  const row = sheet.getRange(rowIndex, 1, 1, 18).getValues()[0];
+  const row = sheet.getRange(rowIndex, 1, 1, 19).getValues()[0];
   const oldReturnDate = fmtDate(row[7]);
 
   updateFleetRow(body.plate, { returnDate: body.returnDate, remarks: body.remarks || "" });
@@ -391,7 +401,7 @@ function updatePayment(body) {
   if (!body.plate)         throw new Error("Plate is required");
   if (!body.paymentStatus) throw new Error("Payment status is required");
   if (!body.staffName)     throw new Error("Staff name is required");
-  requireManager(body.staffName);
+  requireManagerOrAdmin(body.staffName);
 
   updateFleetRow(body.plate, {
     paymentStatus: body.paymentStatus,
@@ -399,7 +409,7 @@ function updatePayment(body) {
   });
 
   const { sheet, rowIndex } = findRow(body.plate);
-  const row = sheet.getRange(rowIndex, 1, 1, 18).getValues()[0];
+  const row = sheet.getRange(rowIndex, 1, 1, 19).getValues()[0];
 
   addHistory({
     plate: body.plate, type: body.type || row[1], action: "Payment Updated",
@@ -546,17 +556,17 @@ function setupDailyReminder() {
 function updateHeaders() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-  ss.getSheetByName(FLEET_SHEET).getRange(1, 1, 1, 18).setValues([[
+  ss.getSheetByName(FLEET_SHEET).getRange(1, 1, 1, 19).setValues([[
     "Plate","Type","Location","Status","Current Client","Client Phone",
     "Booked From","Return Date","Remarks","Fuel Out","Amount","Currency",
-    "Garage","Payment Status","Amount Paid","Police Fine (Out)","Parking Fine (Out)","KM Out"
+    "Garage","Payment Status","Amount Paid","Police Fine (Out)","Parking Fine (Out)","KM Out","Driver"
   ]]).setFontWeight("bold");
 
-  ss.getSheetByName(HISTORY_SHEET).getRange(1, 1, 1, 22).setValues([[
+  ss.getSheetByName(HISTORY_SHEET).getRange(1, 1, 1, 23).setValues([[
     "Timestamp","Plate","Type","Action","Client","Client Phone",
     "Booked From","Return Date","Location","Remarks","Staff Name",
     "Fuel Out","Fuel In","Amount","Currency","Police Fine","Parking Fine",
-    "Garage","Payment Status","Amount Paid","KM Out","KM In"
+    "Garage","Payment Status","Amount Paid","KM Out","KM In","Driver"
   ]]).setFontWeight("bold");
 
   ss.getSheetByName(CONFIG_SHEET).getRange(1, 3, 1, 2).setValues([["Password", "Role"]]).setFontWeight("bold");
@@ -699,4 +709,203 @@ function setupSubHireSheet() {
     "Supplier Amount","Supplier Currency","Supplier Pay Status","Supplier Amount Paid",
     "Police Fine","Parking Fine","Remarks","Staff Name","Timestamp"
   ]]).setFontWeight("bold");
+}
+
+// ============================================================
+//  v7 — Client Directory, Driver Assignment, Reservations
+// ============================================================
+
+// ── Router additions (add these lines to doGet / doPost manually) ──
+// doGet:  if (action === "getClients") return respond(getClients());
+// doPost: if (action === "reserveCar")    return respond(reserveCar(body));
+//         if (action === "activateReservation") return respond(activateReservation(body));
+//         if (action === "cancelReservation")   return respond(cancelReservation(body));
+//         if (action === "addDriver")            return respond(addConfigItem("Driver", body.name));
+
+// ── Client Directory ──────────────────────────────────────────
+// Built entirely from History data — no new sheet needed.
+function getClients() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(HISTORY_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+  if (rows.length <= 1) return { success: true, data: [] };
+
+  const tz = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
+  const clients = {};
+
+  rows.slice(1).forEach(row => {
+    const action = row[3] || "";
+    const client = (row[4] || "").trim();
+    const phone  = row[5]  || "";
+    if (!client || action !== "Checked Out") return;
+
+    if (!clients[client]) {
+      clients[client] = {
+        name:            client,
+        phone:           phone,
+        totalRentals:    0,
+        lastRentalDate:  "",
+        totalAmount:     0,
+        currency:        row[14] || "TZS",
+        unpaidCount:     0,
+        rentals:         [],
+      };
+    }
+
+    const c = clients[client];
+    c.totalRentals++;
+    const ts = row[0] ? Utilities.formatDate(new Date(row[0]), tz, "yyyy-MM-dd") : "";
+    if (!c.lastRentalDate || ts > c.lastRentalDate) c.lastRentalDate = ts;
+    const amount = Number(row[13]) || 0;
+    c.totalAmount += amount;
+    const payStatus = row[18] || "";
+    if (payStatus === "Unpaid" || payStatus === "Partial Paid") c.unpaidCount++;
+    c.rentals.push({
+      date:      ts,
+      plate:     row[1]  || "",
+      type:      row[2]  || "",
+      returnDate:fmtDate(row[7]),
+      amount:    row[13] || "",
+      currency:  row[14] || "TZS",
+      payStatus: payStatus,
+      location:  row[8]  || "",
+      staff:     row[10] || "",
+    });
+  });
+
+  const data = Object.values(clients).sort((a, b) =>
+    b.lastRentalDate.localeCompare(a.lastRentalDate)
+  );
+  return { success: true, data };
+}
+
+// ── DEBUG: Test role reading — call this URL to diagnose:
+// YOUR_SCRIPT_URL?action=testRole&name=Ramzanali R
+function testRole(name) {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+  const allStaff = rows.filter(r => r[0] === "Staff").map(r => ({
+    name: r[1], nameLen: r[1].toString().length,
+    role: r[3], roleLen: (r[3]||"").toString().length,
+    roleTrimmed: (r[3]||"").toString().trim(),
+  }));
+  const match = rows.find(r => r[0] === "Staff" && r[1].toString().trim() === name.toString().trim());
+  return {
+    searchName: name,
+    found: !!match,
+    role: match ? (match[3]||"").toString() : null,
+    roleTrimmed: match ? (match[3]||"").toString().trim() : null,
+    allStaff,
+  };
+}
+
+
+// Reuses Fleet sheet — status = "Reserved", bookedFrom = future date
+// Extra: check for near-future existing reservations and warn
+
+function reserveCar(body) {
+  if (!body.plate)     throw new Error("Plate is required");
+  if (!body.client)    throw new Error("Client name is required");
+  if (!body.staffName) throw new Error("Staff name is required");
+  if (!body.bookedFrom)throw new Error("Start date is required");
+
+  // Check for conflicting reservations (warn only — don't block)
+  const sheet  = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(FLEET_SHEET);
+  const rows   = sheet.getDataRange().getValues();
+  const { rowIndex } = findRow(body.plate);
+  const currentRow = rows[rowIndex - 1];
+  const currentStatus = currentRow[3];
+
+  let warning = null;
+  if (currentStatus === "Reserved") {
+    const existingFrom = fmtDate(currentRow[6]);
+    warning = `This car already has a reservation starting ${existingFrom}.`;
+  }
+
+  updateFleetRow(body.plate, {
+    status:        "Reserved",
+    currentClient: body.client,
+    clientPhone:   body.clientPhone   || "",
+    bookedFrom:    body.bookedFrom,
+    returnDate:    body.returnDate    || "",
+    remarks:       body.remarks       || "",
+    location:      body.location      || "",
+    fuelOut:       body.fuelOut       || "",
+    amount:        body.amount        || "",
+    currency:      body.currency      || "TZS",
+    paymentStatus: body.paymentStatus || "Unpaid",
+    amountPaid:    body.amountPaid    || "",
+    policeFineOut: body.policeFine    || "",
+    parkingFineOut:body.parkingFine   || "",
+    kmOut:         body.kmOut         || "",
+    driver:        body.driver        || "",
+  });
+
+  addHistory({
+    plate: body.plate, type: body.type, action: "Reserved",
+    client: body.client, clientPhone: body.clientPhone || "",
+    bookedFrom: body.bookedFrom, returnDate: body.returnDate || "",
+    location: body.location || "", remarks: body.remarks || "",
+    staffName: body.staffName, amount: body.amount || "",
+    currency: body.currency || "TZS",
+    paymentStatus: body.paymentStatus || "Unpaid",
+  });
+
+  return { success: true, warning };
+}
+
+function activateReservation(body) {
+  if (!body.plate)     throw new Error("Plate is required");
+  if (!body.staffName) throw new Error("Staff name is required");
+
+  const { sheet, rowIndex } = findRow(body.plate);
+  const row = sheet.getRange(rowIndex, 1, 1, 19).getValues()[0];
+
+  updateFleetRow(body.plate, { status: "Rented" });
+
+  addHistory({
+    plate: body.plate, type: body.type || row[1], action: "Reservation Activated",
+    client: row[4], clientPhone: row[5], bookedFrom: fmtDate(row[6]),
+    returnDate: fmtDate(row[7]), location: row[2],
+    remarks: body.remarks || "", staffName: body.staffName,
+    amount: row[10] || "", currency: row[11] || "TZS",
+  });
+
+  return { success: true };
+}
+
+function cancelReservation(body) {
+  if (!body.plate)     throw new Error("Plate is required");
+  if (!body.staffName) throw new Error("Staff name is required");
+
+  const { sheet, rowIndex } = findRow(body.plate);
+  const row = sheet.getRange(rowIndex, 1, 1, 19).getValues()[0];
+
+  clearFleetRow(body.plate, "Available", { remarks: body.remarks || "" });
+
+  addHistory({
+    plate: body.plate, type: body.type || row[1], action: "Reservation Cancelled",
+    client: row[4], clientPhone: row[5], bookedFrom: fmtDate(row[6]),
+    returnDate: fmtDate(row[7]), location: row[2],
+    remarks: body.remarks || `Cancelled by ${body.staffName}`,
+    staffName: body.staffName,
+  });
+
+  return { success: true };
+}
+
+// ── Driver field in Fleet & History ──────────────────────────
+// Driver is stored in Fleet col S (index 18) and History col W (index 22)
+// updateFleetRow already supports arbitrary fields via the map —
+// add driver: 19 to map (col S = index 19 in 1-based)
+// addHistory already appends — add driver as last column
+
+// ── Update getConfig to include drivers ─────────────────────
+function getConfigV7() {
+  const sheet     = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
+  const rows      = sheet.getDataRange().getValues();
+  const staff     = rows.filter(r => r[0] === "Staff").map(r => r[1]).filter(Boolean);
+  const locations = rows.filter(r => r[0] === "Location").map(r => r[1]).filter(Boolean);
+  const garages   = rows.filter(r => r[0] === "Garage").map(r => r[1]).filter(Boolean);
+  const drivers   = rows.filter(r => r[0] === "Driver").map(r => r[1]).filter(Boolean);
+  return { success: true, staff, locations, garages, drivers };
 }

@@ -2,17 +2,17 @@
 import { useState } from "react";
 
 const ACTIONS = {
-  checkOut:       { title: "Check Out Car",       color: "#16a34a", btnLabel: "Confirm Check Out" },
-  extendBooking:  { title: "Extend Booking",      color: "#0284c7", btnLabel: "Confirm Extension" },
-  markReturned:   { title: "Mark as Returned",    color: "#2563eb", btnLabel: "Confirm Return"    },
-  setMaintenance: { title: "Send to Maintenance", color: "#d97706", btnLabel: "Confirm"           },
-  setAvailable:   { title: "Mark as Available",   color: "#16a34a", btnLabel: "Confirm"           },
-  markSold:       { title: "Mark Car as Sold",    color: "#dc2626", btnLabel: "Confirm Sale"      },
+  checkOut:       { title: "Check Out Car",      color: "#16a34a", btnLabel: "Confirm Check Out"   },
+  reserveCar:     { title: "Reserve Car",         color: "#7c3aed", btnLabel: "Confirm Reservation" },
+  extendBooking:  { title: "Extend Booking",      color: "#0284c7", btnLabel: "Confirm Extension"   },
+  markReturned:   { title: "Mark as Returned",    color: "#2563eb", btnLabel: "Confirm Return"      },
+  setMaintenance: { title: "Send to Maintenance", color: "#d97706", btnLabel: "Confirm"             },
+  setAvailable:   { title: "Mark as Available",   color: "#16a34a", btnLabel: "Confirm"             },
+  markSold:       { title: "Mark Car as Sold",    color: "#dc2626", btnLabel: "Confirm Sale"        },
 };
 
 const FUEL_LEVELS      = ["Full", "3/4", "1/2", "1/4", "Empty"];
 const CURRENCIES       = ["TZS", "USD", "EUR"];
-// Fix #3: Added "Long Term" to payment statuses
 const PAYMENT_STATUSES = ["Paid", "Partial Paid", "Unpaid", "Long Term"];
 
 function fmt(raw) {
@@ -22,7 +22,6 @@ function fmt(raw) {
 }
 function unformat(val) { return String(val || "").replace(/,/g, ""); }
 
-// Fix #4: wider fine input — removed cramped suffix box, now inline label
 function MoneyInput({ value, onChange, placeholder, style }) {
   return (
     <input style={style} type="text" inputMode="numeric" value={value}
@@ -40,17 +39,16 @@ function FineInput({ value, onChange, label }) {
   );
 }
 
-export default function ActionModal({ car, action, locations, garages, staffName, onConfirm, onClose, loading }) {
+export default function ActionModal({ car, action, locations, garages, drivers, staffName, onConfirm, onClose, loading }) {
   const cfg  = ACTIONS[action];
   const today = new Date().toISOString().split("T")[0];
 
   const [client,        setClient]       = useState(car.currentClient || "");
   const [clientPhone,   setClientPhone]  = useState(car.clientPhone   || "");
   const [bookedFrom,    setBookedFrom]   = useState(today);
-  // Fix #1: store dates as plain strings, never pass through Date() constructor
   const rawReturn = action === "extendBooking" ? (car.returnDate ? String(car.returnDate).split("T")[0] : "") : "";
   const [returnDate,    setReturnDate]   = useState(rawReturn);
-  const [actualReturn,  setActualReturn] = useState(today); // Fix #2: returned date in return modal
+  const [actualReturn,  setActualReturn] = useState(today);
   const [location,      setLocation]     = useState(car.location || "");
   const [remarks,       setRemarks]      = useState("");
   const [fuelOut,       setFuelOut]      = useState("");
@@ -63,6 +61,9 @@ export default function ActionModal({ car, action, locations, garages, staffName
   const [parkingFine,   setParkingFine]  = useState("");
   const [paymentStatus, setPaymentStatus]= useState("Unpaid");
   const [amountPaid,    setAmountPaid]   = useState("");
+  const [driver,        setDriver]       = useState(car.driver || "");
+  const [newDriver,     setNewDriver]    = useState("");
+  const [addingDriver,  setAddingDriver] = useState(false);
   const [newLoc,        setNewLoc]       = useState("");
   const [addingLoc,     setAddingLoc]    = useState(false);
   const [garage,        setGarage]       = useState("");
@@ -70,12 +71,13 @@ export default function ActionModal({ car, action, locations, garages, staffName
   const [addingGarage,  setAddingGarage] = useState(false);
   const [err,           setErr]          = useState("");
 
-  const needsClient   = action === "checkOut";
+  const needsClient   = action === "checkOut" || action === "reserveCar";
   const isExtend       = action === "extendBooking";
   const isReturn        = action === "markReturned";
   const isMaintenance    = action === "setMaintenance";
   const isAvailable       = action === "setAvailable";
   const isSold              = action === "markSold";
+  const isReserve            = action === "reserveCar";
 
   const handleSubmit = () => {
     setErr("");
@@ -86,32 +88,35 @@ export default function ActionModal({ car, action, locations, garages, staffName
       const g = addingGarage ? newGarage.trim() : garage;
       if (!g) { setErr("Please select or add a garage."); return; }
     }
-    if (needsClient && (paymentStatus === "Paid" || paymentStatus === "Partial Paid") && !amountPaid) {
+    if (needsClient && paymentStatus === "Partial Paid" && !amountPaid) {
       setErr("Please enter amount paid."); return;
     }
-    const loc = addingLoc ? newLoc.trim() : location;
+    const loc = addingLoc    ? newLoc.trim()    : location;
     const gar = addingGarage ? newGarage.trim() : garage;
+    const drv = addingDriver ? newDriver.trim() : driver;
+
     onConfirm({
       client, clientPhone, bookedFrom,
-      returnDate,        // scheduled return date (checkout / extend)
-      actualReturn,      // Fix #2: actual date returned (return modal)
+      returnDate, actualReturn,
       location: loc, remarks,
       fuelOut, fuelIn, kmOut, kmIn,
       amount: unformat(amount), currency,
       policeFine: unformat(policeFine), parkingFine: unformat(parkingFine),
-      paymentStatus, amountPaid: unformat(amountPaid), garage: gar,
-      newLocation: addingLoc ? loc : null,
+      paymentStatus, amountPaid: unformat(amountPaid),
+      garage: gar, driver: drv,
+      newLocation: addingLoc    ? loc : null,
       newGarage:   addingGarage ? gar : null,
+      newDriver:   addingDriver ? drv : null,
     });
   };
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.modal} onClick={e => e.stopPropagation()}>
+    <div style={styles.overlay} className="sc-overlay" onClick={onClose}>
+      <div style={styles.modal} className="sc-modal" onClick={e => e.stopPropagation()}>
         <div style={{ ...styles.modalHeader, background: cfg.color }}>
           <div>
             <p style={styles.modalPlate}>{car.plate}</p>
-            <p style={styles.modalType}>{car.type}</p>
+            <p style={styles.modalType}>{car.type}{isReserve ? " · Reservation" : ""}</p>
           </div>
           <button style={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
@@ -124,7 +129,7 @@ export default function ActionModal({ car, action, locations, garages, staffName
             <div style={styles.readOnly}>{staffName}</div>
           </div>
 
-          {/* ── Check Out ── */}
+          {/* ── Check Out / Reserve ── */}
           {needsClient && (<>
             <div style={styles.field}>
               <label style={styles.label}>Client Name *</label>
@@ -134,10 +139,9 @@ export default function ActionModal({ car, action, locations, garages, staffName
               <label style={styles.label}>Client Phone</label>
               <input style={styles.input} value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="+255..." />
             </div>
-            {/* Fix #1: plain string date inputs */}
             <div style={styles.twoCol}>
               <div style={styles.field}>
-                <label style={styles.label}>Booked From *</label>
+                <label style={styles.label}>{isReserve ? "Reserved From *" : "Booked From *"}</label>
                 <input style={styles.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} />
               </div>
               <div style={styles.field}>
@@ -156,21 +160,43 @@ export default function ActionModal({ car, action, locations, garages, staffName
                 </div>
               </div>
               <div style={styles.field}>
-                {/* Fix #3: consistent font + Long Term added */}
                 <label style={styles.label}>Payment Status</label>
                 <select style={{ ...styles.input, fontFamily: "inherit" }} value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)}>
                   {PAYMENT_STATUSES.map(p => <option key={p}>{p}</option>)}
                 </select>
-                {(paymentStatus === "Paid" || paymentStatus === "Partial Paid") && (
+                {paymentStatus === "Partial Paid" && (
                   <MoneyInput style={{ ...styles.input, marginTop: 6 }} value={amountPaid} onChange={setAmountPaid} placeholder="Amount paid" />
                 )}
               </div>
+            </div>
+            {/* Driver */}
+            <div style={styles.field}>
+              <label style={styles.label}>Driver (optional)</label>
+              {!addingDriver ? (
+                <select style={{ ...styles.input, fontFamily: "inherit" }} value={driver} onChange={e => {
+                  if (e.target.value === "__new__") setAddingDriver(true);
+                  else setDriver(e.target.value);
+                }}>
+                  <option value="">— No driver assigned —</option>
+                  {(drivers || []).map(d => <option key={d} value={d}>{d}</option>)}
+                  <option value="__new__">+ Add new driver</option>
+                </select>
+              ) : (
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input style={{ ...styles.input, flex: 1 }} placeholder="Driver full name"
+                    value={newDriver} onChange={e => setNewDriver(e.target.value)} autoFocus />
+                  <button style={styles.cancelSmall} onClick={() => setAddingDriver(false)}>✕</button>
+                </div>
+              )}
             </div>
             <div style={styles.threeCol}>
               <div style={styles.field}>
                 <label style={styles.label}>Location</label>
                 {!addingLoc ? (
-                  <select style={{ ...styles.input, fontFamily: "inherit" }} value={location} onChange={e => { if (e.target.value === "__new__") setAddingLoc(true); else setLocation(e.target.value); }}>
+                  <select style={{ ...styles.input, fontFamily: "inherit" }} value={location} onChange={e => {
+                    if (e.target.value === "__new__") setAddingLoc(true);
+                    else setLocation(e.target.value);
+                  }}>
                     <option value="">— Select —</option>
                     {locations.map(l => <option key={l}>{l}</option>)}
                     <option value="__new__">+ Add new</option>
@@ -195,11 +221,12 @@ export default function ActionModal({ car, action, locations, garages, staffName
                   onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" />
               </div>
             </div>
-            {/* Fix #4: fines with label suffix instead of cramped box */}
-            <div style={styles.twoCol}>
-              <FineInput label="Police Fine" value={policeFine} onChange={setPoliceFine} />
-              <FineInput label="Parking Fine" value={parkingFine} onChange={setParkingFine} />
-            </div>
+            {!isReserve && (
+              <div style={styles.twoCol}>
+                <FineInput label="Police Fine"  value={policeFine}  onChange={setPoliceFine}  />
+                <FineInput label="Parking Fine" value={parkingFine} onChange={setParkingFine} />
+              </div>
+            )}
           </>)}
 
           {/* ── Extend ── */}
@@ -209,7 +236,6 @@ export default function ActionModal({ car, action, locations, garages, staffName
               <div style={styles.readOnly}>{car.currentClient}{car.clientPhone ? ` · ${car.clientPhone}` : ""}</div>
             </div>
             <div style={styles.field}>
-              {/* Fix #1: show current as plain string, input stays as string */}
               <label style={styles.label}>New Return Date *</label>
               {car.returnDate && <p style={{ fontSize: 12, color: "#888", margin: "0 0 4px" }}>Current: {String(car.returnDate).split("T")[0]}</p>}
               <input style={styles.input} type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} />
@@ -218,7 +244,6 @@ export default function ActionModal({ car, action, locations, garages, staffName
 
           {/* ── Return ── */}
           {isReturn && (<>
-            {/* Fix #2: Returned Date field added */}
             <div style={styles.twoCol}>
               <div style={styles.field}>
                 <label style={styles.label}>Returned Date</label>
@@ -239,20 +264,18 @@ export default function ActionModal({ car, action, locations, garages, staffName
                 </select>
               </div>
               <div style={styles.field}>
-                {/* Fix #3 */}
                 <label style={styles.label}>Payment Status</label>
                 <select style={{ ...styles.input, fontFamily: "inherit" }} value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)}>
                   <option value="">— Keep ({car.paymentStatus || "Unpaid"}) —</option>
                   {PAYMENT_STATUSES.map(p => <option key={p}>{p}</option>)}
                 </select>
-                {(paymentStatus === "Paid" || paymentStatus === "Partial Paid") && (
+                {paymentStatus === "Partial Paid" && (
                   <MoneyInput style={{ ...styles.input, marginTop: 6 }} value={amountPaid} onChange={setAmountPaid} placeholder="Amount paid" />
                 )}
               </div>
             </div>
-            {/* Fix #4 */}
             <div style={styles.twoCol}>
-              <FineInput label="Police Fine (on return)" value={policeFine} onChange={setPoliceFine} />
+              <FineInput label="Police Fine (on return)"  value={policeFine}  onChange={setPoliceFine}  />
               <FineInput label="Parking Fine (on return)" value={parkingFine} onChange={setParkingFine} />
             </div>
           </>)}
@@ -262,7 +285,9 @@ export default function ActionModal({ car, action, locations, garages, staffName
             <div style={styles.field}>
               <label style={styles.label}>Garage *</label>
               {!addingGarage ? (
-                <select style={{ ...styles.input, fontFamily: "inherit" }} value={garage} onChange={e => { if (e.target.value === "__new__") setAddingGarage(true); else setGarage(e.target.value); }}>
+                <select style={{ ...styles.input, fontFamily: "inherit" }} value={garage} onChange={e => {
+                  if (e.target.value === "__new__") setAddingGarage(true); else setGarage(e.target.value);
+                }}>
                   <option value="">— Select garage —</option>
                   {(garages || []).map(g => <option key={g}>{g}</option>)}
                   <option value="__new__">+ Add new garage</option>
@@ -276,7 +301,7 @@ export default function ActionModal({ car, action, locations, garages, staffName
             </div>
           )}
 
-          {/* ── Mark Available — Fix #6: KM Out added ── */}
+          {/* ── Mark Available — KM Out ── */}
           {isAvailable && (
             <div style={styles.field}>
               <label style={styles.label}>KM Out (from garage)</label>
@@ -294,12 +319,14 @@ export default function ActionModal({ car, action, locations, garages, staffName
             </div>
           )}
 
-          {/* Location — non-checkout, non-sold actions */}
+          {/* Location for non-checkout, non-sold actions */}
           {!isSold && !needsClient && (
             <div style={styles.field}>
               <label style={styles.label}>Location</label>
               {!addingLoc ? (
-                <select style={{ ...styles.input, fontFamily: "inherit" }} value={location} onChange={e => { if (e.target.value === "__new__") setAddingLoc(true); else setLocation(e.target.value); }}>
+                <select style={{ ...styles.input, fontFamily: "inherit" }} value={location} onChange={e => {
+                  if (e.target.value === "__new__") setAddingLoc(true); else setLocation(e.target.value);
+                }}>
                   <option value="">— Select location —</option>
                   {locations.map(l => <option key={l}>{l}</option>)}
                   <option value="__new__">+ Add new location</option>
@@ -319,6 +346,7 @@ export default function ActionModal({ car, action, locations, garages, staffName
             <textarea style={styles.textarea} rows={2} value={remarks} onChange={e => setRemarks(e.target.value)}
               placeholder={
                 action === "checkOut"       ? "e.g. Client heading to Mombasa" :
+                action === "reserveCar"     ? "e.g. Client will pick up on Monday morning" :
                 action === "extendBooking"  ? "e.g. Client requested 3 more days" :
                 action === "setMaintenance" ? "e.g. Engine oil leak, brake service" :
                 action === "markReturned"   ? "e.g. Returned with minor scratch" :
