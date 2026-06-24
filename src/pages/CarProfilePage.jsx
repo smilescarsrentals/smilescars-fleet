@@ -190,6 +190,7 @@ export default function CarProfilePage({ staffName, role }) {
   }
 
   // ── Admin / Manager Full Profile ──────────────────────────
+  return (
     <div>
       {/* Back button */}
       <button style={styles.backBtn} onClick={() => navigate("/")}>← Back to Fleet</button>
