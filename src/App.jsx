@@ -19,18 +19,24 @@ export default function App() {
   const [role, setRole] = useState(
     () => sessionStorage.getItem("role") || "Staff"
   );
+  const [fuelAccess, setFuelAccess] = useState(
+    () => JSON.parse(sessionStorage.getItem("fuelAccess") || "[]")
+  );
 
-  const handleStaffSet = (name, userRole) => {
+  const handleStaffSet = (name, userRole, userFuelAccess) => {
     sessionStorage.setItem("staffName", name);
     sessionStorage.setItem("role", userRole || "Staff");
+    sessionStorage.setItem("fuelAccess", JSON.stringify(userFuelAccess || []));
     setStaffName(name);
     setRole(userRole || "Staff");
+    setFuelAccess(userFuelAccess || []);
   };
 
   const handleSignOut = () => {
     sessionStorage.clear();
     setStaffName("");
     setRole("Staff");
+    setFuelAccess([]);
   };
 
   if (!staffName) {
@@ -46,7 +52,7 @@ export default function App() {
           <Route path="/clients"    element={<ClientsPage />} />
           <Route path="/car/:plate" element={<CarProfilePage staffName={staffName} role={role} />} />
           <Route path="/sub-hire"   element={<SubHirePage staffName={staffName} />} />
-          <Route path="/fuel"       element={<FuelPage staffName={staffName} role={role} />} />
+          <Route path="/fuel"       element={<FuelPage staffName={staffName} role={role} fuelAccess={fuelAccess} />} />
           <Route path="/sold"       element={<SoldPage />} />
           <Route path="*"           element={<Navigate to="/" />} />
         </Routes>

@@ -1,5 +1,5 @@
 // src/pages/FuelPage.jsx
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { post, get } from "../lib/api";
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -234,6 +234,15 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const plateOptions = [...fleet].map(c => c.plate).sort();
 
+  // Auto-detect current rental when plate is selected
+  const currentRental = useMemo(() => {
+    if (!form.plate) return null;
+    const norm = form.plate.trim().toLowerCase().replace(/\s+/g, "");
+    const car  = fleet.find(c => c.plate.trim().toLowerCase().replace(/\s+/g, "") === norm);
+    if (!car || car.status !== "Rented" || !car.currentClient) return null;
+    return car;
+  }, [form.plate, fleet]);
+
   const handleSave = async () => {
     if (!form.plate)   return setError("Please select a vehicle.");
     if (!form.product) return setError("Please select a product.");
@@ -254,6 +263,9 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
         authorisedBy: staffName,
         submittedBy:  staffName,
         remarks:      form.remarks || "",
+        // Auto-link to current rental
+        linkedClient: currentRental ? currentRental.currentClient : "",
+        linkedClientPhone: currentRental ? currentRental.clientPhone : "",
       };
       const res = await post(payload);
       if (!res.success) throw new Error(res.error || "Save failed");
@@ -303,6 +315,22 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
             value={form.plate}
             onChange={v => set("plate", v)}
           />
+
+          {currentRental && (
+            <div style={{ marginTop:8,padding:"10px 12px",background:"#fef9c3",border:"1px solid #fde68a",borderRadius:8,fontSize:13 }}>
+              <div style={{ fontWeight:600,color:"#854d0e",marginBottom:2 }}>🚗 Currently rented — fuel will be linked automatically</div>
+              <div style={{ color:"#92400e" }}>
+                <strong>{currentRental.currentClient}</strong>
+                {currentRental.clientPhone && <span style={{ marginLeft:8,opacity:0.8 }}>{currentRental.clientPhone}</span>}
+              </div>
+              {currentRental.returnDate && <div style={{ color:"#92400e",fontSize:12,marginTop:2 }}>Due back: {currentRental.returnDate}</div>}
+            </div>
+          )}
+          {form.plate && !currentRental && (
+            <div style={{ marginTop:8,fontSize:12,color:"#aaa" }}>
+              ℹ️ Car is not currently rented — no client will be linked
+            </div>
+          )}
 
           <label style={S.label}>Product</label>
           <div style={S.toggleRow}>
@@ -477,14 +505,16 @@ function EditFuelModal({ entry, fleet, staffName, onClose, onSaved }) {
 }
 
 // ── Main Page ────────────────────────────────────────────────
-export default function FuelPage({ staffName, role }) {
-  const isAdmin = role === "Admin" || role === "Manager";
+export default function FuelPage({ staffName, role, fuelAccess }) {
+  const isAdmin   = role === "Admin" || role === "Manager";
+  const hasAccess = Array.isArray(fuelAccess) && fuelAccess.map(n => n.trim().toLowerCase()).includes(staffName.trim().toLowerCase());
 
   const [entries,       setEntries]       = useState([]);
   const [fleet,         setFleet]         = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [showAdd,       setShowAdd]       = useState(false);
   const [editEntry,     setEditEntry]     = useState(null);
+  const [accessDenied,  setAccessDenied]  = useState(false);
   const [filterPlate,   setFilterPlate]   = useState("");
   const [filterProduct, setFilterProduct] = useState("");
   const [filterFrom,    setFilterFrom]    = useState("");
@@ -560,7 +590,7 @@ export default function FuelPage({ staffName, role }) {
           {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
         </span>
         <div style={{ flex: 1 }} />
-        <button onClick={() => setShowAdd(true)} style={S.addBtn}>＋ Add New</button>
+        <button onClick={() => hasAccess ? setShowAdd(true) : setAccessDenied(true)} style={S.addBtn}>＋ Add New</button>
       </div>
 
       {/* Table */}
@@ -573,7 +603,7 @@ export default function FuelPage({ staffName, role }) {
           <table style={S.table}>
             <thead>
               <tr style={{ background: "#f9fafb" }}>
-                {["Ref No","Date","Plate","Type","Product","Amount / Litres","Authorised By",""].map(h => (
+                {["Ref No","Date","Plate No.","Type","Product","Amount","Litres","Client Name","Authorised By",""].map(h => (
                   <th key={h} style={S.th}>{h}</th>
                 ))}
               </tr>
@@ -592,8 +622,12 @@ export default function FuelPage({ staffName, role }) {
                       color:      e.product === "Diesel" ? "#1d4ed8" : "#92400e",
                     }}>{e.product}</span>
                   </td>
-                  <td style={S.td}>
-                    {e.amount ? `TSH ${fmtNum(e.amount)}` : e.litres ? `${e.litres} Ltrs` : "—"}
+                  <td style={S.td}>{e.amount ? `TSH ${fmtNum(e.amount)}` : "—"}</td>
+                  <td style={S.td}>{e.litres || "—"}</td>
+                  <td style={{ ...S.td, fontSize: 12 }}>
+                    {e.linkedClient
+                      ? <span style={{ fontWeight:500, color:"#374151" }}>{e.linkedClient}</span>
+                      : <span style={{ color:"#ccc" }}>—</span>}
                   </td>
                   <td style={S.td}>{e.authorisedBy}</td>
                   <td style={{ ...S.td, whiteSpace: "nowrap" }}>
@@ -612,6 +646,22 @@ export default function FuelPage({ staffName, role }) {
       )}
 
       {/* Modals */}
+      {accessDenied && (
+        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}
+          onClick={() => setAccessDenied(false)}>
+          <div style={{ background:"#fff",borderRadius:14,width:340,maxWidth:"100%",padding:"2rem",textAlign:"center",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:44,marginBottom:12 }}>⛽</div>
+            <h3 style={{ fontSize:18,fontWeight:700,color:"#111",margin:"0 0 8px" }}>Access Denied</h3>
+            <p style={{ fontSize:14,color:"#888",margin:"0 0 20px",lineHeight:1.5 }}>
+              You are not authorised to submit fuel requests.<br/>
+              Please contact your manager.
+            </p>
+            <button style={{ padding:"10px 24px",fontSize:14,fontWeight:600,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer" }}
+              onClick={() => setAccessDenied(false)}>Close</button>
+          </div>
+        </div>
+      )}
       {showAdd && (
         <AddFuelModal
           fleet={fleet} staffName={staffName}

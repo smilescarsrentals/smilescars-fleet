@@ -273,7 +273,8 @@ function verifyStaff(body) {
   if (!match[2]) return { success: false, message: "No password set for this account" };
   if (match[2].toString().trim() !== body.password.toString().trim())
     return { success: false, message: "Incorrect password" };
-  return { success: true, role: (match[3] || "Staff").toString().trim() };
+  const fuelAccess = rows.filter(r => r[0] === "FuelAccess").map(r => r[1].toString().trim()).filter(Boolean);
+  return { success: true, role: (match[3] || "Staff").toString().trim(), fuelAccess };
 }
 
 function addStaff(body) {
@@ -441,9 +442,10 @@ function getConfigV7() {
   const rows      = sheet.getDataRange().getValues();
   const staff     = rows.filter(r => r[0] === "Staff").map(r => r[1]).filter(Boolean);
   const locations = rows.filter(r => r[0] === "Location").map(r => r[1]).filter(Boolean);
-  const garages   = rows.filter(r => r[0] === "Garage").map(r => r[1]).filter(Boolean);
-  const drivers   = rows.filter(r => r[0] === "Driver").map(r => r[1]).filter(Boolean);
-  return { success: true, staff, locations, garages, drivers };
+  const garages    = rows.filter(r => r[0] === "Garage").map(r => r[1]).filter(Boolean);
+  const drivers    = rows.filter(r => r[0] === "Driver").map(r => r[1]).filter(Boolean);
+  const fuelAccess = rows.filter(r => r[0] === "FuelAccess").map(r => r[1]).filter(Boolean);
+  return { success: true, staff, locations, garages, drivers, fuelAccess };
 }
 
 function addConfigItem(type, name) {
@@ -616,6 +618,7 @@ function getFuel() {
       litres:       row[7] || "",
       authorisedBy: row[8] || "",
       submittedBy:  row[9] || "",
+      linkedClient: row[10] || "",
     })),
   };
 }
@@ -644,6 +647,7 @@ function getFuelByPlate(plate) {
         litres:       row[7] || "",
         authorisedBy: row[8] || "",
         submittedBy:  row[9] || "",
+        linkedClient: row[10] || "",
       })),
   };
 }
@@ -685,6 +689,7 @@ function addFuel(body) {
     body.litres  || "",
     body.authorisedBy,
     body.submittedBy || body.authorisedBy,
+    body.linkedClient || "",
   ]);
 
   return { success: true, refNo };
@@ -847,9 +852,9 @@ function setupFuelSheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sh   = ss.getSheetByName(FUEL_SHEET);
   if (!sh) sh = ss.insertSheet(FUEL_SHEET);
-  sh.getRange(1, 1, 1, 10).setValues([[
+  sh.getRange(1, 1, 1, 11).setValues([[
     "Timestamp","Ref No","Date","Plate","Vehicle Type",
-    "Product","Amount (TSH)","Litres","Authorised By","Submitted By"
+    "Product","Amount (TSH)","Litres","Authorised By","Submitted By","Linked Client"
   ]]).setFontWeight("bold");
   Logger.log("✅ Fuel sheet ready.");
 }
