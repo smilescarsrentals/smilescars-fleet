@@ -9,6 +9,7 @@ import SoldPage from "./pages/SoldPage";
 import SubHirePage from "./pages/SubHirePage";
 import ClientsPage from "./pages/ClientsPage";
 import CarProfilePage from "./pages/CarProfilePage";
+import FuelPage from "./pages/FuelPage";
 import logo from "./assets/logo.js";
 
 export default function App() {
@@ -40,13 +41,14 @@ export default function App() {
     <BrowserRouter>
       <Layout staffName={staffName} role={role} onSignOut={handleSignOut} logo={logo}>
         <Routes>
-          <Route path="/"         element={<FleetPage staffName={staffName} role={role} />} />
-          <Route path="/history"  element={<HistoryPage role={role} />} />
+          <Route path="/"           element={<FleetPage staffName={staffName} role={role} />} />
+          <Route path="/history"    element={<HistoryPage role={role} />} />
           <Route path="/clients"    element={<ClientsPage />} />
           <Route path="/car/:plate" element={<CarProfilePage staffName={staffName} role={role} />} />
-          <Route path="/sub-hire" element={<SubHirePage staffName={staffName} />} />
-          <Route path="/sold"     element={<SoldPage />} />
-          <Route path="*"         element={<Navigate to="/" />} />
+          <Route path="/sub-hire"   element={<SubHirePage staffName={staffName} />} />
+          <Route path="/fuel"       element={<FuelPage staffName={staffName} role={role} />} />
+          <Route path="/sold"       element={<SoldPage />} />
+          <Route path="*"           element={<Navigate to="/" />} />
         </Routes>
       </Layout>
     </BrowserRouter>

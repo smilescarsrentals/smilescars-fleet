@@ -27,6 +27,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
             <NavLink to="/history"  style={navStyle}>History</NavLink>
             <NavLink to="/clients"  style={navStyle}>Clients</NavLink>
             <NavLink to="/sub-hire" style={navStyle}>Sub-Hire</NavLink>
+            <NavLink to="/fuel"     style={navStyle}>Fuel</NavLink>
             <NavLink to="/sold"     style={navStyle}>Sold</NavLink>
           </nav>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
