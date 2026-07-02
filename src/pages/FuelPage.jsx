@@ -544,7 +544,13 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
   };
 
   const filtered = entries.filter(e => {
-    if (filterPlate   && !e.plate.toLowerCase().includes(filterPlate.toLowerCase())) return false;
+    if (filterPlate) {
+      const q = filterPlate.toLowerCase();
+      const matchesPlate  = e.plate.toLowerCase().includes(q);
+      const matchesClient = (e.linkedClient || "").toLowerCase().includes(q);
+      const matchesType   = (e.type || "").toLowerCase().includes(q);
+      if (!matchesPlate && !matchesClient && !matchesType) return false;
+    }
     if (filterProduct && e.product !== filterProduct) return false;
     if (filterFrom    && e.date < filterFrom) return false;
     if (filterTo      && e.date > filterTo)   return false;
@@ -575,8 +581,8 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
 
       {/* Filter row */}
       <div style={S.filterRow}>
-        <input placeholder="Search plate…" value={filterPlate}
-          onChange={e => setFilterPlate(e.target.value)} style={S.filterInput} />
+        <input placeholder="Search plate, client or type…" value={filterPlate}
+          onChange={e => setFilterPlate(e.target.value)} style={{ ...S.filterInput, minWidth: 220 }} />
         <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)} style={S.filterInput}>
           <option value="">All Products</option>
           <option value="Diesel">Diesel</option>
