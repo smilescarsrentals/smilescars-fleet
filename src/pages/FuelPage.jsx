@@ -234,15 +234,25 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const plateOptions = [...fleet].map(c => c.plate).sort();
 
-  // Auto-detect current rental or staff use when plate is selected
-  const currentRental = useMemo(() => {
+  // Detect car state when plate is selected
+  const carState = useMemo(() => {
     if (!form.plate) return null;
     const norm = form.plate.trim().toLowerCase().replace(/\s+/g, "");
     const car  = fleet.find(c => c.plate.trim().toLowerCase().replace(/\s+/g, "") === norm);
-    if (!car || !car.currentClient) return null;
-    if (car.status !== "Rented" && car.status !== "Staff Use") return null;
-    return car;
+    if (!car) return null;
+    if (car.status === "Rented" && car.currentClient)
+      return { type: "rented",    car, label: `Currently rented to: ${car.currentClient}`, sub: car.returnDate ? `Due back: ${car.returnDate}` : null, linkedClient: car.currentClient };
+    if (car.status === "Staff Use" && car.currentClient)
+      return { type: "staff",     car, label: `Currently used by: ${car.currentClient}`,   sub: car.location || null,                                  linkedClient: car.currentClient };
+    if (car.status === "Maintenance")
+      return { type: "garage",    car, label: `Currently at garage: ${car.garage || car.location || "Garage"}`, sub: null,                             linkedClient: car.garage || car.location || "" };
+    if ((car.location || "").toLowerCase().includes("showroom"))
+      return { type: "showroom",  car, label: `Currently at showroom: ${car.location}`,    sub: null,                                                  linkedClient: car.location };
+    return null;
   }, [form.plate, fleet]);
+
+  // Keep backward compat alias
+  const currentRental = carState;
 
   const handleSave = async () => {
     if (!form.plate)   return setError("Please select a vehicle.");
@@ -265,8 +275,8 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
         submittedBy:  staffName,
         remarks:      form.remarks || "",
         // Auto-link to current rental
-        linkedClient: currentRental ? currentRental.currentClient : "",
-        linkedClientPhone: currentRental ? currentRental.clientPhone : "",
+        linkedClient: carState ? carState.linkedClient : "",
+        linkedClientPhone: carState?.car?.clientPhone || "",
       };
       const res = await post(payload);
       if (!res.success) throw new Error(res.error || "Save failed");
@@ -317,24 +327,26 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
             onChange={v => set("plate", v)}
           />
 
-          {currentRental && (
-            <div style={{ marginTop:8,padding:"10px 12px",
-              background: currentRental.status==="Staff Use" ? "#eff6ff" : "#fef9c3",
-              border: `1px solid ${currentRental.status==="Staff Use" ? "#bfdbfe" : "#fde68a"}`,
-              borderRadius:8,fontSize:13 }}>
-              <div style={{ fontWeight:600,color:currentRental.status==="Staff Use"?"#1d4ed8":"#854d0e",marginBottom:2 }}>
-                {currentRental.status==="Staff Use" ? "👤 Currently used by staff — fuel will be linked automatically" : "🚗 Currently rented — fuel will be linked automatically"}
+          {carState && (() => {
+            const themes = {
+              rented:   { bg:"#fef9c3", border:"#fde68a", color:"#854d0e", icon:"🚗" },
+              staff:    { bg:"#eff6ff", border:"#bfdbfe", color:"#1d4ed8", icon:"👤" },
+              garage:   { bg:"#fff7ed", border:"#fed7aa", color:"#c2410c", icon:"🔧" },
+              showroom: { bg:"#f0fdf4", border:"#bbf7d0", color:"#15803d", icon:"🏢" },
+            };
+            const t = themes[carState.type];
+            return (
+              <div style={{ marginTop:8,padding:"10px 12px",background:t.bg,border:`1px solid ${t.border}`,borderRadius:8,fontSize:13 }}>
+                <div style={{ fontWeight:600,color:t.color,marginBottom:2 }}>
+                  {t.icon} {carState.label} — fuel will be linked automatically
+                </div>
+                {carState.sub && <div style={{ color:t.color,fontSize:12,marginTop:2,opacity:0.85 }}>{carState.sub}</div>}
               </div>
-              <div style={{ color:currentRental.status==="Staff Use"?"#1e40af":"#92400e" }}>
-                <strong>{currentRental.currentClient}</strong>
-                {currentRental.clientPhone && <span style={{ marginLeft:8,opacity:0.8 }}>{currentRental.clientPhone}</span>}
-              </div>
-              {currentRental.returnDate && currentRental.status==="Rented" && <div style={{ color:"#92400e",fontSize:12,marginTop:2 }}>Due back: {currentRental.returnDate}</div>}
-            </div>
-          )}
-          {form.plate && !currentRental && (
+            );
+          })()}
+          {form.plate && !carState && (
             <div style={{ marginTop:8,fontSize:12,color:"#aaa" }}>
-              ℹ️ Car is not currently rented — no client will be linked
+              ℹ️ Car is available — no client will be linked
             </div>
           )}
 
@@ -637,9 +649,19 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
                   <td style={S.td}>{e.amount ? `TSH ${fmtNum(e.amount)}` : "—"}</td>
                   <td style={S.td}>{e.litres || "—"}</td>
                   <td style={{ ...S.td, fontSize: 12 }}>
-                    {e.linkedClient
-                      ? <span style={{ fontWeight:500, color:"#374151" }}>{e.linkedClient}</span>
-                      : <span style={{ color:"#ccc" }}>—</span>}
+                    {e.linkedClient ? (() => {
+                      // Cross-reference with current fleet to get context icon
+                      const norm = (e.plate||"").trim().toLowerCase().replace(/\s+/g,"");
+                      const car  = fleet.find(c => c.plate.trim().toLowerCase().replace(/\s+/g,"") === norm);
+                      let icon = "🚗";
+                      if (car) {
+                        if (car.status === "Staff Use")   icon = "👤";
+                        if (car.status === "Maintenance") icon = "🔧";
+                        if ((car.location||"").toLowerCase().includes("showroom")) icon = "🏢";
+                      }
+                      return <span style={{ fontWeight:500,color:"#374151" }}>{icon} {e.linkedClient}</span>;
+                    })()
+                    : <span style={{ color:"#ccc" }}>—</span>}
                   </td>
                   <td style={S.td}>{e.authorisedBy}</td>
                   <td style={{ ...S.td, whiteSpace: "nowrap" }}>

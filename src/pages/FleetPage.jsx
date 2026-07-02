@@ -49,6 +49,7 @@ export default function FleetPage({ staffName, role }) {
   const [fLocation, setFLocation] = useState("");
   const [fType,     setFType]     = useState("");
   const [view,      setView]      = useState("all");
+  const [expiringFilter, setExpiringFilter] = useState("all"); // all | overdue | soon
   const [modal,     setModal]     = useState(null);
   const [moveCar,   setMoveCar]   = useState(null);
   const [saving,    setSaving]    = useState(false);
@@ -147,7 +148,10 @@ export default function FleetPage({ staffName, role }) {
   const locations = useMemo(() => [...new Set(fleet.map(c=>c.location).filter(Boolean))].sort(), [fleet]);
 
   const staffUseList = useMemo(() => fleet.filter(c => c.status === "Staff Use"), [fleet]);
-  const baseList = view==="expiring" ? [...expired,...expiringSoon] : view==="unpaid" ? unpaid : view==="staffuse" ? staffUseList : fleet;
+  const expiringAll = useMemo(() => [...expired, ...expiringSoon], [expired, expiringSoon]);
+  const baseList = view==="expiring"
+    ? (expiringFilter==="overdue" ? expired : expiringFilter==="soon" ? expiringSoon : expiringAll)
+    : view==="unpaid" ? unpaid : view==="staffuse" ? staffUseList : fleet;
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -192,7 +196,7 @@ export default function FleetPage({ staffName, role }) {
           { label:"Unpaid",           value:unpaid.length,                        color:"#b91c1c",bg:"#fee2e2",view:"unpaid"   },
         ].map(s => (
           <div key={s.label} style={{ borderRadius:10,padding:"18px 10px",textAlign:"center",cursor:"pointer",background:s.bg,width:"100%",outline:view===s.view&&s.view!=="all"?`2px solid ${s.color}`:"none" }}
-            onClick={() => { if(s.view!=="all"){setView(v=>v===s.view?"all":s.view);setFStatus("");}else{setFStatus(fStatus===s.label?"":s.label);setView("all");}setPage(1); }}>
+            onClick={() => { if(s.view!=="all"){setView(v=>v===s.view?"all":s.view);setFStatus("");setExpiringFilter("all");}else{setFStatus(fStatus===s.label?"":s.label);setView("all");}setPage(1); }}>
             <div style={{ fontSize:26,fontWeight:700,color:s.color }}>{s.value}</div>
             <div style={{ fontSize:11,color:s.color,fontWeight:500 }}>{s.label}</div>
           </div>
@@ -200,9 +204,21 @@ export default function FleetPage({ staffName, role }) {
       </div>
 
       {view!=="all" && (
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"8px 14px",fontSize:13,color:"#92400e",marginBottom:"1rem" }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"8px 14px",fontSize:13,color:"#92400e",marginBottom:"1rem",flexWrap:"wrap",gap:8 }}>
           <span>{view==="expiring"?"⚠️ Showing rentals expiring within 24h or already overdue":view==="unpaid"?"💰 Showing unpaid / partially paid rentals":"👤 Showing cars assigned to staff"}</span>
-          <button style={{ fontSize:12,border:"1px solid #92400e",background:"none",color:"#92400e",padding:"4px 10px",borderRadius:6,cursor:"pointer" }} onClick={()=>{setView("all");setPage(1);}}>Show all cars</button>
+          <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+            {view==="expiring" && (<>
+              {[["all","All","#92400e","#fef9c3"],["overdue","Overdue","#b91c1c","#fee2e2"],["soon","Due Soon","#b45309","#fffbeb"]].map(([val,label,color,bg])=>(
+                <button key={val} onClick={()=>{setExpiringFilter(val);setPage(1);}}
+                  style={{ fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:6,border:`1.5px solid ${color}`,background:expiringFilter===val?color:bg,color:expiringFilter===val?"#fff":color,cursor:"pointer" }}>
+                  {label} {val==="overdue"?`(${expired.length})`:val==="soon"?`(${expiringSoon.length})`:`(${expired.length+expiringSoon.length})`}
+                </button>
+              ))}
+              <span style={{ width:1,background:"#fde68a",height:20,display:"inline-block",margin:"0 4px" }} />
+            </>)}
+            <button style={{ fontSize:12,border:"1px solid #92400e",background:"none",color:"#92400e",padding:"4px 10px",borderRadius:6,cursor:"pointer" }}
+              onClick={()=>{setView("all");setExpiringFilter("all");setPage(1);}}>Show all cars</button>
+          </div>
         </div>
       )}
 
@@ -232,7 +248,7 @@ export default function FleetPage({ staffName, role }) {
       <div className="sc-table-wrap">
         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
           <thead>
-            <tr>{["Plate","Type","Location","Status","Client","Return Date","Payment","Action"].map(h =>
+            <tr>{["Plate","Type","Location","Status","Client","Return Date","Payment", ...(view==="unpaid"?["Staff"]:[]), "Action"].map(h =>
               <th key={h} style={{ padding:"10px 12px",textAlign:"left",fontSize:11,fontWeight:600,color:"#888",borderBottom:"1px solid #e5e7eb",background:"#fafafa",textTransform:"uppercase",letterSpacing:".4px",whiteSpace:"nowrap" }}>{h}</th>)}
             </tr>
           </thead>
@@ -287,6 +303,13 @@ export default function FleetPage({ staffName, role }) {
                     ):<span style={{ color:"#ccc" }}>—</span>}
                     {car.paymentStatus==="Partial Paid"&&car.amountPaid&&<div style={{ fontSize:11,color:"#888",marginTop:2 }}>{fmtMoney(car.amountPaid,car.currency)}</div>}
                   </td>
+                  {view==="unpaid" && (
+                    <td data-label="Staff" style={{ padding:"11px 12px",fontSize:13 }}>
+                      {car.checkedOutBy
+                        ? <span style={{ fontWeight:500,color:"#374151" }}>{car.checkedOutBy}</span>
+                        : <span style={{ color:"#ccc" }}>—</span>}
+                    </td>
+                  )}
                   <td data-label="Action" style={{ padding:"11px 12px" }}>
                     <ActionButtons car={car} onAction={(c,a)=>setModal({car:c,action:a})} onMove={c=>setMoveCar(c)} canSell={canExportOrSell} />
                   </td>
