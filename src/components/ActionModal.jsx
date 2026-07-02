@@ -59,14 +59,13 @@ function FineInput({ value, onChange, label }) {
 }
 
 export default function ActionModal({ car, action, locations, garages, drivers, staff, staffName, role, onConfirm, onClose, loading }) {
-  const cfg        = ACTIONS[action];
+  const cfg        = ACTIONS[action] || { title: "", color: "#16a34a", btnLabel: "Confirm" };
   const today      = new Date().toISOString().split("T")[0];
   const canAddLocGarage = role === "Admin" || role === "Manager";
 
   const [client,        setClient]       = useState(car.currentClient || "");
   const [countryCode,   setCountryCode]  = useState("+255");
   const [phoneNumber,   setPhoneNumber]  = useState("");
-  const clientPhone = countryCode + phoneNumber;
   const [bookedFrom,    setBookedFrom]   = useState(today);
   const rawReturn = action === "extendBooking" ? (car.returnDate ? String(car.returnDate).split("T")[0] : "") : "";
   const [returnDate,    setReturnDate]   = useState(rawReturn);
@@ -106,6 +105,8 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const isAvailable   = action === "setAvailable";
   const isSold        = action === "markSold";
   const isStaffUse    = action === "setStaffUse";
+
+  const clientPhone = phoneNumber ? countryCode + phoneNumber : "";
 
   const handleSubmit = () => {
     setErr("");
