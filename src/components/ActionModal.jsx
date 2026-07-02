@@ -171,7 +171,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
               {!addingDriver ? (
                 <select style={selStyle} value={driver} onChange={e => { if (e.target.value === "__new__") setAddingDriver(true); else setDriver(e.target.value); }}>
                   <option value="">— No driver assigned —</option>
-                  {(drivers || []).length > 0 && <optgroup label="Drivers">{(drivers || []).map(d => <option key={d} value={d}>{d}</option>)}</optgroup>}
+                  {(drivers || []).map(d => <option key={d} value={d}>{d}</option>)}
                   <option value="__new__">+ Add new driver</option>
                 </select>
               ) : (
