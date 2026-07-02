@@ -10,30 +10,6 @@ const ACTIONS = {
   markSold:       { title: "Mark Car as Sold",    color: "#dc2626", btnLabel: "Confirm Sale"        },
 };
 
-const COUNTRY_CODES = [
-  { flag: "🇹🇿", code: "+255", name: "Tanzania"     },
-  { flag: "🇰🇪", code: "+254", name: "Kenya"         },
-  { flag: "🇺🇬", code: "+256", name: "Uganda"        },
-  { flag: "🇷🇼", code: "+250", name: "Rwanda"        },
-  { flag: "🇧🇮", code: "+257", name: "Burundi"       },
-  { flag: "🇿🇲", code: "+260", name: "Zambia"        },
-  { flag: "🇲🇿", code: "+258", name: "Mozambique"    },
-  { flag: "🇿🇦", code: "+27",  name: "South Africa"  },
-  { flag: "🇬🇧", code: "+44",  name: "UK"            },
-  { flag: "🇩🇪", code: "+49",  name: "Germany"       },
-  { flag: "🇫🇷", code: "+33",  name: "France"        },
-  { flag: "🇮🇹", code: "+39",  name: "Italy"         },
-  { flag: "🇳🇱", code: "+31",  name: "Netherlands"   },
-  { flag: "🇨🇭", code: "+41",  name: "Switzerland"   },
-  { flag: "🇺🇸", code: "+1",   name: "USA"           },
-  { flag: "🇨🇦", code: "+1",   name: "Canada"        },
-  { flag: "🇦🇺", code: "+61",  name: "Australia"     },
-  { flag: "🇮🇳", code: "+91",  name: "India"         },
-  { flag: "🇨🇳", code: "+86",  name: "China"         },
-  { flag: "🇦🇪", code: "+971", name: "UAE"           },
-  { flag: "🇸🇦", code: "+966", name: "Saudi Arabia"  },
-  { flag: "🇴🇲", code: "+968", name: "Oman"          },
-];
 const CURRENCIES       = ["TZS", "USD", "EUR"];
 const PAYMENT_STATUSES = ["Paid", "Partial Paid", "Unpaid", "Long Term"];
 
@@ -64,8 +40,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const canAddLocGarage = role === "Admin" || role === "Manager";
 
   const [client,        setClient]       = useState(car.currentClient || "");
-  const [countryCode,   setCountryCode]  = useState("+255");
-  const [phoneNumber,   setPhoneNumber]  = useState("");
+  const [clientPhone,   setClientPhone]  = useState(car.clientPhone || "");
   const [bookedFrom,    setBookedFrom]   = useState(today);
   const rawReturn = action === "extendBooking" ? (car.returnDate ? String(car.returnDate).split("T")[0] : "") : "";
   const [returnDate,    setReturnDate]   = useState(rawReturn);
@@ -105,8 +80,6 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const isAvailable   = action === "setAvailable";
   const isSold        = action === "markSold";
   const isStaffUse    = action === "setStaffUse";
-
-  const clientPhone = phoneNumber ? countryCode + phoneNumber : "";
 
   const handleSubmit = () => {
     setErr("");
@@ -169,21 +142,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
             <div style={S.field}><label style={S.label}>Client Name *</label>
               <input style={S.input} value={client} onChange={e => setClient(e.target.value)} placeholder="Full name" autoFocus /></div>
             <div style={S.field}><label style={S.label}>Client Phone</label>
-              <div style={{ display:"flex", gap:6 }}>
-                <select value={countryCode} onChange={e => setCountryCode(e.target.value)}
-                  style={{ ...selStyle, width:130, flexShrink:0, fontSize:13 }}>
-                  {COUNTRY_CODES.map((c,i) => (
-                    <option key={`${c.code}-${i}`} value={c.code}>
-                      {c.flag} {c.code} {c.name}
-                    </option>
-                  ))}
-                </select>
-                <input style={{ ...S.input, flex:1 }} type="tel" inputMode="numeric"
-                  value={phoneNumber} onChange={e => setPhoneNumber(e.target.value.replace(/[^\d\s]/g,""))}
-                  placeholder="678 251 635" />
-              </div>
-              {phoneNumber && <div style={{ fontSize:11,color:"#888",marginTop:4 }}>Full number: {clientPhone}</div>}
-            </div>
+              <input style={S.input} value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="+255..." /></div>
             <div style={S.twoCol}>
               <div style={S.field}><label style={S.label}>Booked From *</label>
                 <input style={S.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} /></div>
