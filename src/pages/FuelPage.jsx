@@ -234,12 +234,13 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const plateOptions = [...fleet].map(c => c.plate).sort();
 
-  // Auto-detect current rental when plate is selected
+  // Auto-detect current rental or staff use when plate is selected
   const currentRental = useMemo(() => {
     if (!form.plate) return null;
     const norm = form.plate.trim().toLowerCase().replace(/\s+/g, "");
     const car  = fleet.find(c => c.plate.trim().toLowerCase().replace(/\s+/g, "") === norm);
-    if (!car || car.status !== "Rented" || !car.currentClient) return null;
+    if (!car || !car.currentClient) return null;
+    if (car.status !== "Rented" && car.status !== "Staff Use") return null;
     return car;
   }, [form.plate, fleet]);
 
@@ -317,13 +318,18 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
           />
 
           {currentRental && (
-            <div style={{ marginTop:8,padding:"10px 12px",background:"#fef9c3",border:"1px solid #fde68a",borderRadius:8,fontSize:13 }}>
-              <div style={{ fontWeight:600,color:"#854d0e",marginBottom:2 }}>🚗 Currently rented — fuel will be linked automatically</div>
-              <div style={{ color:"#92400e" }}>
+            <div style={{ marginTop:8,padding:"10px 12px",
+              background: currentRental.status==="Staff Use" ? "#eff6ff" : "#fef9c3",
+              border: `1px solid ${currentRental.status==="Staff Use" ? "#bfdbfe" : "#fde68a"}`,
+              borderRadius:8,fontSize:13 }}>
+              <div style={{ fontWeight:600,color:currentRental.status==="Staff Use"?"#1d4ed8":"#854d0e",marginBottom:2 }}>
+                {currentRental.status==="Staff Use" ? "👤 Currently used by staff — fuel will be linked automatically" : "🚗 Currently rented — fuel will be linked automatically"}
+              </div>
+              <div style={{ color:currentRental.status==="Staff Use"?"#1e40af":"#92400e" }}>
                 <strong>{currentRental.currentClient}</strong>
                 {currentRental.clientPhone && <span style={{ marginLeft:8,opacity:0.8 }}>{currentRental.clientPhone}</span>}
               </div>
-              {currentRental.returnDate && <div style={{ color:"#92400e",fontSize:12,marginTop:2 }}>Due back: {currentRental.returnDate}</div>}
+              {currentRental.returnDate && currentRental.status==="Rented" && <div style={{ color:"#92400e",fontSize:12,marginTop:2 }}>Due back: {currentRental.returnDate}</div>}
             </div>
           )}
           {form.plate && !currentRental && (

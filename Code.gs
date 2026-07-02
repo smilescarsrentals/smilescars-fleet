@@ -51,6 +51,7 @@ function doPost(e) {
     if (action === "extendBooking")        return respond(extendBooking(body));
     if (action === "setMaintenance")       return respond(setMaintenance(body));
     if (action === "setAvailable")         return respond(setAvailable(body));
+    if (action === "setStaffUse")          return respond(setStaffUse(body));
     if (action === "updateLocation")       return respond(updateLocation(body));
     if (action === "updatePayment")        return respond(updatePayment(body));
     if (action === "markSold")             return respond(markSold(body));
@@ -375,6 +376,37 @@ function setAvailable(body) {
     plate: body.plate, type: body.type || "", action: "Marked Available",
     remarks: body.remarks || "", location: body.location || "",
     staffName: body.staffName, kmOut: body.kmOut || "",
+  });
+  return { success: true };
+}
+
+function setStaffUse(body) {
+  if (!body.plate)        throw new Error("Plate is required");
+  if (!body.staffName)    throw new Error("Staff name is required");
+  if (!body.assignedTo)   throw new Error("Assigned staff member is required");
+  updateFleetRow(body.plate, {
+    status:        "Staff Use",
+    currentClient: body.assignedTo,
+    clientPhone:   "",
+    bookedFrom:    "",
+    returnDate:    "",
+    remarks:       body.remarks  || "",
+    fuelOut:       body.fuelOut  || "",
+    kmOut:         body.kmOut    || "",
+    location:      body.location || "",
+    amount: "", currency: "", garage: "", paymentStatus: "",
+    amountPaid: "", policeFineOut: "", parkingFineOut: "", driver: "",
+  });
+  addHistory({
+    plate:     body.plate,
+    type:      body.type || "",
+    action:    "Staff Use",
+    client:    body.assignedTo,
+    location:  body.location  || "",
+    remarks:   body.remarks   || "",
+    fuelOut:   body.fuelOut   || "",
+    kmOut:     body.kmOut     || "",
+    staffName: body.staffName,
   });
   return { success: true };
 }

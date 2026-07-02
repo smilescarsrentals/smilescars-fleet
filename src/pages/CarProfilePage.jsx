@@ -25,6 +25,7 @@ const STATUS_COLORS = {
   Available:   { bg: "#dcfce7", color: "#15803d" },
   Rented:      { bg: "#fef9c3", color: "#854d0e" },
   Maintenance: { bg: "#ffedd5", color: "#c2410c" },
+  "Staff Use": { bg: "#eff6ff", color: "#1d4ed8" },
 };
 const ACTION_COLORS = {
   "Checked Out":          { bg: "#fef9c3", color: "#854d0e" },
@@ -157,6 +158,14 @@ export default function CarProfilePage({ staffName, role }) {
               ):null)}
             </div>
           )}
+          {car.status==="Staff Use" && car.currentClient && (
+            <div style={{ ...S.staffRentalBox, background:"#eff6ff", border:"1px solid #bfdbfe" }}>
+              <div style={{ fontWeight:600,fontSize:14,color:"#1d4ed8",marginBottom:4 }}>👤 Assigned to Staff</div>
+              <div style={S.staffInfoRow}><span style={S.staffInfoLabel}>Staff Member</span><span style={{ fontWeight:600 }}>{car.currentClient}</span></div>
+              {car.location && <div style={S.staffInfoRow}><span style={S.staffInfoLabel}>Location</span><span>{car.location}</span></div>}
+              {car.remarks && <div style={S.staffInfoRow}><span style={S.staffInfoLabel}>Remarks</span><span>{car.remarks}</span></div>}
+            </div>
+          )}
           {car.status==="Maintenance" && car.garage && (
             <div style={S.staffRentalBox}>
               <div style={{ fontWeight:600,fontSize:14,color:"#c2410c",marginBottom:4 }}>🔧 In Maintenance</div>
@@ -207,6 +216,12 @@ export default function CarProfilePage({ staffName, role }) {
             {fmtDate(car.bookedFrom)} → {fmtDate(car.returnDate)}
             {car.paymentStatus && <span style={{ marginLeft:12,fontWeight:600,color:car.paymentStatus==="Unpaid"?"#b91c1c":"#15803d" }}>{car.paymentStatus}</span>}
           </div>
+        </div>
+      )}
+      {car.status==="Staff Use" && car.currentClient && (
+        <div style={{ ...S.rentalBanner, background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8" }}>
+          <div><span style={{ fontWeight:600 }}>👤 Currently assigned to: </span>{car.currentClient}</div>
+          <div style={{ fontSize:13 }}>{car.location && `📍 ${car.location}`}</div>
         </div>
       )}
 
