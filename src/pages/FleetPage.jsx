@@ -196,7 +196,17 @@ export default function FleetPage({ staffName, role }) {
           { label:"Unpaid",           value:unpaid.length,                        color:"#b91c1c",bg:"#fee2e2",view:"unpaid"   },
         ].map(s => (
           <div key={s.label} style={{ borderRadius:10,padding:"18px 10px",textAlign:"center",cursor:"pointer",background:s.bg,width:"100%",outline:view===s.view&&s.view!=="all"?`2px solid ${s.color}`:"none" }}
-            onClick={() => { if(s.view!=="all"){setView(v=>v===s.view?"all":s.view);setFStatus("");setExpiringFilter("all");}else{setFStatus(fStatus===s.label?"":s.label);setView("all");}setPage(1); }}>
+            onClick={() => {
+              if (s.view !== "all") {
+                setView(s.view);
+                setFStatus("");
+                setExpiringFilter("all");
+              } else {
+                setFStatus(fStatus === s.label ? "" : s.label);
+                setView("all");
+              }
+              setPage(1);
+            }}>
             <div style={{ fontSize:26,fontWeight:700,color:s.color }}>{s.value}</div>
             <div style={{ fontSize:11,color:s.color,fontWeight:500 }}>{s.label}</div>
           </div>
@@ -204,20 +214,24 @@ export default function FleetPage({ staffName, role }) {
       </div>
 
       {view!=="all" && (
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"8px 14px",fontSize:13,color:"#92400e",marginBottom:"1rem",flexWrap:"wrap",gap:8 }}>
-          <span>{view==="expiring"?"⚠️ Showing rentals expiring within 24h or already overdue":view==="unpaid"?"💰 Showing unpaid / partially paid rentals":"👤 Showing cars assigned to staff"}</span>
-          <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",background:view==="expiring"?"#fef2f2":view==="unpaid"?"#fefce8":"#eff6ff",border:`1.5px solid ${view==="expiring"?"#fca5a5":view==="unpaid"?"#fde68a":"#bfdbfe"}`,borderRadius:10,padding:"10px 16px",fontSize:13,color:view==="expiring"?"#b91c1c":view==="unpaid"?"#92400e":"#1d4ed8",marginBottom:"1rem",flexWrap:"wrap",gap:8 }}>
+          <span style={{ fontWeight:500 }}>{view==="expiring"?"⚠️ Expiring / Overdue Rentals":view==="unpaid"?"💰 Unpaid / Partially Paid Rentals":"👤 Staff Assigned Cars"}</span>
+          <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
             {view==="expiring" && (<>
-              {[["all","All","#92400e","#fef9c3"],["overdue","Overdue","#b91c1c","#fee2e2"],["soon","Due Soon","#b45309","#fffbeb"]].map(([val,label,color,bg])=>(
-                <button key={val} onClick={()=>{setExpiringFilter(val);setPage(1);}}
-                  style={{ fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:6,border:`1.5px solid ${color}`,background:expiringFilter===val?color:bg,color:expiringFilter===val?"#fff":color,cursor:"pointer" }}>
-                  {label} {val==="overdue"?`(${expired.length})`:val==="soon"?`(${expiringSoon.length})`:`(${expired.length+expiringSoon.length})`}
+              {[
+                ["all",     `All (${expired.length + expiringSoon.length})`, "#7f1d1d", "#fee2e2"],
+                ["overdue", `Overdue (${expired.length})`,                  "#b91c1c", "#fecaca"],
+                ["soon",    `Due Soon (${expiringSoon.length})`,             "#b45309", "#fef3c7"],
+              ].map(([val, label, color, bg]) => (
+                <button key={val} onClick={() => { setExpiringFilter(val); setPage(1); }}
+                  style={{ fontSize:12, fontWeight:600, padding:"5px 14px", borderRadius:20, border:"none", background:expiringFilter===val ? color : bg, color:expiringFilter===val ? "#fff" : color, cursor:"pointer" }}>
+                  {label}
                 </button>
               ))}
-              <span style={{ width:1,background:"#fde68a",height:20,display:"inline-block",margin:"0 4px" }} />
+              <span style={{ width:1, background:"#fca5a5", height:18, display:"inline-block", margin:"0 2px" }} />
             </>)}
-            <button style={{ fontSize:12,border:"1px solid #92400e",background:"none",color:"#92400e",padding:"4px 10px",borderRadius:6,cursor:"pointer" }}
-              onClick={()=>{setView("all");setExpiringFilter("all");setPage(1);}}>Show all cars</button>
+            <button style={{ fontSize:12, fontWeight:500, border:"1.5px solid currentColor", background:"transparent", color:"inherit", padding:"4px 12px", borderRadius:20, cursor:"pointer" }}
+              onClick={() => { setView("all"); setExpiringFilter("all"); setPage(1); }}>✕ Clear</button>
           </div>
         </div>
       )}
