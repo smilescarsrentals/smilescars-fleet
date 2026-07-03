@@ -102,7 +102,7 @@ function updateFleetRow(plate, fields) {
     location: 3, status: 4, currentClient: 5, clientPhone: 6, bookedFrom: 7,
     returnDate: 8, remarks: 9, fuelOut: 10, amount: 11, currency: 12, garage: 13,
     paymentStatus: 14, amountPaid: 15, policeFineOut: 16, parkingFineOut: 17,
-    kmOut: 18, driver: 19, checkedOutBy: 20,
+    kmOut: 18, driver: 19, checkedOutBy: 22,
   };
   Object.keys(map).forEach(key => {
     if (fields[key] !== undefined) sheet.getRange(rowIndex, map[key]).setValue(fields[key]);
@@ -346,13 +346,21 @@ function extendBooking(body) {
   const { sheet, rowIndex } = findRow(body.plate);
   const row = sheet.getRange(rowIndex, 1, 1, 19).getValues()[0];
   const oldReturnDate = fmtDate(row[7]);
-  updateFleetRow(body.plate, { returnDate: body.returnDate, remarks: body.remarks || "" });
+  updateFleetRow(body.plate, {
+    returnDate: body.returnDate,
+    remarks: body.remarks || "",
+    ...(body.amount        ? { amount: body.amount, currency: body.currency || "TZS" } : {}),
+    ...(body.paymentStatus ? { paymentStatus: body.paymentStatus }                      : {}),
+    ...(body.amountPaid    ? { amountPaid: body.amountPaid }                            : {}),
+  });
   addHistory({
     plate: body.plate, type: body.type || row[1], action: "Booking Extended",
     client: row[4], clientPhone: row[5], bookedFrom: fmtDate(row[6]),
     returnDate: body.returnDate, location: body.location || row[2],
     remarks: `Extended from ${oldReturnDate} to ${body.returnDate}. ${body.remarks || ""}`.trim(),
     staffName: body.staffName,
+    amount: body.amount || "", currency: body.currency || "",
+    paymentStatus: body.paymentStatus || "", amountPaid: body.amountPaid || "",
   });
   return { success: true };
 }

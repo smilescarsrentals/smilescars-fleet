@@ -205,6 +205,24 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
             <div style={S.field}><label style={S.label}>New Return Date *</label>
               {car.returnDate && <p style={{ fontSize:12, color:"#888", margin:"0 0 4px" }}>Current: {String(car.returnDate).split("T")[0]}</p>}
               <input style={S.input} type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} /></div>
+            <div style={S.two}>
+              <div style={S.field}><label style={S.label}>Amount Charged</label>
+                <div style={{ display:"flex", gap:6 }}>
+                  <MoneyInput style={{ ...S.input, flex:1 }} value={amount} onChange={setAmount} placeholder="e.g. 150,000" />
+                  <select style={{ ...sel, width:76 }} value={currency} onChange={e => setCurrency(e.target.value)}>
+                    {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={S.field}><label style={S.label}>Payment Status</label>
+                <select style={sel} value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)}>
+                  {PAYMENT_STATUSES.map(p => <option key={p}>{p}</option>)}
+                </select>
+                {paymentStatus === "Partial Paid" && (
+                  <MoneyInput style={{ ...S.input, marginTop:6 }} value={amountPaid} onChange={setAmountPaid} placeholder="Amount paid" />
+                )}
+              </div>
+            </div>
           </>)}
 
           {/* Return */}
