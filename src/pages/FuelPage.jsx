@@ -294,7 +294,6 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
     }
   };
 
-  return (
   if (pdfReady) {
     const { blob, refNo, filename } = pdfReady;
 
