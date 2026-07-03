@@ -16,7 +16,12 @@ const ACTION_COLORS = {
   "Note Added":          { bg: "#f0fdf4", color: "#15803d" },
 };
 
-function fmt(iso) {
+function fuelVal(val) {
+  if (!val) return null;
+  const s = String(val);
+  if (s.includes("T21:") || s.match(/^\d{4}-\d{2}-\d{2}T/)) return null;
+  return s;
+}
   if (!iso) return "—";
   const d = new Date(iso);
   return d.toLocaleDateString("en-TZ", { day:"2-digit",month:"short",year:"numeric" }) +
@@ -110,7 +115,7 @@ export default function HistoryPage({ role }) {
     const rows = exportRows.map(h => ({
       Time: fmt(h.timestamp), Plate: h.plate, Type: h.type, Action: h.action,
       Client: h.client, Phone: h.clientPhone, "Booked From": fmtDate(h.bookedFrom),
-      "Return Date": fmtDate(h.returnDate), "Fuel Out": h.fuelOut, "Fuel In": h.fuelIn,
+      "Return Date": fmtDate(h.returnDate), "Fuel Out": fuelVal(h.fuelOut)||"", "Fuel In": fuelVal(h.fuelIn)||"",
       Amount: h.amount, Currency: h.currency, "Police Fine": h.policeFine, "Parking Fine": h.parkingFine,
       Garage: h.garage, Location: h.location, "Payment Status": h.paymentStatus,
       "Amount Paid": h.amountPaid, "KM Out": h.kmOut, "KM In": h.kmIn, Driver: h.driver,
@@ -207,8 +212,8 @@ export default function HistoryPage({ role }) {
                   </td>
                   <td data-label="Return Date" style={{ padding:"10px 12px",fontSize:12,color:"#555",whiteSpace:"nowrap" }}>{fmtDate(h.returnDate)}</td>
                   <td data-label="Garage" style={{ padding:"10px 12px",fontSize:12,color:"#c2410c",fontWeight:500 }}>{h.garage || "—"}</td>
-                  <td data-label="Fuel Out" style={{ padding:"10px 12px",fontSize:12,color:"#555" }}>{h.fuelOut || "—"}</td>
-                  <td data-label="Fuel In" style={{ padding:"10px 12px",fontSize:12,color:"#555" }}>{h.fuelIn || "—"}</td>
+                  <td data-label="Fuel Out" style={{ padding:"10px 12px",fontSize:12,color:"#555" }}>{fuelVal(h.fuelOut) || "—"}</td>
+                  <td data-label="Fuel In" style={{ padding:"10px 12px",fontSize:12,color:"#555" }}>{fuelVal(h.fuelIn) || "—"}</td>
                   <td data-label="Amount" style={{ padding:"10px 12px",fontSize:12,color:"#555",whiteSpace:"nowrap" }}>
                     {fmtMoney(h.amount, h.currency)}
                     {(h.policeFine || h.parkingFine) && (

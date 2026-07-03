@@ -41,8 +41,10 @@ const ACTION_COLORS = {
 
 function fuelVal(val) {
   if (!val) return null;
-  if (String(val).includes("T") || String(val).includes("-202") || String(val).match(/^\d{4}-\d{2}/)) return null;
-  return val;
+  const s = String(val);
+  // Only hide ISO datetime strings like "2026-03-31T21:00:00.000Z"
+  if (s.match(/^\d{4}-\d{2}-\d{2}T/)) return null;
+  return s;
 }
 
 export default function CarProfilePage({ staffName, role }) {
@@ -238,7 +240,7 @@ export default function CarProfilePage({ staffName, role }) {
 
       {activeTab==="overview" && (
         <div style={S.tabContent}>
-          <div style={S.infoGrid}>
+          <div style={{ display:"flex", flexDirection:"column" }}>
             {[
               ["Plate",car.plate],["Type",car.type],["Status",car.status],["Location",car.location||"—"],
               ["Driver",car.driver||"—"],["Fuel Out",fuelVal(car.fuelOut)||"—"],["KM Out",car.kmOut?Number(car.kmOut).toLocaleString("en-US"):"—"],
@@ -247,9 +249,9 @@ export default function CarProfilePage({ staffName, role }) {
               ["Payment Status",car.paymentStatus||"—"],["Amount",car.amount?fmtMoney(car.amount,car.currency):"—"],
               ["Garage",car.garage||"—"],["Remarks",car.remarks||"—"],
             ].map(([label,value]) => (
-              <div key={label} style={S.infoRow}>
-                <div style={S.infoLabel}>{label}</div>
-                <div style={S.infoValue}>{value}</div>
+              <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:"1px solid #f3f4f6", gap:16 }}>
+                <div style={{ fontSize:12, fontWeight:600, color:"#888", textTransform:"uppercase", letterSpacing:".3px", flexShrink:0, minWidth:120 }}>{label}</div>
+                <div style={{ fontSize:13, color:"#111", textAlign:"right" }}>{value}</div>
               </div>
             ))}
           </div>
