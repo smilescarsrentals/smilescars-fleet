@@ -50,10 +50,11 @@ export default function FleetPage({ staffName, role }) {
   const [fType,     setFType]     = useState("");
   const [view,      setView]      = useState("all");
   const [expiringFilter, setExpiringFilter] = useState("all"); // all | overdue | soon
-  const [modal,     setModal]     = useState(null);
-  const [moveCar,   setMoveCar]   = useState(null);
-  const [saving,    setSaving]    = useState(false);
-  const [toast,     setToast]     = useState("");
+  const [modal,        setModal]        = useState(null);
+  const [moveCar,      setMoveCar]      = useState(null);
+  const [replaceCar,   setReplaceCar]   = useState(null);
+  const [saving,       setSaving]       = useState(false);
+  const [toast,        setToast]        = useState("");
   const [overdueBlock, setOverdueBlock] = useState(false);
   const [page,      setPage]      = useState(1);
   const PER_PAGE = 25;
@@ -105,6 +106,38 @@ export default function FleetPage({ staffName, role }) {
       if (fields.newDriver)   await api.addDriver(fields.newDriver);
       setModal(null);
       showToast("✅ Saved successfully");
+      cache.clear();
+      await load(true);
+    } catch (e) { showToast("❌ Error: " + e.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleReplaceConfirm = async (fields) => {
+    if (!replaceCar) return;
+    setSaving(true);
+    try {
+      await api.replaceVehicle({
+        originalPlate: replaceCar.plate,
+        originalType:  replaceCar.type,
+        replacePlate:  fields.replacePlate,
+        replaceType:   fields.replaceType,
+        staffName,
+        // Pass original rental details
+        client:        replaceCar.currentClient,
+        clientPhone:   replaceCar.clientPhone,
+        bookedFrom:    replaceCar.bookedFrom,
+        returnDate:    replaceCar.returnDate,
+        amount:        replaceCar.amount,
+        currency:      replaceCar.currency,
+        paymentStatus: replaceCar.paymentStatus,
+        amountPaid:    replaceCar.amountPaid,
+        driver:        replaceCar.driver,
+        location:      replaceCar.location,
+        garage:        fields.garage || "",
+        remarks:       fields.remarks || "",
+      });
+      setReplaceCar(null);
+      showToast(`✅ ${replaceCar.plate} replaced by ${fields.replacePlate}`);
       cache.clear();
       await load(true);
     } catch (e) { showToast("❌ Error: " + e.message); }
@@ -305,6 +338,7 @@ export default function FleetPage({ staffName, role }) {
                       ? <div>
                           <div style={{ fontWeight:500,fontSize:13 }}>
                             {car.status==="Staff Use" && <span style={{ marginRight:4 }}>👤</span>}
+                            {car.remarks && car.remarks.includes("Replacement for") && <span style={{ marginRight:4 }} title={car.remarks}>🔄</span>}
                             {car.currentClient}
                           </div>
                           {car.clientPhone&&<div style={{ fontSize:12,color:"#888" }}>{car.clientPhone}</div>}
@@ -336,7 +370,7 @@ export default function FleetPage({ staffName, role }) {
                     </td>
                   )}
                   <td data-label="Action" style={{ padding:"11px 12px" }}>
-                    <ActionButtons car={car} onAction={(c,a)=>setModal({car:c,action:a})} onMove={c=>setMoveCar(c)} canSell={canExportOrSell} myOverdueCount={myOverdueCount} setOverdueBlock={setOverdueBlock} />
+                    <ActionButtons car={car} onAction={(c,a)=>setModal({car:c,action:a})} onMove={c=>setMoveCar(c)} onReplace={c=>setReplaceCar(c)} canSell={canExportOrSell} myOverdueCount={myOverdueCount} setOverdueBlock={setOverdueBlock} />
                   </td>
                 </tr>
               );
@@ -380,11 +414,15 @@ export default function FleetPage({ staffName, role }) {
         <MoveCarModal car={moveCar} locations={config.locations} staffName={staffName} role={role}
           onConfirm={handleMoveConfirm} onClose={()=>!saving&&setMoveCar(null)} loading={saving} />
       )}
+      {replaceCar && (
+        <ReplaceCarModal car={replaceCar} fleet={fleet} garages={config.garages} staffName={staffName}
+          onConfirm={handleReplaceConfirm} onClose={()=>!saving&&setReplaceCar(null)} loading={saving} />
+      )}
     </div>
   );
 }
 
-function ActionButtons({ car, onAction, onMove, canSell, myOverdueCount, setOverdueBlock }) {
+function ActionButtons({ car, onAction, onMove, onReplace, canSell, myOverdueCount, setOverdueBlock }) {
   const row = { display:"flex",alignItems:"center",flexWrap:"nowrap",gap:3 };
   const btn = (label, action, color, bg, onClick) => (
     <button key={action}
@@ -415,6 +453,7 @@ function ActionButtons({ car, onAction, onMove, canSell, myOverdueCount, setOver
     <div style={row}>
       {btn("Returned","markReturned","#2563eb","#eff6ff")}
       {btn("Extend Booking","extendBooking","#0284c7","#e0f2fe")}
+      {btn("Replace","replace","#7c3aed","#f5f3ff",()=>onReplace(car))}
     </div>
   );
   if (car.status==="Maintenance") return (
@@ -424,4 +463,117 @@ function ActionButtons({ car, onAction, onMove, canSell, myOverdueCount, setOver
     </div>
   );
   return null;
+}
+
+// ── Replace Car Modal ─────────────────────────────────────────
+function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, loading }) {
+  const available = fleet.filter(c => c.status === "Available");
+  const [replacePlate, setReplacePlate] = useState("");
+  const [garage,       setGarage]       = useState("");
+  const [newGarage,    setNewGarage]    = useState("");
+  const [addingGarage, setAddingGarage] = useState(false);
+  const [remarks,      setRemarks]      = useState("");
+  const [err,          setErr]          = useState("");
+  const [query,        setQuery]        = useState("");
+  const [open,         setOpen]         = useState(false);
+
+  const filtered = query.trim()
+    ? available.filter(c => c.plate.toLowerCase().replace(/\s/g,"").includes(query.toLowerCase().replace(/\s/g,"")))
+    : available;
+
+  const select = (plate) => { setReplacePlate(plate); setQuery(plate); setOpen(false); };
+
+  const handleSubmit = () => {
+    if (!replacePlate) { setErr("Please select a replacement car."); return; }
+    const repCar = available.find(c => c.plate === replacePlate);
+    if (!repCar) { setErr("Selected car not found in available fleet."); return; }
+    onConfirm({
+      replacePlate,
+      replaceType: repCar.type,
+      garage: addingGarage ? newGarage.trim() : garage,
+      remarks,
+    });
+  };
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:14,width:460,maxWidth:"100%",maxHeight:"92vh",overflow:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ padding:"1rem 1.25rem",borderRadius:"14px 14px 0 0",background:"#7c3aed",display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
+          <div>
+            <p style={{ fontSize:16,fontWeight:700,color:"#fff",margin:0 }}>Replace Vehicle</p>
+            <p style={{ fontSize:12,color:"rgba(255,255,255,0.8)",margin:"2px 0 0" }}>{car.plate} · {car.type}</p>
+          </div>
+          <button style={{ background:"rgba(255,255,255,0.25)",border:"none",color:"#fff",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14 }} onClick={onClose}>✕</button>
+        </div>
+        <div style={{ padding:"1.25rem" }}>
+          <p style={{ fontSize:14,fontWeight:600,color:"#111",margin:"0 0 12px" }}>Replace Vehicle</p>
+
+          {/* Current rental summary */}
+          <div style={{ background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:8,padding:"10px 14px",marginBottom:"1rem",fontSize:13 }}>
+            <div style={{ fontWeight:600,color:"#7c3aed",marginBottom:4 }}>Current Rental — transferring to replacement</div>
+            <div style={{ color:"#555" }}>Client: <strong>{car.currentClient}</strong></div>
+            {car.clientPhone && <div style={{ color:"#555" }}>Phone: {car.clientPhone}</div>}
+            <div style={{ color:"#555" }}>Return Date: {car.returnDate}</div>
+            {car.amount && <div style={{ color:"#555" }}>Amount: {car.currency} {Number(car.amount).toLocaleString("en-US")} · {car.paymentStatus}</div>}
+          </div>
+
+          {/* Replacement car selector */}
+          <div style={{ marginBottom:"0.85rem" }}>
+            <label style={{ fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:4 }}>Replacement Car *</label>
+            <div style={{ position:"relative" }}>
+              <input style={{ width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,boxSizing:"border-box",fontFamily:"inherit",background:replacePlate?"#f5f3ff":"#fff" }}
+                placeholder="Type plate to search available cars…" value={query} autoComplete="off"
+                onChange={e => { setQuery(e.target.value); setReplacePlate(""); setOpen(true); }}
+                onFocus={() => setOpen(true)} onBlur={() => setTimeout(()=>setOpen(false),150)} />
+              {replacePlate && <span style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#7c3aed",fontWeight:700 }}>✓</span>}
+              {open && filtered.length > 0 && (
+                <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:8,boxShadow:"0 4px 12px rgba(0,0,0,0.1)",zIndex:50,maxHeight:200,overflowY:"auto" }}>
+                  {filtered.slice(0,20).map(c => (
+                    <div key={c.plate} style={{ padding:"9px 12px",cursor:"pointer",fontSize:13,borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between" }}
+                      onMouseDown={() => select(c.plate)}>
+                      <span style={{ fontWeight:600 }}>{c.plate}</span>
+                      <span style={{ color:"#888" }}>{c.type} · {c.location||"—"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {available.length === 0 && <p style={{ fontSize:12,color:"#dc2626",margin:"6px 0 0" }}>No available cars in fleet.</p>}
+          </div>
+
+          {/* Garage for original car */}
+          <div style={{ marginBottom:"0.85rem" }}>
+            <label style={{ fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:4 }}>Send {car.plate} to Garage</label>
+            {!addingGarage ? (
+              <select style={{ width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,boxSizing:"border-box",fontFamily:"inherit" }}
+                value={garage} onChange={e => { if(e.target.value==="__new__") setAddingGarage(true); else setGarage(e.target.value); }}>
+                <option value="">— Select garage (optional) —</option>
+                {(garages||[]).map(g => <option key={g}>{g}</option>)}
+                <option value="__new__">+ Add new garage</option>
+              </select>
+            ) : (
+              <div style={{ display:"flex",gap:6 }}>
+                <input style={{ flex:1,padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,fontFamily:"inherit" }}
+                  placeholder="New garage name" value={newGarage} onChange={e=>setNewGarage(e.target.value)} autoFocus />
+                <button style={{ padding:"9px 12px",border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer",color:"#666" }} onClick={()=>setAddingGarage(false)}>✕</button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginBottom:"0.85rem" }}>
+            <label style={{ fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:4 }}>Remarks</label>
+            <textarea style={{ width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,resize:"vertical",fontFamily:"inherit",boxSizing:"border-box" }}
+              rows={2} value={remarks} onChange={e=>setRemarks(e.target.value)}
+              placeholder="e.g. Engine overheating, AC failure" />
+          </div>
+
+          {err && <p style={{ color:"#dc2626",fontSize:13,margin:"6px 0" }}>{err}</p>}
+          <button style={{ width:"100%",padding:"11px",fontSize:14,fontWeight:600,color:"#fff",background:"#7c3aed",border:"none",borderRadius:8,cursor:"pointer",opacity:loading?0.65:1,fontFamily:"inherit" }}
+            onClick={handleSubmit} disabled={loading}>
+            {loading ? "Processing…" : `Confirm Replacement`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

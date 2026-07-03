@@ -66,6 +66,7 @@ function doPost(e) {
     if (action === "updateSubHirePayment") return respond(updateSubHirePayment(body));
     if (action === "addFuel")              return respond(addFuel(body));
     if (action === "editFuel")             return respond(editFuel(body));
+    if (action === "replaceVehicle")       return respond(replaceVehicle(body));
     if (action === "addReservation")       return respond(addReservation(body));
     if (action === "editReservation")      return respond(editReservation(body));
     if (action === "deleteReservation")    return respond(deleteReservation(body));
@@ -1157,5 +1158,66 @@ function deleteReservation(body) {
   const idx  = rows.findIndex(r => r[0] === body.id);
   if (idx < 1) throw new Error("Reservation not found");
   sh.deleteRow(idx + 1);
+  return { success: true };
+}
+
+// ── Vehicle Replacement ───────────────────────────────────────
+function replaceVehicle(body) {
+  if (!body.originalPlate) throw new Error("Original plate is required");
+  if (!body.replacePlate)  throw new Error("Replacement plate is required");
+  if (!body.staffName)     throw new Error("Staff name is required");
+
+  const tz      = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
+  const today   = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
+  const note    = `Replacement for ${body.originalPlate}. ${body.remarks || ""}`.trim();
+  const origNote= `Broken down — replaced by ${body.replacePlate}. ${body.remarks || ""}`.trim();
+
+  // 1. Send original car to maintenance
+  clearFleetRow(body.originalPlate, "Maintenance", {
+    remarks: origNote,
+    garage:  body.garage || "",
+  });
+  addHistory({
+    plate: body.originalPlate, type: body.originalType || "", action: "Sent to Maintenance",
+    remarks: origNote, garage: body.garage || "",
+    location: body.location || "", staffName: body.staffName,
+  });
+
+  // 2. Check out replacement car to same client with same details
+  updateFleetRow(body.replacePlate, {
+    status:        "Rented",
+    currentClient: body.client,
+    clientPhone:   body.clientPhone  || "",
+    bookedFrom:    body.bookedFrom   || today,
+    returnDate:    body.returnDate   || "",
+    amount:        body.amount       || "",
+    currency:      body.currency     || "TZS",
+    paymentStatus: body.paymentStatus|| "Paid",
+    amountPaid:    body.amountPaid   || "",
+    driver:        body.driver       || "",
+    location:      body.location     || "",
+    fuelOut:       "",
+    remarks:       note,
+    checkedOutBy:  body.staffName,
+  });
+  addHistory({
+    plate:       body.replacePlate,
+    type:        body.replaceType || "",
+    action:      "Checked Out",
+    client:      body.client,
+    clientPhone: body.clientPhone  || "",
+    bookedFrom:  body.bookedFrom   || today,
+    returnDate:  body.returnDate   || "",
+    location:    body.location     || "",
+    remarks:     note,
+    staffName:   body.staffName,
+    amount:      body.amount       || "",
+    currency:    body.currency     || "TZS",
+    paymentStatus: body.paymentStatus || "Paid",
+    amountPaid:  body.amountPaid   || "",
+    driver:      body.driver       || "",
+    fuelOut:     "",
+  });
+
   return { success: true };
 }
