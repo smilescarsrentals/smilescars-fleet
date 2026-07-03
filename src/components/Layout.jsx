@@ -23,12 +23,13 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
             </div>
           </div>
           <nav className="sc-nav">
-            <NavLink to="/"         style={navStyle} end>Fleet</NavLink>
-            <NavLink to="/history"  style={navStyle}>History</NavLink>
-            <NavLink to="/clients"  style={navStyle}>Clients</NavLink>
-            <NavLink to="/sub-hire" style={navStyle}>Sub-Hire</NavLink>
-            <NavLink to="/fuel"     style={navStyle}>Fuel</NavLink>
-            <NavLink to="/sold"     style={navStyle}>Sold</NavLink>
+            <NavLink to="/"            style={navStyle} end>Fleet</NavLink>
+            <NavLink to="/reservations" style={navStyle}>Reservations</NavLink>
+            <NavLink to="/history"     style={navStyle}>History</NavLink>
+            <NavLink to="/clients"     style={navStyle}>Clients</NavLink>
+            <NavLink to="/sub-hire"    style={navStyle}>Sub-Hire</NavLink>
+            <NavLink to="/fuel"        style={navStyle}>Fuel</NavLink>
+            <NavLink to="/sold"        style={navStyle}>Sold</NavLink>
           </nav>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#1d4ed8", color: "#fff", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>

@@ -33,6 +33,7 @@ function doGet(e) {
     if (action === "getCarHistory")   return respond(getCarHistory(e.parameter.plate   || ""));
     if (action === "getFuel")         return respond(getFuel());
     if (action === "getFuelByPlate")  return respond(getFuelByPlate(e.parameter.plate  || ""));
+    if (action === "getReservations") return respond(getReservations(e.parameter.month || "", e.parameter.year || ""));
     if (action === "testRole")        return respond(testRole(e.parameter.name         || ""));
     return respond({ error: "Unknown action: " + action });
   } catch (err) {
@@ -65,6 +66,9 @@ function doPost(e) {
     if (action === "updateSubHirePayment") return respond(updateSubHirePayment(body));
     if (action === "addFuel")              return respond(addFuel(body));
     if (action === "editFuel")             return respond(editFuel(body));
+    if (action === "addReservation")       return respond(addReservation(body));
+    if (action === "editReservation")      return respond(editReservation(body));
+    if (action === "deleteReservation")    return respond(deleteReservation(body));
     return respond({ error: "Unknown action: " + action });
   } catch (err) {
     return respond({ error: err.message });
@@ -1081,4 +1085,77 @@ function syncDropboxReset() {
   PropertiesService.getScriptProperties().deleteProperty("SYNC_DONE_REG");
   PropertiesService.getScriptProperties().deleteProperty("SYNC_DONE_PICS");
   Logger.log("✅ Reset done.");
+}
+
+// ── Reservations ─────────────────────────────────────────────
+// Sheet columns: A=ID, B=Date, C=ClientName, D=CarType, E=Phone,
+//                F=Remarks, G=StaffName, H=Timestamp
+
+function getOrCreateReservationsSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh   = ss.getSheetByName(RESERVATIONS_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(RESERVATIONS_SHEET);
+    sh.getRange(1,1,1,8).setValues([["ID","Date","Client Name","Car Type","Phone","Remarks","Staff Name","Timestamp"]]).setFontWeight("bold");
+  }
+  return sh;
+}
+
+function getReservations(month, year) {
+  const sh   = getOrCreateReservationsSheet();
+  const rows = sh.getDataRange().getValues();
+  if (rows.length <= 1) return { success: true, data: [] };
+  const tz   = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
+  const data = rows.slice(1).map(row => ({
+    id:        row[0] || "",
+    date:      row[1] ? Utilities.formatDate(new Date(row[1]), tz, "yyyy-MM-dd") : "",
+    client:    row[2] || "",
+    carType:   row[3] || "",
+    phone:     row[4] || "",
+    remarks:   row[5] || "",
+    staffName: row[6] || "",
+    timestamp: row[7] ? Utilities.formatDate(new Date(row[7]), tz, "yyyy-MM-dd'T'HH:mm:ss") : "",
+  })).filter(r => r.id && r.date);
+
+  // Filter by month/year if provided
+  if (month && year) {
+    const m = String(month).padStart(2,"0");
+    const y = String(year);
+    return { success: true, data: data.filter(r => r.date.startsWith(`${y}-${m}`)) };
+  }
+  return { success: true, data };
+}
+
+function addReservation(body) {
+  if (!body.date)   throw new Error("Date is required");
+  if (!body.client) throw new Error("Client name is required");
+  const sh  = getOrCreateReservationsSheet();
+  const id  = "RES-" + Utilities.getUuid().split("-")[0].toUpperCase();
+  sh.appendRow([id, new Date(body.date), body.client, body.carType||"", body.phone||"", body.remarks||"", body.staffName||"", new Date()]);
+  return { success: true, id };
+}
+
+function editReservation(body) {
+  if (!body.id) throw new Error("ID is required");
+  const sh   = getOrCreateReservationsSheet();
+  const rows = sh.getDataRange().getValues();
+  const idx  = rows.findIndex(r => r[0] === body.id);
+  if (idx < 1) throw new Error("Reservation not found");
+  const tz = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
+  if (body.date)    sh.getRange(idx+1,2).setValue(new Date(body.date));
+  if (body.client)  sh.getRange(idx+1,3).setValue(body.client);
+  if (body.carType !== undefined) sh.getRange(idx+1,4).setValue(body.carType);
+  if (body.phone !== undefined)   sh.getRange(idx+1,5).setValue(body.phone);
+  if (body.remarks !== undefined) sh.getRange(idx+1,6).setValue(body.remarks);
+  return { success: true };
+}
+
+function deleteReservation(body) {
+  if (!body.id) throw new Error("ID is required");
+  const sh   = getOrCreateReservationsSheet();
+  const rows = sh.getDataRange().getValues();
+  const idx  = rows.findIndex(r => r[0] === body.id);
+  if (idx < 1) throw new Error("Reservation not found");
+  sh.deleteRow(idx + 1);
+  return { success: true };
 }
