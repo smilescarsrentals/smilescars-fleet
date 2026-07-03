@@ -54,6 +54,7 @@ export default function FleetPage({ staffName, role }) {
   const [moveCar,   setMoveCar]   = useState(null);
   const [saving,    setSaving]    = useState(false);
   const [toast,     setToast]     = useState("");
+  const [overdueBlock, setOverdueBlock] = useState(false);
   const [page,      setPage]      = useState(1);
   const PER_PAGE = 25;
 
@@ -73,6 +74,16 @@ export default function FleetPage({ staffName, role }) {
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
+
+  const myOverdueCount = useMemo(() => {
+    if (!staffName) return 0;
+    return fleet.filter(c =>
+      c.status === "Rented" &&
+      c.checkedOutBy === staffName &&
+      c.returnDate &&
+      daysUntil(c.returnDate) < 0
+    ).length;
+  }, [fleet, staffName]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500); };
 
@@ -262,7 +273,7 @@ export default function FleetPage({ staffName, role }) {
       <div className="sc-table-wrap">
         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
           <thead>
-            <tr>{["Plate","Type","Location","Status","Client","Return Date","Payment", ...(view==="unpaid"?["Staff"]:[]), "Action"].map(h =>
+            <tr>{["Plate","Type","Location","Status","Client","Return Date","Payment", ...(view==="unpaid"||view==="expiring"?["Staff"]:[]), "Action"].map(h =>
               <th key={h} style={{ padding:"10px 12px",textAlign:"left",fontSize:11,fontWeight:600,color:"#888",borderBottom:"1px solid #e5e7eb",background:"#fafafa",textTransform:"uppercase",letterSpacing:".4px",whiteSpace:"nowrap" }}>{h}</th>)}
             </tr>
           </thead>
@@ -317,7 +328,7 @@ export default function FleetPage({ staffName, role }) {
                     ):<span style={{ color:"#ccc" }}>—</span>}
                     {car.paymentStatus==="Partial Paid"&&car.amountPaid&&<div style={{ fontSize:11,color:"#888",marginTop:2 }}>{fmtMoney(car.amountPaid,car.currency)}</div>}
                   </td>
-                  {view==="unpaid" && (
+                  {(view==="unpaid"||view==="expiring") && (
                     <td data-label="Staff" style={{ padding:"11px 12px",fontSize:13 }}>
                       {car.checkedOutBy
                         ? <span style={{ fontWeight:500,color:"#374151" }}>{car.checkedOutBy}</span>
@@ -325,7 +336,7 @@ export default function FleetPage({ staffName, role }) {
                     </td>
                   )}
                   <td data-label="Action" style={{ padding:"11px 12px" }}>
-                    <ActionButtons car={car} onAction={(c,a)=>setModal({car:c,action:a})} onMove={c=>setMoveCar(c)} canSell={canExportOrSell} />
+                    <ActionButtons car={car} onAction={(c,a)=>setModal({car:c,action:a})} onMove={c=>setMoveCar(c)} canSell={canExportOrSell} myOverdueCount={myOverdueCount} setOverdueBlock={setOverdueBlock} />
                   </td>
                 </tr>
               );
@@ -342,6 +353,24 @@ export default function FleetPage({ staffName, role }) {
         </div>
       )}
 
+      {overdueBlock && (
+        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16 }}
+          onClick={() => setOverdueBlock(false)}>
+          <div style={{ background:"#fff",borderRadius:14,width:360,maxWidth:"100%",padding:"2rem",textAlign:"center",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:44,marginBottom:12 }}>🚫</div>
+            <h3 style={{ fontSize:18,fontWeight:700,color:"#111",margin:"0 0 8px" }}>Check Out Blocked</h3>
+            <p style={{ fontSize:14,color:"#555",margin:"0 0 6px",lineHeight:1.5 }}>
+              You have <strong style={{ color:"#b91c1c" }}>{myOverdueCount} overdue rental{myOverdueCount > 1 ? "s" : ""}</strong> that need to be resolved.
+            </p>
+            <p style={{ fontSize:13,color:"#888",margin:"0 0 20px" }}>
+              Please contact your Manager or Admin to authorize a new check out.
+            </p>
+            <button style={{ padding:"10px 24px",fontSize:14,fontWeight:600,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer" }}
+              onClick={() => setOverdueBlock(false)}>OK</button>
+          </div>
+        </div>
+      )}
       {modal && (
         <ActionModal car={modal.car} action={modal.action}
           locations={config.locations} garages={config.garages} drivers={config.drivers||[]} staff={config.staff||[]}
@@ -355,7 +384,7 @@ export default function FleetPage({ staffName, role }) {
   );
 }
 
-function ActionButtons({ car, onAction, onMove, canSell }) {
+function ActionButtons({ car, onAction, onMove, canSell, myOverdueCount, setOverdueBlock }) {
   const row = { display:"flex",alignItems:"center",flexWrap:"nowrap",gap:3 };
   const btn = (label, action, color, bg, onClick) => (
     <button key={action}
@@ -366,7 +395,10 @@ function ActionButtons({ car, onAction, onMove, canSell }) {
   );
   if (car.status==="Available") return (
     <div style={row}>
-      {btn("Check Out","checkOut","#15803d","#dcfce7")}
+      {btn("Check Out","checkOut","#15803d","#dcfce7", () => {
+        if (!canSell && myOverdueCount >= 2) { setOverdueBlock(true); return; }
+        onAction(car, "checkOut");
+      })}
       {btn("Staff Use","setStaffUse","#1d4ed8","#eff6ff")}
       {btn("Maintenance","setMaintenance","#c2410c","#fff7ed")}
       {btn("Move","move","#1d4ed8","#eff6ff",()=>onMove(car))}

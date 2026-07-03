@@ -102,7 +102,7 @@ function updateFleetRow(plate, fields) {
     location: 3, status: 4, currentClient: 5, clientPhone: 6, bookedFrom: 7,
     returnDate: 8, remarks: 9, fuelOut: 10, amount: 11, currency: 12, garage: 13,
     paymentStatus: 14, amountPaid: 15, policeFineOut: 16, parkingFineOut: 17,
-    kmOut: 18, driver: 19,
+    kmOut: 18, driver: 19, checkedOutBy: 20,
   };
   Object.keys(map).forEach(key => {
     if (fields[key] !== undefined) sheet.getRange(rowIndex, map[key]).setValue(fields[key]);
@@ -142,7 +142,7 @@ function mapFleetRow(row, i) {
     driver:         row[18] || "",
     regCardUrl:     row[19] || "",
     photosUrl:      row[20] || "",
-  };
+    checkedOutBy:   row[21] || "",  };
 }
 
 function getCarByPlate(plate) {
@@ -300,6 +300,7 @@ function checkOut(body) {
     amountPaid: body.amountPaid || "",
     policeFineOut: body.policeFine || "", parkingFineOut: body.parkingFine || "",
     kmOut: body.kmOut || "", driver: body.driver || "",
+    checkedOutBy: body.staffName,
   });
   addHistory({
     plate: body.plate, type: body.type, action: "Checked Out",
@@ -861,6 +862,51 @@ function testRole(name) {
 }
 
 // ── Setup helpers (run once) ─────────────────────────────────
+function addCheckedOutByHeader() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(FLEET_SHEET);
+  sheet.getRange(1, 22).setValue("Checked Out By").setFontWeight("bold");
+  Logger.log("✅ Checked Out By column added to Fleet sheet (column V).");
+}
+
+// Run once to backfill checkedOutBy from History for all currently rented cars
+function populateCheckedOutBy() {
+  const ss          = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const fleetSheet  = ss.getSheetByName(FLEET_SHEET);
+  const histSheet   = ss.getSheetByName(HISTORY_SHEET);
+  const fleetRows   = fleetSheet.getDataRange().getValues();
+  const histRows    = histSheet.getDataRange().getValues();
+
+  // Build map: plate → most recent "Checked Out" staffName from History
+  const staffMap = {};
+  histRows.slice(1).forEach(row => {
+    const action = (row[3] || "").toString().trim();
+    const plate  = (row[1] || "").toString().trim();
+    const staff  = (row[10] || "").toString().trim();
+    if (action === "Checked Out" && plate && staff) {
+      // History is already in order; last write wins (most recent)
+      staffMap[plate] = staff;
+    }
+  });
+
+  let updated = 0;
+  fleetRows.slice(1).forEach((row, i) => {
+    const plate  = (row[0] || "").toString().trim();
+    const status = (row[3] || "").toString().trim();
+    const existing = (row[21] || "").toString().trim();
+    // Only fill if rented/staff use and column V is empty
+    if (plate && !existing && (status === "Rented" || status === "Staff Use")) {
+      const staff = staffMap[plate];
+      if (staff) {
+        fleetSheet.getRange(i + 2, 22).setValue(staff);
+        updated++;
+        Logger.log(`✅ ${plate} → ${staff}`);
+      }
+    }
+  });
+
+  Logger.log(`✅ Done. Updated ${updated} cars.`);
+}
+
 function updateHeaders() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   ss.getSheetByName(FLEET_SHEET).getRange(1, 1, 1, 19).setValues([[
