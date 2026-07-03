@@ -293,8 +293,6 @@ function EditModal({ res, onClose, onSaved }) {
   );
 }
 
-function pad(n) { return String(n).padStart(2,"0"); }
-
 const S = {
   center:  { textAlign:"center", padding:"3rem", color:"#666" },
   navBtn:  { padding:"6px 14px", fontSize:18, border:"1.5px solid #e5e7eb", borderRadius:8, background:"#fff", cursor:"pointer", color:"#374151", fontWeight:600 },
