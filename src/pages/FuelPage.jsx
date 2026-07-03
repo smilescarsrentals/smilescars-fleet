@@ -230,7 +230,8 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
   });
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
-  const [pdfReady, setPdfReady] = useState(null);  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [pdfReady, setPdfReady] = useState(null);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const plateOptions = [...fleet].map(c => c.plate).sort();
 
   // Detect car state when plate is selected
