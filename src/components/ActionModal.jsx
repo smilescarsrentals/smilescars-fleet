@@ -1,15 +1,16 @@
 import { useState } from "react";
 
 const ACTIONS = {
-  checkOut:       { title: "Check Out Car",      color: "#16a34a", btnLabel: "Confirm Check Out"   },
-  extendBooking:  { title: "Extend Booking",      color: "#0284c7", btnLabel: "Confirm Extension"   },
-  markReturned:   { title: "Mark as Returned",    color: "#2563eb", btnLabel: "Confirm Return"      },
-  setMaintenance: { title: "Send to Maintenance", color: "#d97706", btnLabel: "Confirm"             },
-  setAvailable:   { title: "Mark as Available",   color: "#16a34a", btnLabel: "Confirm"             },
-  setStaffUse:    { title: "Assign to Staff",     color: "#2563eb", btnLabel: "Confirm Assignment"  },
-  markSold:       { title: "Mark Car as Sold",    color: "#dc2626", btnLabel: "Confirm Sale"        },
+  checkOut:       { title: "Check Out Car",      color: "#16a34a", btnLabel: "Confirm Check Out"  },
+  extendBooking:  { title: "Extend Booking",      color: "#0284c7", btnLabel: "Confirm Extension"  },
+  markReturned:   { title: "Mark as Returned",    color: "#2563eb", btnLabel: "Confirm Return"     },
+  setMaintenance: { title: "Send to Maintenance", color: "#d97706", btnLabel: "Confirm"            },
+  setAvailable:   { title: "Mark as Available",   color: "#16a34a", btnLabel: "Confirm"            },
+  setStaffUse:    { title: "Assign to Staff",     color: "#2563eb", btnLabel: "Confirm Assignment" },
+  markSold:       { title: "Mark Car as Sold",    color: "#dc2626", btnLabel: "Confirm Sale"       },
 };
 
+const FUEL_LEVELS      = ["Full", "3/4", "1/2", "1/4", "Empty"];
 const CURRENCIES       = ["TZS", "USD", "EUR"];
 const PAYMENT_STATUSES = ["Paid", "Partial Paid", "Unpaid", "Long Term"];
 
@@ -35,15 +36,13 @@ function FineInput({ value, onChange, label }) {
 }
 
 export default function ActionModal({ car, action, locations, garages, drivers, staff, staffName, role, onConfirm, onClose, loading }) {
-  const cfg        = ACTIONS[action] || { title: "", color: "#16a34a", btnLabel: "Confirm" };
-  const today      = new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().split("T")[0];
   const canAddLocGarage = role === "Admin" || role === "Manager";
 
   const [client,        setClient]       = useState(car.currentClient || "");
   const [clientPhone,   setClientPhone]  = useState(car.clientPhone || "");
   const [bookedFrom,    setBookedFrom]   = useState(today);
-  const rawReturn = action === "extendBooking" ? (car.returnDate ? String(car.returnDate).split("T")[0] : "") : "";
-  const [returnDate,    setReturnDate]   = useState(rawReturn);
+  const [returnDate,    setReturnDate]   = useState(action === "extendBooking" && car.returnDate ? String(car.returnDate).split("T")[0] : "");
   const [actualReturn,  setActualReturn] = useState(today);
   const [location,      setLocation]     = useState(car.location || "");
   const [remarks,       setRemarks]      = useState("");
@@ -65,13 +64,13 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const [garage,        setGarage]       = useState("");
   const [newGarage,     setNewGarage]    = useState("");
   const [addingGarage,  setAddingGarage] = useState(false);
-  const [err,           setErr]          = useState("");
   const [assignedTo,    setAssignedTo]   = useState("");
   const [assignedQuery, setAssignedQuery]= useState("");
   const [assignedOpen,  setAssignedOpen] = useState(false);
-  const filteredStaff = assignedQuery.trim()
-    ? (staff || []).filter(s => s.toLowerCase().includes(assignedQuery.toLowerCase()))
-    : (staff || []);
+  const [err,           setErr]          = useState("");
+
+  const cfg = ACTIONS[action] || { title: "", color: "#16a34a", btnLabel: "Confirm" };
+  const sel = { ...S.input, fontFamily: "inherit" };
 
   const needsClient   = action === "checkOut";
   const isExtend      = action === "extendBooking";
@@ -81,6 +80,10 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const isSold        = action === "markSold";
   const isStaffUse    = action === "setStaffUse";
 
+  const filteredStaff = assignedQuery.trim()
+    ? (staff || []).filter(s => s.toLowerCase().includes(assignedQuery.toLowerCase()))
+    : (staff || []);
+
   const handleSubmit = () => {
     setErr("");
     if (needsClient && !client.trim()) { setErr("Client name is required."); return; }
@@ -88,7 +91,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
     if ((needsClient || isExtend) && !returnDate) { setErr("Return date is required."); return; }
     if (isMaintenance && !addingGarage && !garage) { setErr("Please select or add a garage."); return; }
     if (needsClient && paymentStatus === "Partial Paid" && !amountPaid) { setErr("Please enter amount paid."); return; }
-    if (isStaffUse && !assignedTo) { setErr("Please select a staff member to assign."); return; }
+    if (isStaffUse && !assignedTo) { setErr("Please select a staff member."); return; }
     const loc = addingLoc    ? newLoc.trim()    : location;
     const gar = addingGarage ? newGarage.trim() : garage;
     const drv = addingDriver ? newDriver.trim() : driver;
@@ -105,22 +108,17 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
     });
   };
 
-  const selStyle = { ...S.input, fontFamily: "inherit" };
-
-  const LocationPicker = ({ label = "Location" }) => (
-    <div style={S.field}><label style={S.label}>{label}</label>
+  const locationField = (
+    <div style={S.field}><label style={S.label}>Location</label>
       {!addingLoc ? (
-        <select style={selStyle} value={location} onChange={e => {
-          if (e.target.value === "__new__") setAddingLoc(true); else setLocation(e.target.value);
-        }}>
+        <select style={sel} value={location} onChange={e => { if (e.target.value === "__new__") setAddingLoc(true); else setLocation(e.target.value); }}>
           <option value="">— Select —</option>
-          {locations.map(l => <option key={l}>{l}</option>)}
+          {(locations || []).map(l => <option key={l}>{l}</option>)}
           {canAddLocGarage && <option value="__new__">+ Add new location</option>}
         </select>
       ) : (
         <div style={{ display: "flex", gap: 6 }}>
-          <input style={{ ...S.input, flex: 1 }} placeholder="New location name" value={newLoc}
-            onChange={e => setNewLoc(e.target.value)} autoFocus />
+          <input style={{ ...S.input, flex: 1 }} placeholder="New location name" value={newLoc} onChange={e => setNewLoc(e.target.value)} autoFocus />
           <button style={S.cancelSmall} onClick={() => setAddingLoc(false)}>✕</button>
         </div>
       )}
@@ -128,63 +126,64 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   );
 
   return (
-    <div style={S.overlay} className="sc-overlay" onClick={onClose}>
-      <div style={S.modal} className="sc-modal" onClick={e => e.stopPropagation()}>
-        <div style={{ ...S.modalHeader, background: cfg.color }}>
-          <div><p style={S.modalPlate}>{car.plate}</p><p style={S.modalType}>{car.type}</p></div>
+    <div style={S.overlay} onClick={onClose}>
+      <div style={S.modal} onClick={e => e.stopPropagation()}>
+        <div style={{ ...S.header, background: cfg.color }}>
+          <div><p style={S.plate}>{car.plate}</p><p style={S.type}>{car.type}</p></div>
           <button style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
-        <div style={S.modalBody}>
-          <p style={S.actionTitle}>{cfg.title}</p>
+        <div style={S.body}>
+          <p style={S.title}>{cfg.title}</p>
           <div style={S.field}><label style={S.label}>Staff</label><div style={S.readOnly}>{staffName}</div></div>
 
+          {/* Check Out */}
           {needsClient && (<>
             <div style={S.field}><label style={S.label}>Client Name *</label>
               <input style={S.input} value={client} onChange={e => setClient(e.target.value)} placeholder="Full name" autoFocus /></div>
             <div style={S.field}><label style={S.label}>Client Phone</label>
               <input style={S.input} value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="+255..." /></div>
-            <div style={S.twoCol}>
+            <div style={S.two}>
               <div style={S.field}><label style={S.label}>Booked From *</label>
                 <input style={S.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} /></div>
               <div style={S.field}><label style={S.label}>Return Date *</label>
                 <input style={S.input} type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} /></div>
             </div>
-            <div style={S.twoCol}>
+            <div style={S.two}>
               <div style={S.field}><label style={S.label}>Amount Charged</label>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <MoneyInput style={{ ...S.input, flex: 1 }} value={amount} onChange={setAmount} placeholder="e.g. 150,000" />
-                  <select style={{ ...selStyle, width: 76 }} value={currency} onChange={e => setCurrency(e.target.value)}>
+                <div style={{ display:"flex", gap:6 }}>
+                  <MoneyInput style={{ ...S.input, flex:1 }} value={amount} onChange={setAmount} placeholder="e.g. 150,000" />
+                  <select style={{ ...sel, width:76 }} value={currency} onChange={e => setCurrency(e.target.value)}>
                     {CURRENCIES.map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
               <div style={S.field}><label style={S.label}>Payment Status</label>
-                <select style={selStyle} value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)}>
+                <select style={sel} value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)}>
                   {PAYMENT_STATUSES.map(p => <option key={p}>{p}</option>)}
                 </select>
                 {paymentStatus === "Partial Paid" && (
-                  <MoneyInput style={{ ...S.input, marginTop: 6 }} value={amountPaid} onChange={setAmountPaid} placeholder="Amount paid" />
+                  <MoneyInput style={{ ...S.input, marginTop:6 }} value={amountPaid} onChange={setAmountPaid} placeholder="Amount paid" />
                 )}
               </div>
             </div>
             <div style={S.field}><label style={S.label}>Driver (optional)</label>
               {!addingDriver ? (
-                <select style={selStyle} value={driver} onChange={e => { if (e.target.value === "__new__") setAddingDriver(true); else setDriver(e.target.value); }}>
-                  <option value="">— No driver assigned —</option>
+                <select style={sel} value={driver} onChange={e => { if (e.target.value === "__new__") setAddingDriver(true); else setDriver(e.target.value); }}>
+                  <option value="">— No driver —</option>
                   {(drivers || []).map(d => <option key={d} value={d}>{d}</option>)}
                   <option value="__new__">+ Add new driver</option>
                 </select>
               ) : (
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input style={{ ...S.input, flex: 1 }} placeholder="Driver full name" value={newDriver} onChange={e => setNewDriver(e.target.value)} autoFocus />
+                <div style={{ display:"flex", gap:6 }}>
+                  <input style={{ ...S.input, flex:1 }} placeholder="Driver name" value={newDriver} onChange={e => setNewDriver(e.target.value)} autoFocus />
                   <button style={S.cancelSmall} onClick={() => setAddingDriver(false)}>✕</button>
                 </div>
               )}
             </div>
-            <div style={S.threeCol}>
-              <LocationPicker label="Location" />
+            <div style={S.three}>
+              {locationField}
               <div style={S.field}><label style={S.label}>Fuel Out</label>
-                <select style={selStyle} value={fuelOut} onChange={e => setFuelOut(e.target.value)}>
+                <select style={sel} value={fuelOut} onChange={e => setFuelOut(e.target.value)}>
                   <option value="">— Select —</option>
                   {FUEL_LEVELS.map(f => <option key={f}>{f}</option>)}
                 </select>
@@ -193,86 +192,91 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 <input style={S.input} type="text" inputMode="numeric" value={kmOut} onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" />
               </div>
             </div>
-            <div style={S.twoCol}>
+            <div style={S.two}>
               <FineInput label="Police Fine"  value={policeFine}  onChange={setPoliceFine}  />
               <FineInput label="Parking Fine" value={parkingFine} onChange={setParkingFine} />
             </div>
           </>)}
 
+          {/* Extend */}
           {isExtend && (<>
             <div style={S.field}><label style={S.label}>Client</label>
               <div style={S.readOnly}>{car.currentClient}{car.clientPhone ? ` · ${car.clientPhone}` : ""}</div></div>
             <div style={S.field}><label style={S.label}>New Return Date *</label>
-              {car.returnDate && <p style={{ fontSize: 12, color: "#888", margin: "0 0 4px" }}>Current: {String(car.returnDate).split("T")[0]}</p>}
+              {car.returnDate && <p style={{ fontSize:12, color:"#888", margin:"0 0 4px" }}>Current: {String(car.returnDate).split("T")[0]}</p>}
               <input style={S.input} type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} /></div>
           </>)}
 
+          {/* Return */}
           {isReturn && (<>
-            <div style={S.twoCol}>
+            <div style={S.two}>
               <div style={S.field}><label style={S.label}>Returned Date</label>
                 <input style={S.input} type="date" value={actualReturn} onChange={e => setActualReturn(e.target.value)} /></div>
               <div style={S.field}><label style={S.label}>KM In</label>
                 <input style={S.input} type="text" inputMode="numeric" value={kmIn} onChange={e => setKmIn(fmt(e.target.value))} placeholder="e.g. 45,300" /></div>
             </div>
-            <div style={S.twoCol}>
+            <div style={S.two}>
               <div style={S.field}><label style={S.label}>Fuel In</label>
-                <select style={selStyle} value={fuelIn} onChange={e => setFuelIn(e.target.value)}>
+                <select style={sel} value={fuelIn} onChange={e => setFuelIn(e.target.value)}>
                   <option value="">— Select —</option>
                   {FUEL_LEVELS.map(f => <option key={f}>{f}</option>)}
                 </select>
               </div>
               <div style={S.field}><label style={S.label}>Payment Status</label>
-                <select style={selStyle} value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)}>
+                <select style={sel} value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)}>
                   <option value="">— Keep ({car.paymentStatus || "Unpaid"}) —</option>
                   {PAYMENT_STATUSES.map(p => <option key={p}>{p}</option>)}
                 </select>
                 {paymentStatus === "Partial Paid" && (
-                  <MoneyInput style={{ ...S.input, marginTop: 6 }} value={amountPaid} onChange={setAmountPaid} placeholder="Amount paid" />
+                  <MoneyInput style={{ ...S.input, marginTop:6 }} value={amountPaid} onChange={setAmountPaid} placeholder="Amount paid" />
                 )}
               </div>
             </div>
-            <div style={S.twoCol}>
+            <div style={S.two}>
               <FineInput label="Police Fine (on return)"  value={policeFine}  onChange={setPoliceFine}  />
               <FineInput label="Parking Fine (on return)" value={parkingFine} onChange={setParkingFine} />
             </div>
           </>)}
 
+          {/* Maintenance */}
           {isMaintenance && (
             <div style={S.field}><label style={S.label}>Garage *</label>
               {!addingGarage ? (
-                <select style={selStyle} value={garage} onChange={e => { if (e.target.value === "__new__") setAddingGarage(true); else setGarage(e.target.value); }}>
+                <select style={sel} value={garage} onChange={e => { if (e.target.value === "__new__") setAddingGarage(true); else setGarage(e.target.value); }}>
                   <option value="">— Select garage —</option>
                   {(garages || []).map(g => <option key={g}>{g}</option>)}
                   {canAddLocGarage && <option value="__new__">+ Add new garage</option>}
                 </select>
               ) : (
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input style={{ ...S.input, flex: 1 }} placeholder="New garage name" value={newGarage} onChange={e => setNewGarage(e.target.value)} autoFocus />
+                <div style={{ display:"flex", gap:6 }}>
+                  <input style={{ ...S.input, flex:1 }} placeholder="New garage name" value={newGarage} onChange={e => setNewGarage(e.target.value)} autoFocus />
                   <button style={S.cancelSmall} onClick={() => setAddingGarage(false)}>✕</button>
                 </div>
               )}
             </div>
           )}
 
+          {/* Mark Available */}
           {isAvailable && (
             <div style={S.field}><label style={S.label}>KM Out (from garage)</label>
               <input style={S.input} type="text" inputMode="numeric" value={kmOut} onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" /></div>
           )}
 
+          {/* Staff Use */}
           {isStaffUse && (<>
             <div style={S.field}>
               <label style={S.label}>Assigned To *</label>
-              <div style={{ position: "relative" }}>
+              <div style={{ position:"relative" }}>
                 <input style={{ ...S.input, paddingRight: assignedTo ? 32 : 14 }}
                   placeholder="Type staff name…" value={assignedQuery} autoComplete="off"
                   onChange={e => { setAssignedQuery(e.target.value); setAssignedTo(""); setAssignedOpen(true); }}
                   onFocus={() => setAssignedOpen(true)}
                   onBlur={() => setTimeout(() => setAssignedOpen(false), 150)} />
-                {assignedTo && <span style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#16a34a",fontWeight:700 }}>✓</span>}
+                {assignedTo && <span style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", color:"#16a34a", fontWeight:700 }}>✓</span>}
                 {assignedOpen && filteredStaff.length > 0 && (
-                  <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:8,boxShadow:"0 4px 12px rgba(0,0,0,0.1)",zIndex:50,maxHeight:180,overflowY:"auto" }}>
+                  <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, right:0, background:"#fff", border:"1.5px solid #e5e7eb", borderRadius:8, boxShadow:"0 4px 12px rgba(0,0,0,0.1)", zIndex:50, maxHeight:180, overflowY:"auto" }}>
                     {filteredStaff.map(s => (
-                      <div key={s} style={{ padding:"9px 12px",cursor:"pointer",fontSize:13,borderBottom:"1px solid #f3f4f6",color:"#111" }}
+                      <div key={s} style={{ padding:"9px 12px", cursor:"pointer", fontSize:13, borderBottom:"1px solid #f3f4f6" }}
                         onMouseDown={() => { setAssignedTo(s); setAssignedQuery(s); setAssignedOpen(false); }}>
                         {s}
                       </div>
@@ -281,10 +285,10 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 )}
               </div>
             </div>
-            <div style={S.twoCol}>
-              <LocationPicker label="Location" />
+            <div style={S.two}>
+              {locationField}
               <div style={S.field}><label style={S.label}>Fuel Out</label>
-                <select style={selStyle} value={fuelOut} onChange={e => setFuelOut(e.target.value)}>
+                <select style={sel} value={fuelOut} onChange={e => setFuelOut(e.target.value)}>
                   <option value="">— Select —</option>
                   {FUEL_LEVELS.map(f => <option key={f}>{f}</option>)}
                 </select>
@@ -295,23 +299,25 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
             </div>
           </>)}
 
+          {/* Sold */}
           {isSold && (
-            <div style={S.field}><p style={{ fontSize: 13, color: "#888", margin: 0 }}>
+            <div style={S.field}><p style={{ fontSize:13, color:"#888", margin:0 }}>
               This will remove {car.plate} from the active fleet and record it in the Sold Cars tab.</p></div>
           )}
 
-          {!isSold && !needsClient && !isStaffUse && <LocationPicker label="Location" />}
+          {/* Location for other actions */}
+          {!isSold && !needsClient && !isStaffUse && locationField}
 
           <div style={S.field}><label style={S.label}>Remarks / Notes</label>
             <textarea style={S.textarea} rows={2} value={remarks} onChange={e => setRemarks(e.target.value)}
               placeholder={
-                action === "checkOut" ? "e.g. Client heading to Mombasa" :
-                action === "extendBooking" ? "e.g. Client requested 3 more days" :
+                action === "checkOut"       ? "e.g. Client heading to Mombasa" :
+                action === "extendBooking"  ? "e.g. Client requested 3 more days" :
                 action === "setMaintenance" ? "e.g. Engine oil leak, brake service" :
-                action === "markReturned" ? "e.g. Returned with minor scratch" :
-                action === "setAvailable" ? "e.g. Repaired, ready for hire" :
-                action === "markSold" ? "e.g. Sold with full service history" :
-                action === "setStaffUse" ? "e.g. Going to Arusha for company errand" : "Optional note"
+                action === "markReturned"   ? "e.g. Returned with minor scratch" :
+                action === "setAvailable"   ? "e.g. Repaired, ready for hire" :
+                action === "markSold"       ? "e.g. Sold with full service history" :
+                action === "setStaffUse"    ? "e.g. Going to Arusha for company errand" : "Optional note"
               } />
           </div>
 
@@ -326,22 +332,22 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
 }
 
 const S = {
-  overlay:    { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 },
-  modal:      { background: "#fff", borderRadius: 14, width: 500, maxWidth: "100%", maxHeight: "92vh", overflow: "auto", boxShadow: "0 8px 40px rgba(0,0,0,0.18)" },
-  modalHeader:{ padding: "1rem 1.25rem", borderRadius: "14px 14px 0 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
-  modalPlate: { fontSize: 18, fontWeight: 700, color: "#fff", margin: 0 },
-  modalType:  { fontSize: 13, color: "rgba(255,255,255,0.8)", margin: "2px 0 0" },
-  closeBtn:   { background: "rgba(255,255,255,0.25)", border: "none", color: "#fff", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 14 },
-  modalBody:  { padding: "1.25rem" },
-  actionTitle:{ fontSize: 15, fontWeight: 600, color: "#111", marginBottom: "1rem" },
-  field:      { marginBottom: "0.85rem" },
-  twoCol:     { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
-  threeCol:   { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 },
-  label:      { fontSize: 12, fontWeight: 500, color: "#555", display: "block", marginBottom: 4 },
-  input:      { width: "100%", padding: "9px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, background: "#fff", color: "#111", boxSizing: "border-box", fontFamily: "inherit" },
-  textarea:   { width: "100%", padding: "9px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, background: "#fff", color: "#111", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" },
-  readOnly:   { padding: "9px 11px", fontSize: 14, background: "#f3f4f6", borderRadius: 7, color: "#555", border: "1.5px solid #e5e7eb" },
-  confirmBtn: { width: "100%", padding: "11px", fontSize: 15, fontWeight: 600, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", marginTop: 4, fontFamily: "inherit" },
-  cancelSmall:{ padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 7, background: "#fff", cursor: "pointer", color: "#666" },
-  error:      { color: "#dc2626", fontSize: 13, margin: "6px 0" },
+  overlay:    { position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100, padding:16 },
+  modal:      { background:"#fff", borderRadius:14, width:500, maxWidth:"100%", maxHeight:"92vh", overflow:"auto", boxShadow:"0 8px 40px rgba(0,0,0,0.18)" },
+  header:     { padding:"1rem 1.25rem", borderRadius:"14px 14px 0 0", display:"flex", justifyContent:"space-between", alignItems:"flex-start" },
+  plate:      { fontSize:18, fontWeight:700, color:"#fff", margin:0 },
+  type:       { fontSize:13, color:"rgba(255,255,255,0.8)", margin:"2px 0 0" },
+  closeBtn:   { background:"rgba(255,255,255,0.25)", border:"none", color:"#fff", borderRadius:6, padding:"4px 8px", cursor:"pointer", fontSize:14 },
+  body:       { padding:"1.25rem" },
+  title:      { fontSize:15, fontWeight:600, color:"#111", marginBottom:"1rem" },
+  field:      { marginBottom:"0.85rem" },
+  two:        { display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 },
+  three:      { display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 },
+  label:      { fontSize:12, fontWeight:500, color:"#555", display:"block", marginBottom:4 },
+  input:      { width:"100%", padding:"9px 11px", fontSize:13, border:"1.5px solid #e5e7eb", borderRadius:7, background:"#fff", color:"#111", boxSizing:"border-box", fontFamily:"inherit" },
+  textarea:   { width:"100%", padding:"9px 11px", fontSize:13, border:"1.5px solid #e5e7eb", borderRadius:7, background:"#fff", color:"#111", resize:"vertical", fontFamily:"inherit", boxSizing:"border-box" },
+  readOnly:   { padding:"9px 11px", fontSize:14, background:"#f3f4f6", borderRadius:7, color:"#555", border:"1.5px solid #e5e7eb" },
+  confirmBtn: { width:"100%", padding:"11px", fontSize:15, fontWeight:600, color:"#fff", border:"none", borderRadius:8, cursor:"pointer", marginTop:4, fontFamily:"inherit" },
+  cancelSmall:{ padding:"9px 12px", border:"1.5px solid #e5e7eb", borderRadius:7, background:"#fff", cursor:"pointer", color:"#666" },
+  error:      { color:"#dc2626", fontSize:13, margin:"6px 0" },
 };
