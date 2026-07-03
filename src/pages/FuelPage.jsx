@@ -228,10 +228,9 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
   const [form, setForm] = useState({
     date: todayStr(), plate: "", product: "Diesel", mode: "amount", amount: "", litres: "", remarks: "",
   });
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState("");
-
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState("");
+  const [pdfReady, setPdfReady] = useState(null);  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const plateOptions = [...fleet].map(c => c.plate).sort();
 
   // Detect car state when plate is selected
@@ -281,31 +280,77 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
       const res = await post(payload);
       if (!res.success) throw new Error(res.error || "Save failed");
 
-      // Generate PDF
+      // Generate PDF blob and show popup
       const entry = { ...payload, refNo: res.refNo, remarks: form.remarks || "" };
       const doc   = await generateFuelPDF(entry);
       const blob  = doc.output("blob");
-
-      // Download
-      const url = URL.createObjectURL(blob);
-      const a   = document.createElement("a");
-      a.href = url; a.download = `${res.refNo}.pdf`; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-
-      // WhatsApp share on mobile (Web Share API)
-      const file = new File([blob], `${res.refNo}.pdf`, { type: "application/pdf" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: res.refNo }); } catch {}
-      }
-
+      const filename = `${res.refNo}.pdf`;
       onSaved();
-      onClose();
+      setPdfReady({ blob, refNo: res.refNo, filename });
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
   };
+
+  return (
+  if (pdfReady) {
+    const { blob, refNo, filename } = pdfReady;
+
+    const handleDownload = () => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    };
+
+    const handleShare = async () => {
+      const file = new File([blob], filename, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: refNo }); } catch {}
+      } else {
+        handleDownload();
+      }
+    };
+
+    const handleWhatsApp = async () => {
+      const file = new File([blob], filename, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: refNo, text: `Fuel Request ${refNo}` }); } catch {}
+      } else {
+        window.open(`https://wa.me/?text=${encodeURIComponent(`Fuel Request ${refNo}`)}`, "_blank");
+      }
+    };
+
+    return (
+      <div style={S.overlay}>
+        <div style={{ background:"#fff", borderRadius:16, width:340, maxWidth:"calc(100% - 32px)", padding:"2rem", textAlign:"center", boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }}>
+          <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
+          <h3 style={{ fontSize:18, fontWeight:700, color:"#111", margin:"0 0 6px" }}>Fuel Request Saved</h3>
+          <p style={{ fontSize:14, color:"#888", margin:"0 0 24px" }}>Ref: <strong style={{ color:"#111" }}>{refNo}</strong><br/>What would you like to do with the PDF?</p>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <button onClick={handleDownload}
+              style={{ padding:"12px", fontSize:14, fontWeight:600, background:"#1d4ed8", color:"#fff", border:"none", borderRadius:10, cursor:"pointer" }}>
+              ⬇ Download PDF
+            </button>
+            <button onClick={handleShare}
+              style={{ padding:"12px", fontSize:14, fontWeight:600, background:"#f0fdf4", color:"#15803d", border:"1.5px solid #bbf7d0", borderRadius:10, cursor:"pointer" }}>
+              📤 Share
+            </button>
+            <button onClick={handleWhatsApp}
+              style={{ padding:"12px", fontSize:14, fontWeight:600, background:"#dcfce7", color:"#15803d", border:"1.5px solid #86efac", borderRadius:10, cursor:"pointer" }}>
+              💬 Share to WhatsApp
+            </button>
+            <button onClick={onClose}
+              style={{ padding:"10px", fontSize:13, background:"none", color:"#888", border:"none", cursor:"pointer", marginTop:4 }}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={S.overlay}>
