@@ -31,20 +31,17 @@ const ACTION_COLORS = {
 };
 
 export default function Layout({ children, staffName, role, onSignOut, logo }) {
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [history,   setHistory]   = useState([]);
-  const [loading,   setLoading]   = useState(false);
-  const [search,    setSearch]    = useState("");
-  const [viewAll,   setViewAll]   = useState(false);
-
-  const roleBadge = {
-    Admin:   { bg: "#7c3aed", color: "#fff" },
-    Manager: { bg: "#0284c7", color: "#fff" },
-    Staff:   { bg: "#e5e7eb", color: "#555" },
-  }[role] || { bg: "#e5e7eb", color: "#555" };
+  const [panelOpen,    setPanelOpen]    = useState(false);
+  const [history,      setHistory]      = useState([]);
+  const [loading,      setLoading]      = useState(false);
+  const [search,       setSearch]       = useState("");
+  const [viewAll,      setViewAll]      = useState(false);
+  const [fDate,        setFDate]        = useState("");
+  const [statFilter,   setStatFilter]   = useState("");
+  const [staffList,    setStaffList]    = useState([]);
+  const [viewingStaff, setViewingStaff] = useState(staffName);
 
   const canViewAll = role === "Admin" || role === "Manager";
-  const [viewingStaff, setViewingStaff] = useState(staffName);
 
   const loadHistory = async (name) => {
     setLoading(true);
@@ -56,19 +53,50 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   };
 
   useEffect(() => {
-    if (panelOpen) { setViewingStaff(staffName); loadHistory(staffName); }
+    if (panelOpen) {
+      setViewingStaff(staffName);
+      loadHistory(staffName);
+      setSearch(""); setFDate(""); setStatFilter(""); setViewAll(false);
+      if (canViewAll && staffList.length === 0) {
+        api.getConfig().then(c => setStaffList(c.staff || [])).catch(() => {});
+      }
+    }
   }, [panelOpen]);
 
   const myHistory = history.filter(h => {
-    if (!search) return true;
     const q = search.toLowerCase();
-    return h.plate.toLowerCase().includes(q) || (h.client||"").toLowerCase().includes(q) || h.action.toLowerCase().includes(q);
+    const ts = h.timestamp ? h.timestamp.split("T")[0] : "";
+    if (search && !h.plate.toLowerCase().includes(q) && !(h.client||"").toLowerCase().includes(q) && !h.action.toLowerCase().includes(q)) return false;
+    if (fDate   && ts !== fDate) return false;
+    if (statFilter) {
+      if (statFilter === "checkouts"   && h.action !== "Checked Out")           return false;
+      if (statFilter === "returns"     && h.action !== "Returned")               return false;
+      if (statFilter === "maintenance" && h.action !== "Sent to Maintenance")    return false;
+      if (statFilter === "month") {
+        if (!h.timestamp) return false;
+        const d = new Date(h.timestamp); const now = new Date();
+        if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) return false;
+      }
+    }
+    return true;
   });
 
   const displayed = viewAll ? myHistory : myHistory.slice(0, 20);
 
+  const roleBadge = {
+    Admin:   { bg: "#7c3aed", color: "#fff" },
+    Manager: { bg: "#0284c7", color: "#fff" },
+    Staff:   { bg: "#e5e7eb", color: "#555" },
+  }[role] || { bg: "#e5e7eb", color: "#555" };
+
+  const switchStaff = (name) => {
+    setViewingStaff(name);
+    setSearch(""); setFDate(""); setStatFilter(""); setViewAll(false);
+    loadHistory(name);
+  };
+
   // Stats
-  const checkouts    = history.filter(h => h.action === "Checked Out").length;
+  const checkouts   = history.filter(h => h.action === "Checked Out").length;
   const returns      = history.filter(h => h.action === "Returned").length;
   const maintenance  = history.filter(h => h.action === "Sent to Maintenance").length;
   const thisMonth    = history.filter(h => {
@@ -145,22 +173,35 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
               </div>
               <div>
                 <div style={{ fontSize:16, fontWeight:700, color:"#fff" }}>{viewingStaff}</div>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.75)", marginTop:2 }}>{role} · Activity Summary</div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.75)", marginTop:2 }}>
+                  {viewingStaff === staffName ? `${role} · Your Activity` : "Staff Activity"}
+                </div>
               </div>
             </div>
             <button onClick={() => setPanelOpen(false)}
               style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"#fff", borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:16 }}>✕</button>
           </div>
 
-          {/* Stats */}
+          {/* Staff switcher for Admin/Manager */}
+          {canViewAll && staffList.length > 0 && (
+            <select value={viewingStaff} onChange={e => switchStaff(e.target.value)}
+              style={{ width:"100%", marginTop:10, padding:"8px 10px", fontSize:13, borderRadius:8, border:"none", background:"rgba(255,255,255,0.15)", color:"#fff", fontFamily:"inherit", cursor:"pointer" }}>
+              {staffList.map(s => (
+                <option key={s} value={s} style={{ background:"#1d4ed8", color:"#fff" }}>{s}{s === staffName ? " (You)" : ""}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Clickable Stats */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, marginTop:14 }}>
             {[
-              { label:"Checkouts", value:checkouts },
-              { label:"Returns",   value:returns   },
-              { label:"Maint.",    value:maintenance},
-              { label:"This Month",value:thisMonth  },
+              { label:"Checkouts", value:checkouts,   key:"checkouts"   },
+              { label:"Returns",   value:returns,     key:"returns"     },
+              { label:"Maint.",    value:maintenance, key:"maintenance" },
+              { label:"This Month",value:thisMonth,   key:"month"       },
             ].map(s => (
-              <div key={s.label} style={{ background:"rgba(255,255,255,0.15)", borderRadius:8, padding:"8px 6px", textAlign:"center" }}>
+              <div key={s.label} onClick={() => { setStatFilter(statFilter===s.key?"":s.key); setViewAll(false); }}
+                style={{ background: statFilter===s.key ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.15)", borderRadius:8, padding:"8px 6px", textAlign:"center", cursor:"pointer", outline: statFilter===s.key ? "2px solid rgba(255,255,255,0.8)" : "none", transition:"all .15s" }}>
                 <div style={{ fontSize:20, fontWeight:700, color:"#fff" }}>{s.value}</div>
                 <div style={{ fontSize:10, color:"rgba(255,255,255,0.75)", marginTop:2 }}>{s.label}</div>
               </div>
@@ -168,11 +209,21 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
           </div>
         </div>
 
-        {/* Search */}
-        <div style={{ padding:"10px 1rem", borderBottom:"1px solid #f3f4f6", flexShrink:0 }}>
-          <input style={{ width:"100%", padding:"8px 11px", fontSize:13, border:"1.5px solid #e5e7eb", borderRadius:7, boxSizing:"border-box", fontFamily:"inherit" }}
-            placeholder="Search plate, client or action…"
-            value={search} onChange={e => setSearch(e.target.value)} />
+        {/* Filter bar */}
+        <div style={{ padding:"8px 1rem", borderBottom:"1px solid #f3f4f6", flexShrink:0, display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+          <input style={{ flex:1, minWidth:140, padding:"7px 10px", fontSize:13, border:"1.5px solid #e5e7eb", borderRadius:7, boxSizing:"border-box", fontFamily:"inherit" }}
+            placeholder="Search plate, client…"
+            value={search} onChange={e => { setSearch(e.target.value); setViewAll(false); }} />
+          <button onClick={() => { setStatFilter(statFilter==="checkouts"?"":"checkouts"); setViewAll(false); }}
+            style={{ padding:"7px 12px", fontSize:12, fontWeight:600, borderRadius:7, border:"1.5px solid #1d4ed8", background: statFilter==="checkouts"?"#1d4ed8":"#eff6ff", color: statFilter==="checkouts"?"#fff":"#1d4ed8", cursor:"pointer", whiteSpace:"nowrap" }}>
+            🚗 Currently Rented
+          </button>
+          <input type="date" value={fDate} onChange={e => { setFDate(e.target.value); setViewAll(false); }}
+            style={{ padding:"7px 8px", fontSize:12, border:"1.5px solid #e5e7eb", borderRadius:7, fontFamily:"inherit", cursor:"pointer" }} />
+          {(search || fDate || statFilter) && (
+            <button onClick={() => { setSearch(""); setFDate(""); setStatFilter(""); setViewAll(false); }}
+              style={{ padding:"7px 10px", fontSize:12, border:"1.5px solid #e5e7eb", borderRadius:7, background:"#fff", cursor:"pointer", color:"#555" }}>Clear</button>
+          )}
         </div>
 
         {/* History list */}
