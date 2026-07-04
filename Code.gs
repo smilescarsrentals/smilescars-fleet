@@ -750,6 +750,7 @@ function addFuel(body) {
     body.authorisedBy,
     body.submittedBy || body.authorisedBy,
     body.linkedClient || "",
+    body.currentKm    || "",
   ]);
 
   return { success: true, refNo };
@@ -957,9 +958,9 @@ function setupFuelSheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sh   = ss.getSheetByName(FUEL_SHEET);
   if (!sh) sh = ss.insertSheet(FUEL_SHEET);
-  sh.getRange(1, 1, 1, 11).setValues([[
+  sh.getRange(1, 1, 1, 12).setValues([[
     "Timestamp","Ref No","Date","Plate","Vehicle Type",
-    "Product","Amount (TSH)","Litres","Authorised By","Submitted By","Linked Client"
+    "Product","Amount (TSH)","Litres","Authorised By","Submitted By","Linked Client","Current KM"
   ]]).setFontWeight("bold");
   Logger.log("✅ Fuel sheet ready.");
 }

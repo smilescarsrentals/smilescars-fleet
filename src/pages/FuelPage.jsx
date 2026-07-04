@@ -226,7 +226,7 @@ function PlateSearch({ plates, value, onChange }) {
 // ── Add Fuel Modal ───────────────────────────────────────────
 function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
   const [form, setForm] = useState({
-    date: todayStr(), plate: "", product: "Diesel", mode: "amount", amount: "", litres: "", remarks: "",
+    date: todayStr(), plate: "", product: "Diesel", mode: "amount", amount: "", litres: "", remarks: "", currentKm: "",
   });
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
@@ -257,6 +257,8 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
   const handleSave = async () => {
     if (!form.plate)   return setError("Please select a vehicle.");
     if (!form.product) return setError("Please select a product.");
+    if (!form.currentKm || !form.currentKm.replace(/,/g,""))
+      return setError("Current KM is required.");
     if (form.mode === "amount" && !form.amount.replace(/,/g, ""))
       return setError("Please enter an amount.");
     if (form.mode === "litres" && !form.litres && !form.fullTank)
@@ -274,6 +276,7 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
         authorisedBy: staffName,
         submittedBy:  staffName,
         remarks:      form.remarks || "",
+        currentKm:    form.currentKm.replace(/,/g,"") || "",
         // Auto-link to current rental
         linkedClient: carState ? carState.linkedClient : "",
         linkedClientPhone: carState?.car?.clientPhone || "",
@@ -394,6 +397,15 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
               ℹ️ Car is available — no client will be linked
             </div>
           )}
+
+          <label style={S.label}>Current KM *</label>
+          <input type="text" inputMode="numeric" value={form.currentKm}
+            placeholder="e.g. 45,000"
+            onChange={e => {
+              const digits = e.target.value.replace(/[^\d]/g, "");
+              set("currentKm", digits ? Number(digits).toLocaleString("en-US") : "");
+            }}
+            style={S.input} />
 
           <label style={S.label}>Product</label>
           <div style={S.toggleRow}>
