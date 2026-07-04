@@ -186,7 +186,12 @@ export default function FleetPage({ staffName, role }) {
 
   const expiringSoon = useMemo(() => fleet.filter(c => c.status==="Rented" && c.returnDate && daysUntil(c.returnDate)>=0 && daysUntil(c.returnDate)<=1), [fleet]);
   const expired      = useMemo(() => fleet.filter(c => c.status==="Rented" && c.returnDate && daysUntil(c.returnDate)<0), [fleet]);
-  const unpaid       = useMemo(() => fleet.filter(c => c.status==="Rented" && (c.paymentStatus==="Unpaid"||c.paymentStatus==="Partial Paid")), [fleet]);
+  const unpaid = useMemo(() => fleet.filter(c =>
+    c.status === "Rented" &&
+    c.paymentStatus !== "Paid" &&
+    c.paymentStatus !== "Long Term" &&
+    (c.paymentStatus === "Unpaid" || c.paymentStatus === "Partial Paid")
+  ), [fleet]);
 
   const types     = useMemo(() => [...new Set(fleet.map(c=>c.type))].sort(), [fleet]);
   const locations = useMemo(() => [...new Set(fleet.map(c=>c.location).filter(Boolean))].sort(), [fleet]);
@@ -357,7 +362,6 @@ export default function FleetPage({ staffName, role }) {
                         <option value="Paid">Paid</option>
                         <option value="Partial Paid">Partial Paid</option>
                         <option value="Unpaid">Unpaid</option>
-                        <option value="Long Term">Long Term</option>
                       </select>
                     ):<span style={{ color:"#ccc" }}>—</span>}
                     {car.paymentStatus==="Partial Paid"&&car.amountPaid&&<div style={{ fontSize:11,color:"#888",marginTop:2 }}>{fmtMoney(car.amountPaid,car.currency)}</div>}
