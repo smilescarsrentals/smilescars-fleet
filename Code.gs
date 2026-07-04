@@ -1103,15 +1103,16 @@ function syncDropboxReset() {
 }
 
 // ── Reservations ─────────────────────────────────────────────
-// Sheet columns: A=ID, B=Date, C=ClientName, D=CarType, E=Phone,
-//                F=Remarks, G=StaffName, H=Timestamp
+// Sheet columns: A=ID, B=Date, C=ClientName, D=Phone,
+//                E=CarType, F=NumCars, G=PickUpFrom, H=Remarks,
+//                I=StaffName, J=Timestamp
 
 function getOrCreateReservationsSheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sh   = ss.getSheetByName(RESERVATIONS_SHEET);
   if (!sh) {
     sh = ss.insertSheet(RESERVATIONS_SHEET);
-    sh.getRange(1,1,1,8).setValues([["ID","Date","Client Name","Car Type","Phone","Remarks","Staff Name","Timestamp"]]).setFontWeight("bold");
+    sh.getRange(1,1,1,10).setValues([["ID","Date","Client Name","Phone","Car Type","No. of Cars","Pick Up From","Remarks","Staff Name","Timestamp"]]).setFontWeight("bold");
   }
   return sh;
 }
@@ -1122,17 +1123,18 @@ function getReservations(month, year) {
   if (rows.length <= 1) return { success: true, data: [] };
   const tz   = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
   const data = rows.slice(1).map(row => ({
-    id:        row[0] || "",
-    date:      row[1] ? Utilities.formatDate(new Date(row[1]), tz, "yyyy-MM-dd") : "",
-    client:    row[2] || "",
-    carType:   row[3] || "",
-    phone:     row[4] || "",
-    remarks:   row[5] || "",
-    staffName: row[6] || "",
-    timestamp: row[7] ? Utilities.formatDate(new Date(row[7]), tz, "yyyy-MM-dd'T'HH:mm:ss") : "",
+    id:         row[0] || "",
+    date:       row[1] ? Utilities.formatDate(new Date(row[1]), tz, "yyyy-MM-dd") : "",
+    client:     row[2] || "",
+    phone:      row[3] || "",
+    carType:    row[4] || "",
+    numCars:    row[5] || "",
+    pickUpFrom: row[6] || "",
+    remarks:    row[7] || "",
+    staffName:  row[8] || "",
+    timestamp:  row[9] ? Utilities.formatDate(new Date(row[9]), tz, "yyyy-MM-dd'T'HH:mm:ss") : "",
   })).filter(r => r.id && r.date);
 
-  // Filter by month/year if provided
   if (month && year) {
     const m = String(month).padStart(2,"0");
     const y = String(year);
@@ -1146,7 +1148,12 @@ function addReservation(body) {
   if (!body.client) throw new Error("Client name is required");
   const sh  = getOrCreateReservationsSheet();
   const id  = "RES-" + Utilities.getUuid().split("-")[0].toUpperCase();
-  sh.appendRow([id, new Date(body.date), body.client, body.carType||"", body.phone||"", body.remarks||"", body.staffName||"", new Date()]);
+  sh.appendRow([
+    id, new Date(body.date), body.client,
+    body.phone||"", body.carType||"", body.numCars||"",
+    body.pickUpFrom||"", body.remarks||"",
+    body.staffName||"", new Date()
+  ]);
   return { success: true, id };
 }
 
@@ -1156,12 +1163,13 @@ function editReservation(body) {
   const rows = sh.getDataRange().getValues();
   const idx  = rows.findIndex(r => r[0] === body.id);
   if (idx < 1) throw new Error("Reservation not found");
-  const tz = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
-  if (body.date)    sh.getRange(idx+1,2).setValue(new Date(body.date));
-  if (body.client)  sh.getRange(idx+1,3).setValue(body.client);
-  if (body.carType !== undefined) sh.getRange(idx+1,4).setValue(body.carType);
-  if (body.phone !== undefined)   sh.getRange(idx+1,5).setValue(body.phone);
-  if (body.remarks !== undefined) sh.getRange(idx+1,6).setValue(body.remarks);
+  if (body.date)       sh.getRange(idx+1,2).setValue(new Date(body.date));
+  if (body.client)     sh.getRange(idx+1,3).setValue(body.client);
+  if (body.phone      !== undefined) sh.getRange(idx+1,4).setValue(body.phone);
+  if (body.carType    !== undefined) sh.getRange(idx+1,5).setValue(body.carType);
+  if (body.numCars    !== undefined) sh.getRange(idx+1,6).setValue(body.numCars);
+  if (body.pickUpFrom !== undefined) sh.getRange(idx+1,7).setValue(body.pickUpFrom);
+  if (body.remarks    !== undefined) sh.getRange(idx+1,8).setValue(body.remarks);
   return { success: true };
 }
 
