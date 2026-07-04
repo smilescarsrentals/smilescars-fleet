@@ -362,6 +362,7 @@ export default function FleetPage({ staffName, role }) {
                         <option value="Paid">Paid</option>
                         <option value="Partial Paid">Partial Paid</option>
                         <option value="Unpaid">Unpaid</option>
+                        <option value="Long Term">Long Term</option>
                       </select>
                     ):<span style={{ color:"#ccc" }}>—</span>}
                     {car.paymentStatus==="Partial Paid"&&car.amountPaid&&<div style={{ fontSize:11,color:"#888",marginTop:2 }}>{fmtMoney(car.amountPaid,car.currency)}</div>}
