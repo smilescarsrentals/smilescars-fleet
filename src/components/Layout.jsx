@@ -49,9 +49,8 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const loadHistory = async (name) => {
     setLoading(true);
     try {
-      const res = await api.getHistory();
-      const all = (res.data || []).filter(h => h.staffName === name);
-      setHistory(all);
+      const res = await api.getHistoryByStaff(name);
+      setHistory(res.data || []);
     } catch {}
     setLoading(false);
   };

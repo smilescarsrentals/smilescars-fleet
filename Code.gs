@@ -31,6 +31,7 @@ function doGet(e) {
     if (action === "getDashboard")    return respond(getDashboard());
     if (action === "getCarByPlate")   return respond(getCarByPlate(e.parameter.plate   || ""));
     if (action === "getCarHistory")   return respond(getCarHistory(e.parameter.plate   || ""));
+    if (action === "getHistoryByStaff") return respond(getHistoryByStaff(e.parameter.staffName || ""));
     if (action === "getFuel")         return respond(getFuel());
     if (action === "getFuelByPlate")  return respond(getFuelByPlate(e.parameter.plate  || ""));
     if (action === "getReservations") return respond(getReservations(e.parameter.month || "", e.parameter.year || ""));
@@ -197,8 +198,21 @@ function getHistory() {
   const tz       = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
   const dataRows = rows.slice(1);
   const total    = dataRows.length;
-  const sliced   = dataRows.slice(-300).reverse();
-  return { success: true, data: sliced.map(row => mapHistoryRow(row, tz)), total };
+  return { success: true, data: dataRows.reverse().map(row => mapHistoryRow(row, tz)), total };
+}
+
+function getHistoryByStaff(staffName) {
+  if (!staffName) return { success: true, data: [] };
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(HISTORY_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+  if (rows.length <= 1) return { success: true, data: [] };
+  const tz   = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
+  const norm = staffName.trim().toLowerCase();
+  const data = rows.slice(1)
+    .filter(row => (row[10] || "").toString().trim().toLowerCase() === norm)
+    .reverse()
+    .map(row => mapHistoryRow(row, tz));
+  return { success: true, data };
 }
 
 function getCarHistory(plate) {
