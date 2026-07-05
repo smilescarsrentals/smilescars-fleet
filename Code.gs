@@ -35,6 +35,7 @@ function doGet(e) {
     if (action === "getFuel")         return respond(getFuel());
     if (action === "getFuelByPlate")  return respond(getFuelByPlate(e.parameter.plate  || ""));
     if (action === "getReservations") return respond(getReservations(e.parameter.month || "", e.parameter.year || ""));
+    if (action === "getBlacklist")    return respond(getBlacklist());
     if (action === "testRole")        return respond(testRole(e.parameter.name         || ""));
     return respond({ error: "Unknown action: " + action });
   } catch (err) {
@@ -71,6 +72,8 @@ function doPost(e) {
     if (action === "addReservation")       return respond(addReservation(body));
     if (action === "editReservation")      return respond(editReservation(body));
     if (action === "deleteReservation")    return respond(deleteReservation(body));
+    if (action === "addToBlacklist")       return respond(addToBlacklist(body));
+    if (action === "deleteFromBlacklist")  return respond(deleteFromBlacklist(body));
     return respond({ error: "Unknown action: " + action });
   } catch (err) {
     return respond({ error: err.message });
@@ -1242,5 +1245,64 @@ function replaceVehicle(body) {
     fuelOut:     "",
   });
 
+  return { success: true };
+}
+
+// ── Blacklist ─────────────────────────────────────────────────
+// Sheet columns: A=ID, B=Name, C=Phone, D=LicenseNo, E=LicenseImageUrl, F=AddedBy, G=Timestamp
+
+const BLACKLIST_SHEET = "Blacklist";
+
+function getOrCreateBlacklistSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh   = ss.getSheetByName(BLACKLIST_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(BLACKLIST_SHEET);
+    sh.getRange(1,1,1,7).setValues([["ID","Name","Phone","License No","License Image URL","Added By","Timestamp"]]).setFontWeight("bold");
+  }
+  return sh;
+}
+
+function getBlacklist() {
+  const sh   = getOrCreateBlacklistSheet();
+  const rows = sh.getDataRange().getValues();
+  if (rows.length <= 1) return { success: true, data: [] };
+  const tz   = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
+  const data = rows.slice(1).map(row => ({
+    id:              row[0] || "",
+    name:            row[1] || "",
+    phone:           row[2] || "",
+    licenseNo:       row[3] || "",
+    licenseImageUrl: row[4] || "",
+    addedBy:         row[5] || "",
+    timestamp:       row[6] ? Utilities.formatDate(new Date(row[6]), tz, "yyyy-MM-dd'T'HH:mm:ss") : "",
+  })).filter(r => r.id);
+  return { success: true, data };
+}
+
+function addToBlacklist(body) {
+  if (!body.name && !body.phone && !body.licenseNo)
+    throw new Error("At least one of name, phone or license number is required.");
+  const sh  = getOrCreateBlacklistSheet();
+  const id  = "BL-" + Utilities.getUuid().split("-")[0].toUpperCase();
+  sh.appendRow([
+    id,
+    body.name          || "",
+    body.phone         || "",
+    body.licenseNo     || "",
+    body.licenseImageUrl || "",
+    body.addedBy       || "",
+    new Date(),
+  ]);
+  return { success: true, id };
+}
+
+function deleteFromBlacklist(body) {
+  if (!body.id) throw new Error("ID is required");
+  const sh   = getOrCreateBlacklistSheet();
+  const rows = sh.getDataRange().getValues();
+  const idx  = rows.findIndex(r => r[0] === body.id);
+  if (idx < 1) throw new Error("Entry not found");
+  sh.deleteRow(idx + 1);
   return { success: true };
 }

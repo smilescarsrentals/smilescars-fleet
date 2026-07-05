@@ -128,6 +128,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
             <NavLink to="/sub-hire"     style={navStyle}>Sub-Hire</NavLink>
             <NavLink to="/fuel"         style={navStyle}>Fuel</NavLink>
             <NavLink to="/sold"         style={navStyle}>Sold</NavLink>
+            <NavLink to="/blacklist"    style={navStyle}>⛔ Blacklist</NavLink>
           </nav>
           <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
             {/* Clickable avatar + name */}

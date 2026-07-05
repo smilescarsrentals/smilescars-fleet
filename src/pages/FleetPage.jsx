@@ -42,6 +42,7 @@ export default function FleetPage({ staffName, role }) {
   const canExportOrSell = role === "Admin" || role === "Manager";
   const [fleet,     setFleet]     = useState([]);
   const [config,    setConfig]    = useState({ staff:[], locations:[], garages:[], drivers:[] });
+  const [blacklist, setBlacklist] = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState("");
   const [search,    setSearch]    = useState("");
@@ -67,9 +68,9 @@ export default function FleetPage({ staffName, role }) {
     }
     setLoading(true); setError("");
     try {
-      const [f, c] = await Promise.all([api.getFleet(), api.getConfig()]);
+      const [f, c, bl] = await Promise.all([api.getFleet(), api.getConfig(), api.getBlacklist()]);
       const fleetData = f.data || [];
-      setFleet(fleetData); setConfig(c);
+      setFleet(fleetData); setConfig(c); setBlacklist(bl.data || []);
       cache.set("fleet", fleetData); cache.set("config", c);
     } catch (e) { setError("Failed to load fleet: " + e.message); }
     finally { setLoading(false); }
@@ -413,7 +414,8 @@ export default function FleetPage({ staffName, role }) {
       {modal && (
         <ActionModal car={modal.car} action={modal.action}
           locations={config.locations} garages={config.garages} drivers={config.drivers||[]} staff={config.staff||[]}
-          staffName={staffName} role={role} onConfirm={handleConfirm} onClose={()=>!saving&&setModal(null)} loading={saving} />
+          staffName={staffName} role={role} blacklist={blacklist}
+          onConfirm={handleConfirm} onClose={()=>!saving&&setModal(null)} loading={saving} />
       )}
       {moveCar && (
         <MoveCarModal car={moveCar} locations={config.locations} staffName={staffName} role={role}

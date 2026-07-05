@@ -11,6 +11,7 @@ import ClientsPage from "./pages/ClientsPage";
 import CarProfilePage from "./pages/CarProfilePage";
 import FuelPage from "./pages/FuelPage";
 import ReservationsPage from "./pages/ReservationsPage";
+import BlacklistPage from "./pages/BlacklistPage";
 import logo from "./assets/logo.js";
 
 export default function App() {
@@ -55,7 +56,8 @@ export default function App() {
           <Route path="/sub-hire"   element={<SubHirePage staffName={staffName} />} />
           <Route path="/fuel"         element={<FuelPage staffName={staffName} role={role} fuelAccess={fuelAccess} />} />
           <Route path="/reservations" element={<ReservationsPage staffName={staffName} role={role} />} />
-          <Route path="/sold"       element={<SoldPage />} />
+          <Route path="/sold"         element={<SoldPage />} />
+          <Route path="/blacklist"    element={<BlacklistPage staffName={staffName} role={role} />} />
           <Route path="*"           element={<Navigate to="/" />} />
         </Routes>
       </Layout>

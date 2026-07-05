@@ -35,7 +35,7 @@ function FineInput({ value, onChange, label }) {
   );
 }
 
-export default function ActionModal({ car, action, locations, garages, drivers, staff, staffName, role, onConfirm, onClose, loading }) {
+export default function ActionModal({ car, action, locations, garages, drivers, staff, staffName, role, blacklist, onConfirm, onClose, loading }) {
   const today = new Date().toISOString().split("T")[0];
   const canAddLocGarage = role === "Admin" || role === "Manager";
 
@@ -142,6 +142,23 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
               <input style={S.input} value={client} onChange={e => setClient(e.target.value)} placeholder="Full name" autoFocus /></div>
             <div style={S.field}><label style={S.label}>Client Phone</label>
               <input style={S.input} value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="+255..." /></div>
+
+            {/* Blacklist check */}
+            {(() => {
+              const bl = (blacklist||[]).find(b => {
+                const nameMatch  = b.name  && client.trim()      && client.trim().toLowerCase().includes(b.name.toLowerCase());
+                const phoneMatch = b.phone && clientPhone.trim() && clientPhone.replace(/\s/g,"").includes(b.phone.replace(/\s/g,""));
+                return nameMatch || phoneMatch;
+              });
+              return bl ? (
+                <div style={{ background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:10,padding:"14px 16px",marginBottom:8,textAlign:"center" }}>
+                  <div style={{ fontSize:28,marginBottom:6 }}>⛔</div>
+                  <div style={{ fontSize:16,fontWeight:700,color:"#b91c1c",marginBottom:4 }}>This client is on the Blacklist</div>
+                  <div style={{ fontSize:12,color:"#dc2626" }}>Avoid renting cars to this person</div>
+                  {bl.licenseNo && <div style={{ fontSize:12,color:"#888",marginTop:6 }}>License: {bl.licenseNo}</div>}
+                </div>
+              ) : null;
+            })()}
             <div style={S.two}>
               <div style={S.field}><label style={S.label}>Booked From *</label>
                 <input style={S.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} /></div>
@@ -340,9 +357,19 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
           </div>
 
           {err && <p style={S.error}>{err}</p>}
-          <button style={{ ...S.confirmBtn, background: cfg.color, opacity: loading ? 0.65 : 1 }} onClick={handleSubmit} disabled={loading}>
-            {loading ? "Saving…" : cfg.btnLabel}
-          </button>
+          {(() => {
+            const isBlocked = needsClient && (blacklist||[]).some(b => {
+              const nameMatch  = b.name  && client.trim()      && client.trim().toLowerCase().includes(b.name.toLowerCase());
+              const phoneMatch = b.phone && clientPhone.trim() && clientPhone.replace(/\s/g,"").includes(b.phone.replace(/\s/g,""));
+              return nameMatch || phoneMatch;
+            });
+            return (
+              <button style={{ ...S.confirmBtn, background: isBlocked ? "#9ca3af" : cfg.color, opacity: (loading||isBlocked) ? 0.65 : 1, cursor: isBlocked ? "not-allowed" : "pointer" }}
+                onClick={isBlocked ? undefined : handleSubmit} disabled={loading || isBlocked}>
+                {loading ? "Saving…" : isBlocked ? "⛔ Blocked — Client on Blacklist" : cfg.btnLabel}
+              </button>
+            );
+          })()}
         </div>
       </div>
     </div>
