@@ -1234,16 +1234,23 @@ function replaceVehicle(body) {
   const note    = `Replacement for ${body.originalPlate}. ${body.remarks || ""}`.trim();
   const origNote= `Broken down — replaced by ${body.replacePlate}. ${body.remarks || ""}`.trim();
 
-  // 1. Send original car to maintenance
-  clearFleetRow(body.originalPlate, "Maintenance", {
-    remarks: origNote,
-    garage:  body.garage || "",
-  });
-  addHistory({
-    plate: body.originalPlate, type: body.originalType || "", action: "Sent to Maintenance",
-    remarks: origNote, garage: body.garage || "",
-    location: body.location || "", staffName: body.staffName,
-  });
+  // 1. Handle original car based on choice
+  if (body.originalAction === "available") {
+    clearFleetRow(body.originalPlate, "Available", { remarks: origNote });
+    addHistory({
+      plate: body.originalPlate, type: body.originalType || "", action: "Marked Available",
+      remarks: origNote, location: body.location || "", staffName: body.staffName,
+    });
+  } else {
+    clearFleetRow(body.originalPlate, "Maintenance", {
+      remarks: origNote, garage: body.garage || "",
+    });
+    addHistory({
+      plate: body.originalPlate, type: body.originalType || "", action: "Sent to Maintenance",
+      remarks: origNote, garage: body.garage || "",
+      location: body.location || "", staffName: body.staffName,
+    });
+  }
 
   // 2. Check out replacement car to same client with same details
   updateFleetRow(body.replacePlate, {

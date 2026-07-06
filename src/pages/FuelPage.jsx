@@ -111,9 +111,11 @@ async function generateFuelPDF(entry) {
   doc.text("Please supply our vehicle with the following:", ml, y);
 
   // ── Fields box ──
-  const hasAmount = entry.amount && String(entry.amount).trim() !== "";
-  const hasRemarks = entry.remarks && entry.remarks.trim() !== "";
-  const boxH = hasRemarks ? 34 : 24;
+  const hasAmount  = entry.amount  && String(entry.amount).trim()  !== "";
+  const hasRemarks = entry.remarks && entry.remarks.trim()         !== "";
+  const hasKm      = entry.currentKm && String(entry.currentKm).trim() !== "";
+  const rowCount   = 2 + (hasRemarks ? 1 : 0) + (hasKm ? 1 : 0);
+  const boxH = rowCount * 10 + 4;
   const boxY = y + 3;
   doc.setDrawColor(187, 187, 187);
   doc.setLineWidth(0.3);
@@ -137,6 +139,14 @@ async function generateFuelPDF(entry) {
     doc.text("Litres:", ml + 5, fy);
     doc.setFont("helvetica", "normal");
     doc.text("Ltrs  " + entry.litres, ml + 30, fy);
+  }
+
+  if (hasKm) {
+    fy += 10;
+    doc.setFont("helvetica", "bold");
+    doc.text("Current KM:", ml + 5, fy);
+    doc.setFont("helvetica", "normal");
+    doc.text(String(entry.currentKm), ml + 36, fy);
   }
 
   if (hasRemarks) {
@@ -285,7 +295,7 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
       if (!res.success) throw new Error(res.error || "Save failed");
 
       // Generate PDF blob and show popup
-      const entry = { ...payload, refNo: res.refNo, remarks: form.remarks || "" };
+      const entry = { ...payload, refNo: res.refNo, remarks: form.remarks || "", currentKm: form.currentKm || "" };
       const doc   = await generateFuelPDF(entry);
       const blob  = doc.output("blob");
       const filename = `${res.refNo}.pdf`;

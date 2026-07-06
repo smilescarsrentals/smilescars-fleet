@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import { cache } from "../lib/cache";
 import { exportToExcel } from "../lib/exportExcel";
@@ -40,6 +40,14 @@ const PAYMENT_STYLES = {
 
 export default function FleetPage({ staffName, role }) {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Pre-fill search from URL param (e.g. from Reservations checkout button)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const s = params.get("search");
+    if (s) setFSearch(s);
+  }, [location.search]);
   const canExportOrSell = role === "Admin" || role === "Manager";
   const [fleet,        setFleet]        = useState([]);
   const [config,       setConfig]       = useState({ staff:[], locations:[], garages:[], drivers:[] });
@@ -132,12 +140,12 @@ export default function FleetPage({ staffName, role }) {
     setSaving(true);
     try {
       await api.replaceVehicle({
-        originalPlate: replaceCar.plate,
-        originalType:  replaceCar.type,
-        replacePlate:  fields.replacePlate,
-        replaceType:   fields.replaceType,
+        originalPlate:  replaceCar.plate,
+        originalType:   replaceCar.type,
+        replacePlate:   fields.replacePlate,
+        replaceType:    fields.replaceType,
+        originalAction: fields.originalAction || "garage",
         staffName,
-        // Pass original rental details
         client:        replaceCar.currentClient,
         clientPhone:   replaceCar.clientPhone,
         bookedFrom:    replaceCar.bookedFrom,
@@ -503,6 +511,7 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, myOverdueCou
 function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, loading }) {
   const available = fleet.filter(c => c.status === "Available");
   const [replacePlate, setReplacePlate] = useState("");
+  const [originalAction, setOriginalAction] = useState("garage"); // "garage" | "available"
   const [garage,       setGarage]       = useState("");
   const [newGarage,    setNewGarage]    = useState("");
   const [addingGarage, setAddingGarage] = useState(false);
@@ -521,10 +530,12 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
     if (!replacePlate) { setErr("Please select a replacement car."); return; }
     const repCar = available.find(c => c.plate === replacePlate);
     if (!repCar) { setErr("Selected car not found in available fleet."); return; }
+    if (originalAction === "garage" && !addingGarage && !garage) { setErr("Please select a garage."); return; }
     onConfirm({
       replacePlate,
-      replaceType: repCar.type,
-      garage: addingGarage ? newGarage.trim() : garage,
+      replaceType:    repCar.type,
+      originalAction,
+      garage: originalAction === "garage" ? (addingGarage ? newGarage.trim() : garage) : "",
       remarks,
     });
   };
@@ -575,22 +586,32 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
             {available.length === 0 && <p style={{ fontSize:12,color:"#dc2626",margin:"6px 0 0" }}>No available cars in fleet.</p>}
           </div>
 
-          {/* Garage for original car */}
+          {/* What to do with original car */}
           <div style={{ marginBottom:"0.85rem" }}>
-            <label style={{ fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:4 }}>Send {car.plate} to Garage</label>
-            {!addingGarage ? (
-              <select style={{ width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,boxSizing:"border-box",fontFamily:"inherit" }}
-                value={garage} onChange={e => { if(e.target.value==="__new__") setAddingGarage(true); else setGarage(e.target.value); }}>
-                <option value="">— Select garage (optional) —</option>
-                {(garages||[]).map(g => <option key={g}>{g}</option>)}
-                <option value="__new__">+ Add new garage</option>
-              </select>
-            ) : (
-              <div style={{ display:"flex",gap:6 }}>
-                <input style={{ flex:1,padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,fontFamily:"inherit" }}
-                  placeholder="New garage name" value={newGarage} onChange={e=>setNewGarage(e.target.value)} autoFocus />
-                <button style={{ padding:"9px 12px",border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer",color:"#666" }} onClick={()=>setAddingGarage(false)}>✕</button>
-              </div>
+            <label style={{ fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:8 }}>What happens to {car.plate}?</label>
+            <div style={{ display:"flex",gap:8,marginBottom:10 }}>
+              {[["garage","🔧 Send to Garage"],["available","✅ Mark Available"]].map(([val,label])=>(
+                <button key={val} onClick={()=>setOriginalAction(val)}
+                  style={{ flex:1,padding:"9px",fontSize:13,fontWeight:600,borderRadius:8,border:`1.5px solid ${originalAction===val?"#7c3aed":"#e5e7eb"}`,background:originalAction===val?"#f5f3ff":"#fff",color:originalAction===val?"#7c3aed":"#555",cursor:"pointer" }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {originalAction === "garage" && (
+              !addingGarage ? (
+                <select style={{ width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,boxSizing:"border-box",fontFamily:"inherit" }}
+                  value={garage} onChange={e => { if(e.target.value==="__new__") setAddingGarage(true); else setGarage(e.target.value); }}>
+                  <option value="">— Select garage —</option>
+                  {(garages||[]).map(g => <option key={g}>{g}</option>)}
+                  <option value="__new__">+ Add new garage</option>
+                </select>
+              ) : (
+                <div style={{ display:"flex",gap:6 }}>
+                  <input style={{ flex:1,padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,fontFamily:"inherit" }}
+                    placeholder="New garage name" value={newGarage} onChange={e=>setNewGarage(e.target.value)} autoFocus />
+                  <button style={{ padding:"9px 12px",border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer",color:"#666" }} onClick={()=>setAddingGarage(false)}>✕</button>
+                </div>
+              )
             )}
           </div>
 

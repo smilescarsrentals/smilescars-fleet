@@ -159,7 +159,14 @@ export default function ReservationsPage({ staffName, role }) {
       )}
 
       {showAdd    && <AddModal    day={showAdd}    month={month} year={year} staffName={staffName} fleet={fleet} fleetTypes={fleetTypes} onClose={()=>setShowAdd(null)}    onSaved={()=>{setShowAdd(null);load();}} />}
-      {showDetail && <DetailModal res={showDetail} canEdit={canEdit} onClose={()=>setShowDetail(null)} onEdit={()=>{setShowEdit(showDetail);setShowDetail(null);}} onDeleted={()=>{setShowDetail(null);load();}} todayStr={todayStr} />}
+      {showDetail && <DetailModal res={showDetail} canEdit={canEdit}
+        onClose={()=>setShowDetail(null)}
+        onEdit={()=>{setShowEdit(showDetail);setShowDetail(null);}}
+        onDeleted={()=>{setShowDetail(null);load();}}
+        todayStr={todayStr}
+        onCheckOut={(plate) => navigate(`/?search=${encodeURIComponent(plate)}`)}
+        onAssignPlate={(res) => { setShowDetail(null); setShowEdit(res); }}
+      />}
       {showEdit   && <EditModal   res={showEdit}   fleet={fleet}  fleetTypes={fleetTypes} onClose={()=>setShowEdit(null)}   onSaved={()=>{setShowEdit(null);load();}} />}
     </div>
   );
@@ -299,7 +306,7 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
 }
 
 // ── Detail Modal ─────────────────────────────────────────────
-function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr }) {
+function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onCheckOut, onAssignPlate }) {
   const [deleting, setDeleting] = useState(false);
   const color = colorFor(res.plate||res.client);
   const isToday    = res.pickupDate === todayStr;
@@ -343,15 +350,18 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr }) {
 
           {/* Check Out button for today's reservations */}
           {canCheckOut && (
-            <a href={`/car/${encodeURIComponent(res.plate)}`}
-              onClick={onClose}
-              style={{ display:"block",textAlign:"center",marginTop:16,padding:"11px",fontSize:14,fontWeight:600,background:"#16a34a",color:"#fff",borderRadius:8,textDecoration:"none" }}>
-              🚗 Go to Car & Check Out
-            </a>
+            <button onClick={() => { onClose(); onCheckOut(res.plate); }}
+              style={{ display:"block",width:"100%",textAlign:"center",marginTop:16,padding:"11px",fontSize:14,fontWeight:600,background:"#16a34a",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit" }}>
+              🚗 Check Out from Fleet
+            </button>
           )}
           {(isToday || isActive) && !res.plate && (
             <div style={{ marginTop:12,padding:"10px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,fontSize:13,color:"#92400e",textAlign:"center" }}>
-              ⚠️ No car assigned yet — edit to assign a plate before checkout
+              ⚠️ No car assigned yet
+              <button onClick={() => onAssignPlate(res)}
+                style={{ display:"block",width:"100%",marginTop:8,padding:"8px",fontSize:13,fontWeight:600,background:"#f59e0b",color:"#fff",border:"none",borderRadius:6,cursor:"pointer" }}>
+                Assign a Plate Now
+              </button>
             </div>
           )}
 
