@@ -46,6 +46,7 @@ export default function ReservationsPage({ staffName, role }) {
 
   useEffect(() => { load(); }, [month, year]);
 
+  const days = daysInMonth(year, month);
   const fleetTypes = useMemo(() => [...new Set(fleet.map(c => c.type).filter(Boolean))].sort(), [fleet]);
 
   // Urgent = no plate assigned + pickup within 5 days
