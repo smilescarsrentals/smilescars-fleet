@@ -46,7 +46,19 @@ export default function ReservationsPage({ staffName, role }) {
 
   useEffect(() => { load(); }, [month, year]);
 
-  const days = daysInMonth(year, month);
+  const fleetTypes = useMemo(() => [...new Set(fleet.map(c => c.type).filter(Boolean))].sort(), [fleet]);
+
+  // Urgent = no plate assigned + pickup within 5 days
+  const urgentReservations = useMemo(() => {
+    const now = new Date(); now.setHours(0,0,0,0);
+    return reservations.filter(r => {
+      if (r.plate) return false; // already has a car assigned
+      if (!r.pickupDate) return false;
+      const pickup = new Date(r.pickupDate);
+      const diff   = Math.ceil((pickup - now) / (1000 * 60 * 60 * 24));
+      return diff >= 0 && diff <= 5;
+    });
+  }, [reservations]);
 
   // Group by pickup day (show card on pickup date row)
   const byDay = useMemo(() => {
@@ -81,6 +93,31 @@ export default function ReservationsPage({ staffName, role }) {
         </div>
       </div>
 
+      {urgentReservations.length > 0 && (
+        <div style={{ background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:10,padding:"12px 16px",marginBottom:"1rem" }}>
+          <div style={{ fontWeight:700,color:"#b91c1c",fontSize:14,marginBottom:6 }}>
+            🚨 {urgentReservations.length} reservation{urgentReservations.length>1?"s":""} need{urgentReservations.length===1?"s":""} a car assigned
+          </div>
+          <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
+            {urgentReservations.map(r => {
+              const now    = new Date(); now.setHours(0,0,0,0);
+              const pickup = new Date(r.pickupDate);
+              const diff   = Math.ceil((pickup - now) / (1000*60*60*24));
+              return (
+                <div key={r.id} style={{ fontSize:13,color:"#dc2626",display:"flex",alignItems:"center",gap:8 }}>
+                  <span style={{ fontWeight:600 }}>{r.client}</span>
+                  <span style={{ color:"#888" }}>·</span>
+                  <span>{r.carType||"Any"}</span>
+                  <span style={{ color:"#888" }}>·</span>
+                  <span style={{ fontWeight:600 }}>{diff===0?"Today":diff===1?"Tomorrow":`In ${diff} days`}</span>
+                  <span style={{ color:"#888",fontSize:12 }}>({fmtDate(r.pickupDate)})</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {loading ? <div style={S.center}>Loading…</div> : (
         <div style={S.board}>
           {Array.from({length:days},(_,i)=>i+1).map(day => {
@@ -95,14 +132,21 @@ export default function ReservationsPage({ staffName, role }) {
                   {isToday && <div style={{ fontSize:9,color:"#16a34a",fontWeight:700,letterSpacing:".5px" }}>TODAY</div>}
                 </div>
                 <div style={S.slots}>
-                  {slots.map(r => (
-                    <div key={r.id} style={{ ...S.card, borderLeft:`3px solid ${colorFor(r.plate||r.client)}` }}
-                      onClick={() => setShowDetail(r)}>
-                      <span style={{ fontWeight:600,fontSize:12 }}>{r.client}</span>
-                      {r.plate && <span style={{ fontSize:11,color:"#888",marginLeft:5 }}>· {r.plate}</span>}
-                      {r.returnDate && <span style={{ fontSize:11,color:"#aaa",marginLeft:5 }}>→ {fmtDate(r.returnDate)}</span>}
-                    </div>
-                  ))}
+                  {slots.map(r => {
+                    const isUrgent = urgentReservations.some(u => u.id === r.id);
+                    return (
+                      <div key={r.id} style={{ ...S.card,
+                        borderLeft:`3px solid ${isUrgent ? "#dc2626" : colorFor(r.plate||r.client)}`,
+                        background: isUrgent ? "#fef2f2" : "#f5f3ff" }}
+                        onClick={() => setShowDetail(r)}>
+                        {isUrgent && <span title="No car assigned — urgent!">🚨</span>}
+                        <span style={{ fontWeight:600,fontSize:12 }}>{r.client}</span>
+                        {r.plate && <span style={{ fontSize:11,color:"#888",marginLeft:5 }}>· {r.plate}</span>}
+                        {!r.plate && r.carType && <span style={{ fontSize:11,color:"#888",marginLeft:5 }}>· {r.carType}</span>}
+                        {r.returnDate && <span style={{ fontSize:11,color:"#aaa",marginLeft:5 }}>→ {fmtDate(r.returnDate)}</span>}
+                      </div>
+                    );
+                  })}
                   <button style={S.addSlot} onClick={() => setShowAdd(day)} title="Add reservation">+</button>
                 </div>
               </div>
@@ -111,9 +155,9 @@ export default function ReservationsPage({ staffName, role }) {
         </div>
       )}
 
-      {showAdd    && <AddModal    day={showAdd}    month={month} year={year} staffName={staffName} fleet={fleet} onClose={()=>setShowAdd(null)}    onSaved={()=>{setShowAdd(null);load();}} />}
+      {showAdd    && <AddModal    day={showAdd}    month={month} year={year} staffName={staffName} fleet={fleet} fleetTypes={fleetTypes} onClose={()=>setShowAdd(null)}    onSaved={()=>{setShowAdd(null);load();}} />}
       {showDetail && <DetailModal res={showDetail} canEdit={canEdit} onClose={()=>setShowDetail(null)} onEdit={()=>{setShowEdit(showDetail);setShowDetail(null);}} onDeleted={()=>{setShowDetail(null);load();}} />}
-      {showEdit   && <EditModal   res={showEdit}   fleet={fleet}  onClose={()=>setShowEdit(null)}   onSaved={()=>{setShowEdit(null);load();}} />}
+      {showEdit   && <EditModal   res={showEdit}   fleet={fleet}  fleetTypes={fleetTypes} onClose={()=>setShowEdit(null)}   onSaved={()=>{setShowEdit(null);load();}} />}
     </div>
   );
 }
@@ -152,7 +196,7 @@ function PlateSearch({ fleet, value, carType, onChange }) {
 }
 
 // ── Add Modal ────────────────────────────────────────────────
-function AddModal({ day, month, year, staffName, fleet, onClose, onSaved }) {
+function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onSaved }) {
   const pickupStr = `${year}-${pad(month)}-${pad(day)}`;
   const [form, setForm] = useState({ client:"", phone:"", plate:"", carType:"", pickupDate:pickupStr, returnDate:"", pickUpFrom:"", remarks:"" });
   const [saving, setSaving] = useState(false);
@@ -164,6 +208,7 @@ function AddModal({ day, month, year, staffName, fleet, onClose, onSaved }) {
 
   const handleSave = async () => {
     if (!form.client.trim())   { setErr("Client name is required."); return; }
+    if (!form.carType.trim())  { setErr("Car type is required."); return; }
     if (!form.pickupDate)      { setErr("Pickup date is required."); return; }
     if (!form.returnDate)      { setErr("Return date is required."); return; }
     if (form.returnDate <= form.pickupDate) { setErr("Return date must be after pickup date."); return; }
@@ -192,12 +237,15 @@ function AddModal({ day, month, year, staffName, fleet, onClose, onSaved }) {
 
           <div style={{ height:1,background:"#f3f4f6",margin:"4px 0 12px" }} />
 
-          <div style={S.field}><label style={S.label}>Plate No.</label>
+          <div style={S.field}><label style={S.label}>Plate No. <span style={{ color:"#aaa",fontWeight:400 }}>(optional)</span></label>
             <PlateSearch fleet={fleet} value={form.plate} carType={form.carType}
-              onChange={(plate,type) => { set("plate",plate); set("carType",type); }} />
+              onChange={(plate,type) => { set("plate",plate); if(type) set("carType",type); }} />
           </div>
-          <div style={S.field}><label style={S.label}>Car Type</label>
-            <div style={{ ...S.readOnly, color: form.carType?"#111":"#aaa" }}>{form.carType||"Auto-filled from plate"}</div>
+          <div style={S.field}><label style={S.label}>Car Type *</label>
+            <select style={{ ...S.input,fontFamily:"inherit" }} value={form.carType} onChange={e=>set("carType",e.target.value)}>
+              <option value="">— Select car type —</option>
+              {(fleetTypes||[]).map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
 
           <div style={S.two}>
@@ -276,7 +324,7 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted }) {
 }
 
 // ── Edit Modal ───────────────────────────────────────────────
-function EditModal({ res, fleet, onClose, onSaved }) {
+function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
   const [form, setForm] = useState({
     client:     res.client     ||"",
     phone:      res.phone      ||"",
@@ -317,12 +365,15 @@ function EditModal({ res, fleet, onClose, onSaved }) {
 
           <div style={{ height:1,background:"#f3f4f6",margin:"4px 0 12px" }} />
 
-          <div style={S.field}><label style={S.label}>Plate No.</label>
+          <div style={S.field}><label style={S.label}>Plate No. <span style={{ color:"#aaa",fontWeight:400 }}>(optional)</span></label>
             <PlateSearch fleet={fleet} value={form.plate} carType={form.carType}
-              onChange={(plate,type) => { set("plate",plate); set("carType",type); }} />
+              onChange={(plate,type) => { set("plate",plate); if(type) set("carType",type); }} />
           </div>
-          <div style={S.field}><label style={S.label}>Car Type</label>
-            <div style={{ ...S.readOnly, color: form.carType?"#111":"#aaa" }}>{form.carType||"Auto-filled from plate"}</div>
+          <div style={S.field}><label style={S.label}>Car Type *</label>
+            <select style={{ ...S.input,fontFamily:"inherit" }} value={form.carType} onChange={e=>set("carType",e.target.value)}>
+              <option value="">— Select car type —</option>
+              {(fleetTypes||[]).map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
 
           <div style={S.two}>

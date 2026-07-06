@@ -40,8 +40,23 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const [statFilter,   setStatFilter]   = useState("");
   const [staffList,    setStaffList]    = useState([]);
   const [viewingStaff, setViewingStaff] = useState(staffName);
+  const [urgentCount,  setUrgentCount]  = useState(0);
 
   const canViewAll = role === "Admin" || role === "Manager";
+
+  // Load urgent reservations count on mount
+  useEffect(() => {
+    api.getAllReservations().then(res => {
+      const now = new Date(); now.setHours(0,0,0,0);
+      const count = (res.data||[]).filter(r => {
+        if (r.plate) return false;
+        if (!r.pickupDate) return false;
+        const diff = Math.ceil((new Date(r.pickupDate) - now) / (1000*60*60*24));
+        return diff >= 0 && diff <= 5;
+      }).length;
+      setUrgentCount(count);
+    }).catch(()=>{});
+  }, []);
 
   const loadHistory = async (name) => {
     setLoading(true);
@@ -122,7 +137,14 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
           </div>
           <nav className="sc-nav">
             <NavLink to="/"             style={navStyle} end>Fleet</NavLink>
-            <NavLink to="/reservations" style={navStyle}>Reservations</NavLink>
+            <NavLink to="/reservations" style={navStyle}>
+              Reservations
+              {urgentCount > 0 && (
+                <span style={{ marginLeft:6,background:"#dc2626",color:"#fff",fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,verticalAlign:"middle" }}>
+                  {urgentCount}
+                </span>
+              )}
+            </NavLink>
             <NavLink to="/history"      style={navStyle}>History</NavLink>
             <NavLink to="/clients"      style={navStyle}>Clients</NavLink>
             <NavLink to="/sub-hire"     style={navStyle}>Sub-Hire</NavLink>
