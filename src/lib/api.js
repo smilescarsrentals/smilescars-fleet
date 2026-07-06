@@ -35,6 +35,7 @@ export const api = {
   getCarHistory:         (plate)       => get("getCarHistory",     { plate }),
   getHistoryByStaff:     (staffName)   => get("getHistoryByStaff", { staffName }),
   getReservations:       (month, year) => get("getReservations", { month, year }),
+  getAllReservations:     ()            => get("getAllReservations"),
   getBlacklist:          ()            => get("getBlacklist"),
   uploadBlacklistImage:  (body)        => post({ action: "uploadBlacklistImage", ...body }),
   addToBlacklist:        (body)        => post({ action: "addToBlacklist",       ...body }),

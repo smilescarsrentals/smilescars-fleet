@@ -34,7 +34,8 @@ function doGet(e) {
     if (action === "getHistoryByStaff") return respond(getHistoryByStaff(e.parameter.staffName || ""));
     if (action === "getFuel")         return respond(getFuel());
     if (action === "getFuelByPlate")  return respond(getFuelByPlate(e.parameter.plate  || ""));
-    if (action === "getReservations") return respond(getReservations(e.parameter.month || "", e.parameter.year || ""));
+    if (action === "getReservations")    return respond(getReservations(e.parameter.month || "", e.parameter.year || ""));
+    if (action === "getAllReservations") return respond(getReservations("", ""));
     if (action === "getBlacklist")    return respond(getBlacklist());
     if (action === "testRole")        return respond(testRole(e.parameter.name         || ""));
     return respond({ error: "Unknown action: " + action });
@@ -1112,12 +1113,19 @@ function syncDropboxReset() {
 //                E=CarType, F=NumCars, G=PickUpFrom, H=Remarks,
 //                I=StaffName, J=Timestamp
 
+// Sheet columns: A=ID, B=Plate, C=CarType, D=ClientName, E=Phone,
+//                F=PickupDate, G=ReturnDate, H=PickUpFrom, I=Remarks,
+//                J=StaffName, K=Timestamp
+
 function getOrCreateReservationsSheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sh   = ss.getSheetByName(RESERVATIONS_SHEET);
   if (!sh) {
     sh = ss.insertSheet(RESERVATIONS_SHEET);
-    sh.getRange(1,1,1,10).setValues([["ID","Date","Client Name","Phone","Car Type","No. of Cars","Pick Up From","Remarks","Staff Name","Timestamp"]]).setFontWeight("bold");
+    sh.getRange(1,1,1,11).setValues([[
+      "ID","Plate","Car Type","Client Name","Phone",
+      "Pickup Date","Return Date","Pick Up From","Remarks","Staff Name","Timestamp"
+    ]]).setFontWeight("bold");
   }
   return sh;
 }
@@ -1128,36 +1136,45 @@ function getReservations(month, year) {
   if (rows.length <= 1) return { success: true, data: [] };
   const tz   = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
   const data = rows.slice(1).map(row => ({
-    id:         row[0] || "",
-    date:       row[1] ? Utilities.formatDate(new Date(row[1]), tz, "yyyy-MM-dd") : "",
-    client:     row[2] || "",
-    phone:      row[3] || "",
-    carType:    row[4] || "",
-    numCars:    row[5] || "",
-    pickUpFrom: row[6] || "",
-    remarks:    row[7] || "",
-    staffName:  row[8] || "",
-    timestamp:  row[9] ? Utilities.formatDate(new Date(row[9]), tz, "yyyy-MM-dd'T'HH:mm:ss") : "",
-  })).filter(r => r.id && r.date);
+    id:         row[0]  || "",
+    plate:      row[1]  || "",
+    carType:    row[2]  || "",
+    client:     row[3]  || "",
+    phone:      row[4]  || "",
+    pickupDate: row[5]  ? Utilities.formatDate(new Date(row[5]),  tz, "yyyy-MM-dd") : "",
+    returnDate: row[6]  ? Utilities.formatDate(new Date(row[6]),  tz, "yyyy-MM-dd") : "",
+    pickUpFrom: row[7]  || "",
+    remarks:    row[8]  || "",
+    staffName:  row[9]  || "",
+    timestamp:  row[10] ? Utilities.formatDate(new Date(row[10]), tz, "yyyy-MM-dd'T'HH:mm:ss") : "",
+  })).filter(r => r.id && r.pickupDate);
 
   if (month && year) {
     const m = String(month).padStart(2,"0");
     const y = String(year);
-    return { success: true, data: data.filter(r => r.date.startsWith(`${y}-${m}`)) };
+    return { success: true, data: data.filter(r => r.pickupDate.startsWith(`${y}-${m}`) || r.returnDate.startsWith(`${y}-${m}`)) };
   }
   return { success: true, data };
 }
 
 function addReservation(body) {
-  if (!body.date)   throw new Error("Date is required");
-  if (!body.client) throw new Error("Client name is required");
-  const sh  = getOrCreateReservationsSheet();
-  const id  = "RES-" + Utilities.getUuid().split("-")[0].toUpperCase();
+  if (!body.client)     throw new Error("Client name is required");
+  if (!body.pickupDate) throw new Error("Pickup date is required");
+  if (!body.returnDate) throw new Error("Return date is required");
+  const sh = getOrCreateReservationsSheet();
+  const id = "RES-" + Utilities.getUuid().split("-")[0].toUpperCase();
   sh.appendRow([
-    id, new Date(body.date), body.client,
-    body.phone||"", body.carType||"", body.numCars||"",
-    body.pickUpFrom||"", body.remarks||"",
-    body.staffName||"", new Date()
+    id,
+    body.plate      || "",
+    body.carType    || "",
+    body.client,
+    body.phone      || "",
+    new Date(body.pickupDate),
+    new Date(body.returnDate),
+    body.pickUpFrom || "",
+    body.remarks    || "",
+    body.staffName  || "",
+    new Date(),
   ]);
   return { success: true, id };
 }
@@ -1168,13 +1185,14 @@ function editReservation(body) {
   const rows = sh.getDataRange().getValues();
   const idx  = rows.findIndex(r => r[0] === body.id);
   if (idx < 1) throw new Error("Reservation not found");
-  if (body.date)       sh.getRange(idx+1,2).setValue(new Date(body.date));
-  if (body.client)     sh.getRange(idx+1,3).setValue(body.client);
-  if (body.phone      !== undefined) sh.getRange(idx+1,4).setValue(body.phone);
-  if (body.carType    !== undefined) sh.getRange(idx+1,5).setValue(body.carType);
-  if (body.numCars    !== undefined) sh.getRange(idx+1,6).setValue(body.numCars);
-  if (body.pickUpFrom !== undefined) sh.getRange(idx+1,7).setValue(body.pickUpFrom);
-  if (body.remarks    !== undefined) sh.getRange(idx+1,8).setValue(body.remarks);
+  if (body.plate      !== undefined) sh.getRange(idx+1, 2).setValue(body.plate);
+  if (body.carType    !== undefined) sh.getRange(idx+1, 3).setValue(body.carType);
+  if (body.client)                   sh.getRange(idx+1, 4).setValue(body.client);
+  if (body.phone      !== undefined) sh.getRange(idx+1, 5).setValue(body.phone);
+  if (body.pickupDate)               sh.getRange(idx+1, 6).setValue(new Date(body.pickupDate));
+  if (body.returnDate)               sh.getRange(idx+1, 7).setValue(new Date(body.returnDate));
+  if (body.pickUpFrom !== undefined) sh.getRange(idx+1, 8).setValue(body.pickUpFrom);
+  if (body.remarks    !== undefined) sh.getRange(idx+1, 9).setValue(body.remarks);
   return { success: true };
 }
 

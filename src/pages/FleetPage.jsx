@@ -40,10 +40,11 @@ const PAYMENT_STYLES = {
 export default function FleetPage({ staffName, role }) {
   const navigate = useNavigate();
   const canExportOrSell = role === "Admin" || role === "Manager";
-  const [fleet,     setFleet]     = useState([]);
-  const [config,    setConfig]    = useState({ staff:[], locations:[], garages:[], drivers:[] });
-  const [blacklist, setBlacklist] = useState([]);
-  const [loading,   setLoading]   = useState(true);
+  const [fleet,        setFleet]        = useState([]);
+  const [config,       setConfig]       = useState({ staff:[], locations:[], garages:[], drivers:[] });
+  const [blacklist,    setBlacklist]    = useState([]);
+  const [reservations, setReservations] = useState([]);
+  const [loading,      setLoading]      = useState(true);
   const [error,     setError]     = useState("");
   const [search,    setSearch]    = useState("");
   const [fStatus,   setFStatus]   = useState("");
@@ -68,9 +69,9 @@ export default function FleetPage({ staffName, role }) {
     }
     setLoading(true); setError("");
     try {
-      const [f, c, bl] = await Promise.all([api.getFleet(), api.getConfig(), api.getBlacklist()]);
+      const [f, c, bl, rv] = await Promise.all([api.getFleet(), api.getConfig(), api.getBlacklist(), api.getAllReservations()]);
       const fleetData = f.data || [];
-      setFleet(fleetData); setConfig(c); setBlacklist(bl.data || []);
+      setFleet(fleetData); setConfig(c); setBlacklist(bl.data || []); setReservations(rv.data || []);
       cache.set("fleet", fleetData); cache.set("config", c);
     } catch (e) { setError("Failed to load fleet: " + e.message); }
     finally { setLoading(false); }
@@ -86,6 +87,18 @@ export default function FleetPage({ staffName, role }) {
       daysUntil(c.returnDate) < 0
     ).length;
   }, [fleet, staffName]);
+
+  const todayStr2 = `${new Date().getFullYear()}-${pad(new Date().getMonth()+1)}-${pad(new Date().getDate())}`;
+
+  const reservationFor = (plate) => {
+    if (!plate) return null;
+    const norm = plate.trim().toLowerCase().replace(/\s/g,"");
+    return reservations.find(r => {
+      const rNorm = (r.plate||"").trim().toLowerCase().replace(/\s/g,"");
+      return rNorm === norm && r.pickupDate && r.returnDate &&
+        (r.pickupDate >= todayStr2 || (r.pickupDate <= todayStr2 && r.returnDate >= todayStr2));
+    }) || null;
+  };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500); };
 
@@ -336,8 +349,22 @@ export default function FleetPage({ staffName, role }) {
                     {car.location?<span style={{ fontSize:12,color:"#374151",background:"#f3f4f6",borderRadius:5,padding:"2px 8px" }}>{car.location}</span>:<span style={{ color:"#ccc" }}>—</span>}
                   </td>
                   <td data-label="Status" style={{ padding:"11px 12px" }}>
-                    <div><span style={{ display:"inline-block",fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:99,background:ss.bg,color:ss.color }}>{car.status}</span>
-                    {car.status==="Maintenance"&&car.garage&&<div style={{ fontSize:11,color:"#c2410c",marginTop:3,fontWeight:500 }}>🔧 {car.garage}</div>}</div>
+                    <div>
+                      <span style={{ display:"inline-block",fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:99,background:ss.bg,color:ss.color }}>{car.status}</span>
+                      {car.status==="Maintenance"&&car.garage&&<div style={{ fontSize:11,color:"#c2410c",marginTop:3,fontWeight:500 }}>🔧 {car.garage}</div>}
+                      {car.status==="Available" && (() => {
+                        const res = reservationFor(car.plate);
+                        if (!res) return null;
+                        const isActive = res.pickupDate <= todayStr2 && res.returnDate >= todayStr2;
+                        return (
+                          <div title={`Reserved for ${res.client} · ${res.pickupDate} → ${res.returnDate}`}
+                            style={{ fontSize:10,fontWeight:600,padding:"2px 7px",marginTop:4,borderRadius:99,display:"inline-block",background:isActive?"#ede9fe":"#f5f3ff",color:"#7c3aed",border:"1px solid #ddd6fe",whiteSpace:"nowrap" }}>
+                            {isActive ? "🟣 Reserved" : `📅 Rsv ${res.pickupDate}`}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </td>
                   </td>
                   <td data-label="Client" style={{ padding:"11px 12px" }}>
                     {car.currentClient
