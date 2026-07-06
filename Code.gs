@@ -1277,7 +1277,8 @@ function uploadBlacklistImage(body) {
   const file   = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   const fileId = file.getId();
-  return { success: true, url: `https://drive.google.com/uc?export=view&id=${fileId}`, fileId };
+  const url = `https://lh3.googleusercontent.com/d/${fileId}`;
+  return { success: true, url, fileId };
 }
 
 function getOrCreateBlacklistSheet() {
