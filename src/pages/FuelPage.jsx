@@ -191,7 +191,7 @@ function PlateSearch({ plates, value, onChange }) {
   const [focused, setFocused] = useState(false);
 
   const filtered = query.trim().length > 0
-    ? plates.filter(p => p.toLowerCase().replace(/\s/g,"").includes(query.toLowerCase().replace(/\s/g,"")))
+    ? plates.filter(p => p && p.toLowerCase().replace(/\s/g,"").includes(query.toLowerCase().replace(/\s/g,"")))
     : [];
 
   const select = (plate) => {
@@ -245,15 +245,17 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
 
   // Merge fleet + active sub-hire plates
   const allCars = useMemo(() => {
-    const subHireActive = (subHire || []).filter(s => s.status === "Active").map(s => ({
+    const subHireActive = (subHire || []).filter(s => s.status === "Active" && s.plate).map(s => ({
       plate: s.plate, type: s.type || "", status: "Sub-Hire",
-      currentClient: s.hiredTo || s.company || "", clientPhone: "", returnDate: s.returnDate, location: "", garage: "",
+      currentClient: s.hiredTo || s.company || "", clientPhone: "", returnDate: s.returnDate || "", location: "", garage: "",
     }));
     const seen = new Set();
-    return [...(fleet||[]), ...subHireActive].filter(c => { if(seen.has(c.plate)) return false; seen.add(c.plate); return true; });
+    return [...(fleet||[]).filter(c => c.plate), ...subHireActive].filter(c => {
+      if (seen.has(c.plate)) return false; seen.add(c.plate); return true;
+    });
   }, [fleet, subHire]);
 
-  const plateOptions = useMemo(() => allCars.map(c => c.plate).sort(), [allCars]);
+  const plateOptions = useMemo(() => allCars.map(c => c.plate).filter(Boolean).sort(), [allCars]);
 
   // Detect car state when plate is selected
   const carState = useMemo(() => {
