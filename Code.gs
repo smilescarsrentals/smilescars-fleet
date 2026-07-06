@@ -1161,8 +1161,25 @@ function addReservation(body) {
   if (!body.client)     throw new Error("Client name is required");
   if (!body.pickupDate) throw new Error("Pickup date is required");
   if (!body.returnDate) throw new Error("Return date is required");
-  const sh = getOrCreateReservationsSheet();
-  const id = "RES-" + Utilities.getUuid().split("-")[0].toUpperCase();
+  const sh   = getOrCreateReservationsSheet();
+  const tz   = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
+  const now  = new Date();
+  const year = Utilities.formatDate(now, tz, "yyyy");
+  const mon  = Utilities.formatDate(now, tz, "MM");
+  const prefix = `RES/SC/${year}/${mon}/`;
+
+  // Find highest number for this month prefix
+  const rows = sh.getDataRange().getValues();
+  let maxNum = 99;
+  rows.slice(1).forEach(row => {
+    const id = String(row[0] || "");
+    if (id.startsWith(prefix)) {
+      const num = parseInt(id.replace(prefix, ""), 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+    }
+  });
+  const id = prefix + (maxNum + 1);
+
   sh.appendRow([
     id,
     body.plate      || "",
@@ -1174,7 +1191,7 @@ function addReservation(body) {
     body.pickUpFrom || "",
     body.remarks    || "",
     body.staffName  || "",
-    new Date(),
+    now,
   ]);
   return { success: true, id };
 }
