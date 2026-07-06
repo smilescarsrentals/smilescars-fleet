@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -18,8 +19,9 @@ function fmtDate(d) {
 }
 
 export default function ReservationsPage({ staffName, role }) {
-  const canEdit = role === "Admin" || role === "Manager";
-  const today   = new Date();
+  const navigate = useNavigate();
+  const canEdit  = role === "Admin" || role === "Manager";
+  const today    = new Date();
   const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
 
   const [year,         setYear]         = useState(today.getFullYear());
@@ -157,7 +159,7 @@ export default function ReservationsPage({ staffName, role }) {
       )}
 
       {showAdd    && <AddModal    day={showAdd}    month={month} year={year} staffName={staffName} fleet={fleet} fleetTypes={fleetTypes} onClose={()=>setShowAdd(null)}    onSaved={()=>{setShowAdd(null);load();}} />}
-      {showDetail && <DetailModal res={showDetail} canEdit={canEdit} onClose={()=>setShowDetail(null)} onEdit={()=>{setShowEdit(showDetail);setShowDetail(null);}} onDeleted={()=>{setShowDetail(null);load();}} />}
+      {showDetail && <DetailModal res={showDetail} canEdit={canEdit} onClose={()=>setShowDetail(null)} onEdit={()=>{setShowEdit(showDetail);setShowDetail(null);}} onDeleted={()=>{setShowDetail(null);load();}} todayStr={todayStr} />}
       {showEdit   && <EditModal   res={showEdit}   fleet={fleet}  fleetTypes={fleetTypes} onClose={()=>setShowEdit(null)}   onSaved={()=>{setShowEdit(null);load();}} />}
     </div>
   );
@@ -165,13 +167,13 @@ export default function ReservationsPage({ staffName, role }) {
 
 // ── Plate Search ─────────────────────────────────────────────
 function PlateSearch({ fleet, value, carType, onChange }) {
-  const [query, setQuery]   = useState(value || "");
-  const [open,  setOpen]    = useState(false);
-
-  const filtered = query.trim().length > 0
-    ? fleet.filter(c => c.plate.toLowerCase().replace(/\s/g,"").includes(query.toLowerCase().replace(/\s/g,"")))
+  const [query, setQuery] = useState(value || "");
+  const [open,  setOpen]  = useState(false);
+  // Only show available cars
+  const available = fleet.filter(c => c.status === "Available");
+  const filtered  = query.trim().length > 0
+    ? available.filter(c => c.plate.toLowerCase().replace(/\s/g,"").includes(query.toLowerCase().replace(/\s/g,"")))
     : [];
-
   const select = (car) => { onChange(car.plate, car.type); setQuery(car.plate); setOpen(false); };
 
   return (
@@ -189,6 +191,33 @@ function PlateSearch({ fleet, value, carType, onChange }) {
               <span style={{ fontWeight:600 }}>{c.plate}</span>
               <span style={{ color:"#888" }}>{c.type} · {c.status}</span>
             </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Type Search ──────────────────────────────────────────────
+function TypeSearch({ fleetTypes, value, onChange }) {
+  const [query, setQuery] = useState(value || "");
+  const [open,  setOpen]  = useState(false);
+  const filtered = query.trim().length > 0
+    ? fleetTypes.filter(t => t.toLowerCase().includes(query.toLowerCase()))
+    : fleetTypes;
+  const select = (type) => { onChange(type); setQuery(type); setOpen(false); };
+  return (
+    <div style={{ position:"relative" }}>
+      <input style={{ ...S.input, background: value ? "#f5f3ff" : "#fff", paddingRight: value ? 32 : 11 }}
+        placeholder="Type car type…" value={query} autoComplete="off"
+        onChange={e => { setQuery(e.target.value); onChange(""); setOpen(true); }}
+        onFocus={() => setOpen(true)} onBlur={() => setTimeout(()=>setOpen(false),150)} />
+      {value && <span style={{ position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#7c3aed",fontWeight:700 }}>✓</span>}
+      {open && filtered.length > 0 && (
+        <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:8,boxShadow:"0 4px 12px rgba(0,0,0,0.1)",zIndex:50,maxHeight:200,overflowY:"auto" }}>
+          {filtered.map(t => (
+            <div key={t} style={{ padding:"9px 12px",cursor:"pointer",fontSize:13,borderBottom:"1px solid #f3f4f6" }}
+              onMouseDown={() => select(t)}>{t}</div>
           ))}
         </div>
       )}
@@ -243,10 +272,8 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
               onChange={(plate,type) => { set("plate",plate); if(type) set("carType",type); }} />
           </div>
           <div style={S.field}><label style={S.label}>Car Type *</label>
-            <select style={{ ...S.input,fontFamily:"inherit" }} value={form.carType} onChange={e=>set("carType",e.target.value)}>
-              <option value="">— Select car type —</option>
-              {(fleetTypes||[]).map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <TypeSearch fleetTypes={fleetTypes||[]} value={form.carType}
+              onChange={type => set("carType", type)} />
           </div>
 
           <div style={S.two}>
@@ -272,9 +299,12 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
 }
 
 // ── Detail Modal ─────────────────────────────────────────────
-function DetailModal({ res, canEdit, onClose, onEdit, onDeleted }) {
+function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr }) {
   const [deleting, setDeleting] = useState(false);
   const color = colorFor(res.plate||res.client);
+  const isToday    = res.pickupDate === todayStr;
+  const isActive   = res.pickupDate <= todayStr && res.returnDate >= todayStr;
+  const canCheckOut = (isToday || isActive) && res.plate;
 
   const handleDelete = async () => {
     if (!window.confirm("Delete this reservation?")) return;
@@ -310,8 +340,23 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted }) {
               <span style={{ color:"#111",textAlign:"right",marginLeft:12 }}>{val}</span>
             </div>
           ))}
+
+          {/* Check Out button for today's reservations */}
+          {canCheckOut && (
+            <a href={`/car/${encodeURIComponent(res.plate)}`}
+              onClick={onClose}
+              style={{ display:"block",textAlign:"center",marginTop:16,padding:"11px",fontSize:14,fontWeight:600,background:"#16a34a",color:"#fff",borderRadius:8,textDecoration:"none" }}>
+              🚗 Go to Car & Check Out
+            </a>
+          )}
+          {(isToday || isActive) && !res.plate && (
+            <div style={{ marginTop:12,padding:"10px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,fontSize:13,color:"#92400e",textAlign:"center" }}>
+              ⚠️ No car assigned yet — edit to assign a plate before checkout
+            </div>
+          )}
+
           {canEdit && (
-            <div style={{ display:"flex",gap:8,marginTop:16 }}>
+            <div style={{ display:"flex",gap:8,marginTop:12 }}>
               <button style={{ ...S.btn,background:"#f59e0b",flex:1 }} onClick={onEdit}>✏️ Edit</button>
               <button style={{ ...S.btn,background:"#dc2626",flex:1,opacity:deleting?0.65:1 }} onClick={handleDelete} disabled={deleting}>
                 {deleting?"Deleting…":"🗑 Delete"}
@@ -371,10 +416,8 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
               onChange={(plate,type) => { set("plate",plate); if(type) set("carType",type); }} />
           </div>
           <div style={S.field}><label style={S.label}>Car Type *</label>
-            <select style={{ ...S.input,fontFamily:"inherit" }} value={form.carType} onChange={e=>set("carType",e.target.value)}>
-              <option value="">— Select car type —</option>
-              {(fleetTypes||[]).map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <TypeSearch fleetTypes={fleetTypes||[]} value={form.carType}
+              onChange={type => set("carType", type)} />
           </div>
 
           <div style={S.two}>
