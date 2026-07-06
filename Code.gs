@@ -595,6 +595,7 @@ function getSubHire() {
       remarks:            row[23] || "",
       staffName:          row[24] || "",
       timestamp:          row[25] ? Utilities.formatDate(new Date(row[25]), tz, "yyyy-MM-dd'T'HH:mm:ss") : "",
+      plate:              row[26] || "",
     })),
   };
 }
@@ -621,8 +622,15 @@ function addSubHire(body) {
     body.policeFine   || "", body.parkingFine || "",
     body.remarks      || "", body.staffName,
     new Date(),
+    body.plate        || "",
   ]);
   return { success: true, id };
+}
+
+function addSubHirePlateHeader() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SUBHIRE_SHEET);
+  sheet.getRange(1, 27).setValue("Plate No.").setFontWeight("bold");
+  Logger.log("✅ Plate No. column added to SubHire sheet (column AA).");
 }
 
 function returnSubHire(body) {
