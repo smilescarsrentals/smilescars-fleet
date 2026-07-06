@@ -234,7 +234,7 @@ function PlateSearch({ plates, value, onChange }) {
 }
 
 // ── Add Fuel Modal ───────────────────────────────────────────
-function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
+function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
   const [form, setForm] = useState({
     date: todayStr(), plate: "", product: "Diesel", mode: "amount", amount: "", litres: "", remarks: "", currentKm: "",
   });
@@ -242,14 +242,27 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
   const [error,    setError]    = useState("");
   const [pdfReady, setPdfReady] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const plateOptions = [...fleet].map(c => c.plate).sort();
+
+  // Merge fleet + active sub-hire plates
+  const allCars = useMemo(() => {
+    const subHireActive = (subHire || []).filter(s => s.status === "Active").map(s => ({
+      plate: s.plate, type: s.type || "", status: "Sub-Hire",
+      currentClient: s.hiredTo || s.company || "", clientPhone: "", returnDate: s.returnDate, location: "", garage: "",
+    }));
+    const seen = new Set();
+    return [...(fleet||[]), ...subHireActive].filter(c => { if(seen.has(c.plate)) return false; seen.add(c.plate); return true; });
+  }, [fleet, subHire]);
+
+  const plateOptions = useMemo(() => allCars.map(c => c.plate).sort(), [allCars]);
 
   // Detect car state when plate is selected
   const carState = useMemo(() => {
     if (!form.plate) return null;
     const norm = form.plate.trim().toLowerCase().replace(/\s+/g, "");
-    const car  = fleet.find(c => c.plate.trim().toLowerCase().replace(/\s+/g, "") === norm);
+    const car  = allCars.find(c => c.plate.trim().toLowerCase().replace(/\s+/g, "") === norm);
     if (!car) return null;
+    if (car.status === "Sub-Hire")
+      return { type: "subhire", car, label: `Sub-Hire${car.currentClient ? ` — hired to: ${car.currentClient}` : ""}`, sub: car.returnDate ? `Return: ${car.returnDate}` : null, linkedClient: car.currentClient || "" };
     if (car.status === "Rented" && car.currentClient)
       return { type: "rented",    car, label: `Currently rented to: ${car.currentClient}`, sub: car.returnDate ? `Due back: ${car.returnDate}` : null, linkedClient: car.currentClient };
     if (car.status === "Staff Use" && car.currentClient)
@@ -391,6 +404,7 @@ function AddFuelModal({ fleet, staffName, onClose, onSaved }) {
               staff:    { bg:"#eff6ff", border:"#bfdbfe", color:"#1d4ed8", icon:"👤" },
               garage:   { bg:"#fff7ed", border:"#fed7aa", color:"#c2410c", icon:"🔧" },
               showroom: { bg:"#f0fdf4", border:"#bbf7d0", color:"#15803d", icon:"🏢" },
+              subhire:  { bg:"#f5f3ff", border:"#ddd6fe", color:"#7c3aed", icon:"🔄" },
             };
             const t = themes[carState.type];
             return (
@@ -596,6 +610,7 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
 
   const [entries,       setEntries]       = useState([]);
   const [fleet,         setFleet]         = useState([]);
+  const [subHire,       setSubHire]        = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [showAdd,       setShowAdd]       = useState(false);
   const [editEntry,     setEditEntry]     = useState(null);
@@ -608,9 +623,10 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [fuelRes, fleetRes] = await Promise.all([get("getFuel"), get("getFleet")]);
-      if (fuelRes.success)  setEntries(fuelRes.data  || []);
-      if (fleetRes.success) setFleet(fleetRes.data   || []);
+      const [fuelRes, fleetRes, subHireRes] = await Promise.all([get("getFuel"), get("getFleet"), get("getSubHire")]);
+      if (fuelRes.success)     setEntries(fuelRes.data   || []);
+      if (fleetRes.success)    setFleet(fleetRes.data    || []);
+      if (subHireRes.success)  setSubHire(subHireRes.data || []);
     } catch {}
     setLoading(false);
   }, []);
@@ -765,7 +781,7 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
       )}
       {showAdd && (
         <AddFuelModal
-          fleet={fleet} staffName={staffName}
+          fleet={fleet} subHire={subHire} staffName={staffName}
           onClose={() => setShowAdd(false)} onSaved={load} />
       )}
       {editEntry && (
