@@ -46,7 +46,7 @@ export default function FleetPage({ staffName, role }) {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const s = params.get("search");
-    if (s) setFSearch(s);
+    if (s) setSearch(s);
   }, [location.search]);
   const canExportOrSell = role === "Admin" || role === "Manager";
   const [fleet,        setFleet]        = useState([]);
