@@ -365,7 +365,6 @@ export default function FleetPage({ staffName, role }) {
                       })()}
                     </div>
                   </td>
-                  </td>
                   <td data-label="Client" style={{ padding:"11px 12px" }}>
                     {car.currentClient
                       ? <div>
