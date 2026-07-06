@@ -23,6 +23,7 @@ function fmtMoney(amount, currency) {
   if (!amount) return "—";
   return `${currency || "TZS"} ${Number(amount).toLocaleString()}`;
 }
+function pad(n) { return String(n).padStart(2,"0"); }
 
 const STATUS_STYLES = {
   Available:  { bg: "#dcfce7", color: "#15803d" },
