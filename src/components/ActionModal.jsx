@@ -67,6 +67,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const [assignedTo,    setAssignedTo]   = useState("");
   const [assignedQuery, setAssignedQuery]= useState("");
   const [assignedOpen,  setAssignedOpen] = useState(false);
+  const [blOverride,    setBlOverride]   = useState(false);
   const [err,           setErr]          = useState("");
 
   const cfg = ACTIONS[action] || { title: "", color: "#16a34a", btnLabel: "Confirm" };
@@ -147,21 +148,34 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
             {(() => {
               const normalize = str => (str||"").toLowerCase().trim();
               const words = str => normalize(str).split(/\s+/).filter(w => w.length >= 3);
-              const bl = (blacklist||[]).find(b => {
-                const blWords     = words(b.name);
-                const clientWords = words(client);
-                const nameMatch   = blWords.length > 0 && clientWords.length > 0 &&
-                  (blWords.some(w => normalize(client).includes(w)) ||
-                   clientWords.some(w => normalize(b.name).includes(w)));
-                const phoneMatch  = b.phone && clientPhone.trim() &&
+              const blMatch = (blacklist||[]).find(b => {
+                const blWords    = words(b.name);
+                const cWords     = words(client);
+                const matchCount = blWords.filter(w => normalize(client).includes(w)).length +
+                                   cWords.filter(w => normalize(b.name).includes(w)).length;
+                const phoneMatch = b.phone && clientPhone.trim() &&
                   clientPhone.replace(/\s/g,"").includes(b.phone.replace(/\s/g,""));
-                return nameMatch || phoneMatch;
+                return matchCount >= 1 || phoneMatch;
               });
+              if (!blMatch) return null;
+              return (
+                <div style={{ background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:10,padding:"14px 16px",marginBottom:8 }}>
+                  <div style={{ fontSize:14,fontWeight:700,color:"#b91c1c",marginBottom:4 }}>⛔ There is a person with this name on the Blacklist</div>
+                  <div style={{ fontSize:12,color:"#dc2626",marginBottom:6 }}>Please check and confirm before checking out.</div>
+                  {blMatch.licenseNo && <div style={{ fontSize:12,color:"#888",marginBottom:10 }}>License: <strong>{blMatch.licenseNo}</strong></div>}
+                  <label style={{ display:"flex",alignItems:"flex-start",gap:8,cursor:"pointer",fontSize:13,color:"#374151" }}>
+                    <input type="checkbox" checked={!!blOverride} onChange={e => setBlOverride(e.target.checked)}
+                      style={{ width:16,height:16,marginTop:1,cursor:"pointer",flexShrink:0 }} />
+                    I confirm this is a different person and want to proceed
+                  </label>
+                </div>
+              );
+            })()}
               return bl ? (
                 <div style={{ background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:10,padding:"14px 16px",marginBottom:8,textAlign:"center" }}>
                   <div style={{ fontSize:28,marginBottom:6 }}>⛔</div>
-                  <div style={{ fontSize:16,fontWeight:700,color:"#b91c1c",marginBottom:4 }}>This client is on the Blacklist</div>
-                  <div style={{ fontSize:12,color:"#dc2626" }}>Avoid renting cars to this person</div>
+                  <div style={{ fontSize:16,fontWeight:700,color:"#b91c1c",marginBottom:4 }}>There is a person with this name on the Blacklist</div>
+                  <div style={{ fontSize:12,color:"#dc2626" }}>Please check and confirm before checking out</div>
                   {bl.licenseNo && <div style={{ fontSize:12,color:"#888",marginTop:6 }}>License: {bl.licenseNo}</div>}
                 </div>
               ) : null;
@@ -366,21 +380,22 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
           {err && <p style={S.error}>{err}</p>}
           {(() => {
             const normalize = str => (str||"").toLowerCase().trim();
-            const words = str => normalize(str).split(/\s+/).filter(w => w.length >= 3);
-            const isBlocked = needsClient && (blacklist||[]).some(b => {
-              const blWords     = words(b.name);
-              const clientWords = words(client);
-              const nameMatch   = blWords.length > 0 && clientWords.length > 0 &&
-                (blWords.some(w => normalize(client).includes(w)) ||
-                 clientWords.some(w => normalize(b.name).includes(w)));
-              const phoneMatch  = b.phone && clientPhone.trim() &&
+            const words     = str => normalize(str).split(/\s+/).filter(w => w.length >= 3);
+            const hasMatch  = needsClient && (blacklist||[]).some(b => {
+              const matchCount = words(b.name).filter(w => normalize(client).includes(w)).length +
+                                 words(client).filter(w => normalize(b.name).includes(w)).length;
+              const phoneMatch = b.phone && clientPhone.trim() &&
                 clientPhone.replace(/\s/g,"").includes(b.phone.replace(/\s/g,""));
-              return nameMatch || phoneMatch;
+              return matchCount >= 1 || phoneMatch;
             });
+            const isBlocked = hasMatch && !blOverride;
             return (
-              <button style={{ ...S.confirmBtn, background: isBlocked ? "#9ca3af" : cfg.color, opacity: (loading||isBlocked) ? 0.65 : 1, cursor: isBlocked ? "not-allowed" : "pointer" }}
-                onClick={isBlocked ? undefined : handleSubmit} disabled={loading || isBlocked}>
-                {loading ? "Saving…" : isBlocked ? "⛔ Blocked — Client on Blacklist" : cfg.btnLabel}
+              <button style={{ ...S.confirmBtn, background: cfg.color,
+                opacity: (loading || isBlocked) ? 0.65 : 1,
+                cursor: isBlocked ? "not-allowed" : "pointer" }}
+                onClick={isBlocked ? undefined : handleSubmit}
+                disabled={loading || isBlocked}>
+                {loading ? "Saving…" : isBlocked ? "⚠️ Tick checkbox to confirm" : cfg.btnLabel}
               </button>
             );
           })()}
