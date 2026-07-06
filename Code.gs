@@ -739,15 +739,22 @@ function addFuel(body) {
   const rowCount = Math.max(sheet.getLastRow() - 1, 0); // subtract header
   const refNo    = "SC-FUEL-" + String(rowCount + 1).padStart(4, "0");
 
-  // Auto-lookup vehicle type from Fleet
+  // Auto-lookup vehicle type from Fleet, then SubHire
   let vehicleType = body.type || "";
   if (!vehicleType) {
     try {
-      const fleetRows = SpreadsheetApp.openById(SPREADSHEET_ID)
-        .getSheetByName(FLEET_SHEET).getDataRange().getValues();
-      const norm  = body.plate.trim().toLowerCase();
-      const match = fleetRows.slice(1).find(r => (r[0] || "").toString().trim().toLowerCase() === norm);
-      if (match) vehicleType = match[1] || "";
+      const norm      = body.plate.trim().toLowerCase();
+      const fleetRows = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(FLEET_SHEET).getDataRange().getValues();
+      const fleetMatch = fleetRows.slice(1).find(r => (r[0] || "").toString().trim().toLowerCase() === norm);
+      if (fleetMatch) vehicleType = fleetMatch[1] || "";
+    } catch(e) {}
+  }
+  if (!vehicleType) {
+    try {
+      const norm       = body.plate.trim().toLowerCase();
+      const shRows     = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SUBHIRE_SHEET).getDataRange().getValues();
+      const shMatch    = shRows.slice(1).find(r => (r[26] || "").toString().trim().toLowerCase() === norm);
+      if (shMatch) vehicleType = shMatch[4] || ""; // vehicleDesc is column E (index 4)
     } catch(e) {}
   }
 

@@ -245,10 +245,18 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
 
   // Merge fleet + active sub-hire plates
   const allCars = useMemo(() => {
-    const subHireActive = (subHire || []).filter(s => s.status === "Active" && s.plate).map(s => ({
-      plate: s.plate, type: s.type || "", status: "Sub-Hire",
-      currentClient: s.hiredTo || s.company || "", clientPhone: "", returnDate: s.returnDate || "", location: "", garage: "",
-    }));
+    const subHireActive = (subHire || [])
+      .filter(s => s.status === "Active" && s.plate)
+      .map(s => ({
+        plate:         s.plate,
+        type:          s.vehicleDesc || s.type || "",
+        status:        "Sub-Hire",
+        currentClient: s.client || "",
+        clientPhone:   s.clientPhone || "",
+        returnDate:    s.returnDate || "",
+        location:      s.location || "",
+        garage:        "",
+      }));
     const seen = new Set();
     return [...(fleet||[]).filter(c => c.plate), ...subHireActive].filter(c => {
       if (seen.has(c.plate)) return false; seen.add(c.plate); return true;
@@ -264,7 +272,7 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
     const car  = allCars.find(c => c.plate.trim().toLowerCase().replace(/\s+/g, "") === norm);
     if (!car) return null;
     if (car.status === "Sub-Hire")
-      return { type: "subhire", car, label: `Sub-Hire${car.currentClient ? ` — hired to: ${car.currentClient}` : ""}`, sub: car.returnDate ? `Return: ${car.returnDate}` : null, linkedClient: car.currentClient || "" };
+      return { type: "subhire", car, label: `Sub-Hire vehicle${car.currentClient ? ` — Client: ${car.currentClient}` : ""}`, sub: `${car.type ? car.type + (car.returnDate ? " · " : "") : ""}${car.returnDate ? `Return: ${car.returnDate}` : ""}` || null, linkedClient: car.currentClient || "" };
     if (car.status === "Rented" && car.currentClient)
       return { type: "rented",    car, label: `Currently rented to: ${car.currentClient}`, sub: car.returnDate ? `Due back: ${car.returnDate}` : null, linkedClient: car.currentClient };
     if (car.status === "Staff Use" && car.currentClient)
@@ -274,7 +282,7 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
     if ((car.location || "").toLowerCase().includes("showroom"))
       return { type: "showroom",  car, label: `Currently at showroom: ${car.location}`,    sub: null,                                                  linkedClient: car.location };
     return null;
-  }, [form.plate, fleet]);
+  }, [form.plate, allCars]);
 
   // Keep backward compat alias
   const currentRental = carState;
