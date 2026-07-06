@@ -33,6 +33,12 @@
       .sc-table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
       @media (max-width: 640px) {
+        .sc-blacklist-grid { grid-template-columns: repeat(2, 1fr) !important; }
+      }
+      @media (max-width: 400px) {
+        .sc-blacklist-grid { grid-template-columns: 1fr !important; }
+      }
+      @media (max-width: 640px) {
         .sc-header-inner { height: auto; flex-wrap: wrap; padding: 10px 1rem; gap: 8px; }
         .sc-brand-name   { font-size: 13px; }
         .sc-brand-sub    { display: none; }

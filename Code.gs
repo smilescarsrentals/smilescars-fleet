@@ -73,6 +73,7 @@ function doPost(e) {
     if (action === "editReservation")      return respond(editReservation(body));
     if (action === "deleteReservation")    return respond(deleteReservation(body));
     if (action === "addToBlacklist")       return respond(addToBlacklist(body));
+    if (action === "uploadBlacklistImage") return respond(uploadBlacklistImage(body));
     if (action === "deleteFromBlacklist")  return respond(deleteFromBlacklist(body));
     return respond({ error: "Unknown action: " + action });
   } catch (err) {
@@ -1249,16 +1250,42 @@ function replaceVehicle(body) {
 }
 
 // ── Blacklist ─────────────────────────────────────────────────
-// Sheet columns: A=ID, B=Name, C=Phone, D=LicenseNo, E=LicenseImageUrl, F=AddedBy, G=Timestamp
+// Sheet columns: A=ID, B=Name, C=Phone, D=LicenseNo, E=ImageUrl, F=AddedBy, G=Timestamp
 
-const BLACKLIST_SHEET = "Blacklist";
+const BLACKLIST_SHEET        = "Blacklist";
+const BLACKLIST_DRIVE_FOLDER = "SmilesCars/Blacklist Photos";
+
+function getBlacklistFolder() {
+  const parts  = BLACKLIST_DRIVE_FOLDER.split("/");
+  let   folder = DriveApp.getRootFolder();
+  for (const part of parts) {
+    const found = folder.getFoldersByName(part);
+    folder = found.hasNext() ? found.next() : folder.createFolder(part);
+  }
+  return folder;
+}
+
+function uploadBlacklistImage(body) {
+  if (!body.imageBase64) throw new Error("No image data provided");
+  if (!body.filename)    throw new Error("Filename required");
+  const folder = getBlacklistFolder();
+  const blob   = Utilities.newBlob(
+    Utilities.base64Decode(body.imageBase64),
+    body.mimeType || "image/jpeg",
+    body.filename
+  );
+  const file   = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  const fileId = file.getId();
+  return { success: true, url: `https://drive.google.com/uc?export=view&id=${fileId}`, fileId };
+}
 
 function getOrCreateBlacklistSheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sh   = ss.getSheetByName(BLACKLIST_SHEET);
   if (!sh) {
     sh = ss.insertSheet(BLACKLIST_SHEET);
-    sh.getRange(1,1,1,7).setValues([["ID","Name","Phone","License No","License Image URL","Added By","Timestamp"]]).setFontWeight("bold");
+    sh.getRange(1,1,1,8).setValues([["ID","Name","Phone","License No","Image URL","File ID","Added By","Timestamp"]]).setFontWeight("bold");
   }
   return sh;
 }
@@ -1268,32 +1295,27 @@ function getBlacklist() {
   const rows = sh.getDataRange().getValues();
   if (rows.length <= 1) return { success: true, data: [] };
   const tz   = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
-  const data = rows.slice(1).map(row => ({
-    id:              row[0] || "",
-    name:            row[1] || "",
-    phone:           row[2] || "",
-    licenseNo:       row[3] || "",
-    licenseImageUrl: row[4] || "",
-    addedBy:         row[5] || "",
-    timestamp:       row[6] ? Utilities.formatDate(new Date(row[6]), tz, "yyyy-MM-dd'T'HH:mm:ss") : "",
-  })).filter(r => r.id);
-  return { success: true, data };
+  return {
+    success: true,
+    data: rows.slice(1).map(row => ({
+      id:        row[0] || "",
+      name:      row[1] || "",
+      phone:     row[2] || "",
+      licenseNo: row[3] || "",
+      imageUrl:  row[4] || "",
+      fileId:    row[5] || "",
+      addedBy:   row[6] || "",
+      timestamp: row[7] ? Utilities.formatDate(new Date(row[7]), tz, "yyyy-MM-dd'T'HH:mm:ss") : "",
+    })).filter(r => r.id)
+  };
 }
 
 function addToBlacklist(body) {
   if (!body.name && !body.phone && !body.licenseNo)
-    throw new Error("At least one of name, phone or license number is required.");
-  const sh  = getOrCreateBlacklistSheet();
-  const id  = "BL-" + Utilities.getUuid().split("-")[0].toUpperCase();
-  sh.appendRow([
-    id,
-    body.name          || "",
-    body.phone         || "",
-    body.licenseNo     || "",
-    body.licenseImageUrl || "",
-    body.addedBy       || "",
-    new Date(),
-  ]);
+    throw new Error("At least name, phone or license number is required.");
+  const sh = getOrCreateBlacklistSheet();
+  const id = "BL-" + Utilities.getUuid().split("-")[0].toUpperCase();
+  sh.appendRow([id, body.name||"", body.phone||"", body.licenseNo||"", body.imageUrl||"", body.fileId||"", body.addedBy||"", new Date()]);
   return { success: true, id };
 }
 
@@ -1303,6 +1325,7 @@ function deleteFromBlacklist(body) {
   const rows = sh.getDataRange().getValues();
   const idx  = rows.findIndex(r => r[0] === body.id);
   if (idx < 1) throw new Error("Entry not found");
+  if (body.fileId) { try { DriveApp.getFileById(body.fileId).setTrashed(true); } catch {} }
   sh.deleteRow(idx + 1);
   return { success: true };
 }

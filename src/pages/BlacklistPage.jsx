@@ -1,26 +1,18 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../lib/api";
 
-function fmtDateTime(iso) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-TZ", { day:"2-digit", month:"short", year:"numeric" }) +
-    " " + d.toLocaleTimeString("en-TZ", { hour:"2-digit", minute:"2-digit" });
-}
-
 export default function BlacklistPage({ staffName, role }) {
   const canDelete = role === "Admin" || role === "Manager";
-  const [entries,  setEntries]  = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [search,   setSearch]   = useState("");
-  const [showAdd,  setShowAdd]  = useState(false);
-  const [selected, setSelected] = useState(null);
+  const [entries,   setEntries]   = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [search,    setSearch]    = useState("");
+  const [showAdd,   setShowAdd]   = useState(false);
+  const [lightbox,  setLightbox]  = useState(null); // selected entry for lightbox
 
   const load = async () => {
     setLoading(true);
     try { const res = await api.getBlacklist(); setEntries(res.data || []); }
-    catch {}
-    setLoading(false);
+    catch {} finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
 
@@ -34,151 +26,229 @@ export default function BlacklistPage({ staffName, role }) {
     );
   }, [entries, search]);
 
+  const handleDelete = async (entry) => {
+    if (!window.confirm(`Remove ${entry.name} from blacklist?`)) return;
+    try {
+      await api.deleteFromBlacklist({ id: entry.id, fileId: entry.fileId });
+      setLightbox(null);
+      load();
+    } catch(e) { alert(e.message); }
+  };
+
   return (
     <div>
+      {/* Header */}
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"1.25rem",flexWrap:"wrap",gap:12 }}>
         <div>
           <h2 style={{ fontSize:20,fontWeight:700,color:"#111",margin:0 }}>⛔ Blacklist</h2>
           <p style={{ fontSize:13,color:"#888",margin:"4px 0 0" }}>{entries.length} flagged {entries.length===1?"person":"people"}</p>
         </div>
         <button onClick={() => setShowAdd(true)}
-          style={{ padding:"8px 16px",fontSize:13,fontWeight:600,background:"#dc2626",color:"#fff",border:"none",borderRadius:7,cursor:"pointer" }}>
+          style={{ padding:"9px 18px",fontSize:13,fontWeight:600,background:"#dc2626",color:"#fff",border:"none",borderRadius:8,cursor:"pointer" }}>
           + Add to Blacklist
         </button>
       </div>
 
-      <div style={{ marginBottom:"1rem" }}>
+      {/* Search */}
+      <div style={{ marginBottom:"1.25rem" }}>
         <input style={{ width:"100%",maxWidth:360,padding:"9px 12px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:8,boxSizing:"border-box" }}
           placeholder="Search name, phone or license number…"
           value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
-      {loading ? <div style={{ textAlign:"center",padding:"3rem",color:"#666" }}>Loading…</div> : (
-        <div className="sc-table-wrap">
-          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-            <thead>
-              <tr>{["Name","Phone","License No","License Image","Added By","Date Added",""].map(h =>
-                <th key={h} style={{ padding:"10px 12px",textAlign:"left",fontSize:11,fontWeight:600,color:"#888",borderBottom:"1px solid #e5e7eb",background:"#fafafa",textTransform:"uppercase",letterSpacing:".4px",whiteSpace:"nowrap" }}>{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign:"center",padding:"2.5rem",color:"#aaa",fontSize:14 }}>
-                  {entries.length === 0 ? "No flagged persons yet." : "No results match your search."}
-                </td></tr>
-              )}
-              {filtered.map((e, i) => (
-                <tr key={e.id} style={{ borderBottom:"1px solid #f3f4f6" }}>
-                  <td data-label="Name" style={{ padding:"12px",fontWeight:600,fontSize:13,color:"#111" }}>
-                    <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-                      <span style={{ width:32,height:32,borderRadius:"50%",background:"#fee2e2",color:"#dc2626",fontSize:13,fontWeight:700,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
-                        {e.name.charAt(0).toUpperCase()}
-                      </span>
-                      {e.name}
-                    </div>
-                  </td>
-                  <td data-label="Phone" style={{ padding:"12px",color:"#555" }}>{e.phone||"—"}</td>
-                  <td data-label="License No" style={{ padding:"12px",fontFamily:"monospace",color:"#374151" }}>{e.licenseNo||"—"}</td>
-                  <td data-label="License Image" style={{ padding:"12px" }}>
-                    {e.licenseImageUrl
-                      ? <a href={e.licenseImageUrl} target="_blank" rel="noopener noreferrer"
-                          style={{ fontSize:12,fontWeight:600,color:"#2563eb",textDecoration:"none",background:"#eff6ff",padding:"3px 10px",borderRadius:6,border:"1px solid #bfdbfe" }}>
-                          View Image
-                        </a>
-                      : <span style={{ color:"#ccc",fontSize:12 }}>—</span>}
-                  </td>
-                  <td data-label="Added By" style={{ padding:"12px",fontSize:12,color:"#555" }}>{e.addedBy||"—"}</td>
-                  <td data-label="Date Added" style={{ padding:"12px",fontSize:12,color:"#888" }}>{fmtDateTime(e.timestamp)}</td>
-                  <td style={{ padding:"12px" }}>
-                    {canDelete && (
-                      <button onClick={() => setSelected(e)}
-                        style={{ fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid #dc2626",background:"#fef2f2",color:"#dc2626",cursor:"pointer",fontWeight:500 }}>
-                        Remove
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Gallery */}
+      {loading ? (
+        <div style={{ textAlign:"center",padding:"3rem",color:"#666" }}>Loading…</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign:"center",padding:"3rem",color:"#aaa",fontSize:14 }}>
+          {entries.length === 0 ? "No flagged persons yet." : "No results match your search."}
+        </div>
+      ) : (
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16 }} className="sc-blacklist-grid">
+          {filtered.map(entry => (
+            <div key={entry.id} onClick={() => setLightbox(entry)}
+              style={{ background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.08)",cursor:"pointer",border:"1px solid #e5e7eb",transition:"transform .15s,box-shadow .15s" }}
+              onMouseEnter={e => { e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,0.12)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.08)"; }}>
+
+              {/* License image */}
+              <div style={{ width:"100%",height:180,background:"#f3f4f6",overflow:"hidden",position:"relative" }}>
+                {entry.imageUrl ? (
+                  <img src={entry.imageUrl} alt="License" style={{ width:"100%",height:"100%",objectFit:"cover" }} />
+                ) : (
+                  <div style={{ width:"100%",height:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",color:"#d1d5db" }}>
+                    <div style={{ fontSize:40 }}>🪪</div>
+                    <div style={{ fontSize:11,marginTop:6 }}>No image</div>
+                  </div>
+                )}
+                {/* Blacklisted banner */}
+                <div style={{ position:"absolute",top:0,left:0,right:0,background:"rgba(220,38,38,0.85)",color:"#fff",fontSize:10,fontWeight:700,textAlign:"center",padding:"4px 0",letterSpacing:"1px" }}>
+                  ⛔ BLACKLISTED
+                </div>
+              </div>
+
+              {/* Info */}
+              <div style={{ padding:"12px" }}>
+                <div style={{ fontWeight:700,fontSize:14,color:"#111",marginBottom:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{entry.name||"—"}</div>
+                {entry.phone && <div style={{ fontSize:12,color:"#555",marginBottom:2 }}>📞 {entry.phone}</div>}
+                {entry.licenseNo && <div style={{ fontSize:12,color:"#374151",fontFamily:"monospace" }}>🪪 {entry.licenseNo}</div>}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      {showAdd   && <AddModal   staffName={staffName} onClose={()=>setShowAdd(false)}  onSaved={()=>{setShowAdd(false);load();}} />}
-      {selected  && <DeleteModal entry={selected}     onClose={()=>setSelected(null)} onDeleted={()=>{setSelected(null);load();}} />}
-    </div>
-  );
-}
+      {/* Add Modal */}
+      {showAdd && (
+        <AddModal staffName={staffName} onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />
+      )}
 
-function AddModal({ staffName, onClose, onSaved }) {
-  const [form,   setForm]   = useState({ name:"", phone:"", licenseNo:"", licenseImageUrl:"" });
-  const [saving, setSaving] = useState(false);
-  const [err,    setErr]    = useState("");
-  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+      {/* Lightbox */}
+      {lightbox && (
+        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}
+          onClick={() => setLightbox(null)}>
+          <div style={{ background:"#fff",borderRadius:16,overflow:"hidden",width:480,maxWidth:"100%",maxHeight:"90vh",display:"flex",flexDirection:"column" }}
+            onClick={e => e.stopPropagation()}>
 
-  const handleSave = async () => {
-    if (!form.name.trim() && !form.phone.trim() && !form.licenseNo.trim())
-      { setErr("At least one of name, phone or license number is required."); return; }
-    setSaving(true); setErr("");
-    try {
-      await api.addToBlacklist({ ...form, addedBy: staffName });
-      onSaved();
-    } catch(e) { setErr(e.message); }
-    finally { setSaving(false); }
-  };
+            {/* Lightbox image */}
+            <div style={{ background:"#111",minHeight:260,display:"flex",alignItems:"center",justifyContent:"center",position:"relative" }}>
+              {lightbox.imageUrl ? (
+                <img src={lightbox.imageUrl} alt="License" style={{ maxWidth:"100%",maxHeight:340,objectFit:"contain" }} />
+              ) : (
+                <div style={{ color:"#555",textAlign:"center",padding:"3rem" }}>
+                  <div style={{ fontSize:60 }}>🪪</div>
+                  <div style={{ fontSize:13,marginTop:8 }}>No image uploaded</div>
+                </div>
+              )}
+              <button onClick={() => setLightbox(null)}
+                style={{ position:"absolute",top:12,right:12,background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:16 }}>✕</button>
+              <div style={{ position:"absolute",top:0,left:0,right:0,background:"rgba(220,38,38,0.8)",color:"#fff",fontSize:11,fontWeight:700,textAlign:"center",padding:"5px 0",letterSpacing:"1px" }}>
+                ⛔ BLACKLISTED
+              </div>
+            </div>
 
-  return (
-    <div style={S.overlay} onClick={onClose}>
-      <div style={S.modal} onClick={e=>e.stopPropagation()}>
-        <div style={{ ...S.mHead,background:"#dc2626" }}>
-          <div><p style={S.mTitle}>⛔ Add to Blacklist</p></div>
-          <button style={S.closeBtn} onClick={onClose}>✕</button>
-        </div>
-        <div style={S.mBody}>
-          <div style={{ background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"10px 14px",marginBottom:16,fontSize:13,color:"#b91c1c" }}>
-            This person will be blocked from renting any car. Staff will see a hard block during checkout.
-          </div>
-          <div style={S.field}><label style={S.label}>Full Name</label>
-            <input style={S.input} value={form.name} onChange={e=>set("name",e.target.value)} placeholder="As on driving license" autoFocus /></div>
-          <div style={S.field}><label style={S.label}>Phone Number</label>
-            <input style={S.input} value={form.phone} onChange={e=>set("phone",e.target.value)} placeholder="+255..." /></div>
-          <div style={S.field}><label style={S.label}>License Number</label>
-            <input style={S.input} value={form.licenseNo} onChange={e=>set("licenseNo",e.target.value)} placeholder="Driving license number" /></div>
-          <div style={S.field}><label style={S.label}>License Image URL <span style={{ color:"#aaa",fontWeight:400 }}>(optional)</span></label>
-            <input style={S.input} value={form.licenseImageUrl} onChange={e=>set("licenseImageUrl",e.target.value)} placeholder="Dropbox or image link" /></div>
-          {err && <p style={S.err}>{err}</p>}
-          <button style={{ ...S.btn,background:"#dc2626",opacity:saving?0.65:1 }} onClick={handleSave} disabled={saving}>
-            {saving?"Adding…":"Add to Blacklist"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+            {/* Details */}
+            <div style={{ padding:"1.25rem" }}>
+              <h3 style={{ fontSize:18,fontWeight:700,color:"#111",margin:"0 0 12px" }}>{lightbox.name||"Unknown"}</h3>
+              {[
+                ["Phone",      lightbox.phone],
+                ["License No", lightbox.licenseNo],
+              ].map(([label, val]) => val ? (
+                <div key={label} style={{ display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f3f4f6",fontSize:13 }}>
+                  <span style={{ fontWeight:600,color:"#888",fontSize:12,textTransform:"uppercase",letterSpacing:".3px" }}>{label}</span>
+                  <span style={{ color:"#111" }}>{val}</span>
+                </div>
+              ) : null)}
 
-function DeleteModal({ entry, onClose, onDeleted }) {
-  const [deleting, setDeleting] = useState(false);
-  const handleDelete = async () => {
-    setDeleting(true);
-    try { await api.deleteFromBlacklist({ id: entry.id }); onDeleted(); }
-    catch(e) { alert(e.message); setDeleting(false); }
-  };
-  return (
-    <div style={S.overlay} onClick={onClose}>
-      <div style={{ ...S.modal,maxWidth:360 }} onClick={e=>e.stopPropagation()}>
-        <div style={S.mBody}>
-          <div style={{ textAlign:"center",padding:"1rem 0" }}>
-            <div style={{ fontSize:44,marginBottom:12 }}>🗑</div>
-            <h3 style={{ fontSize:16,fontWeight:700,color:"#111",margin:"0 0 8px" }}>Remove from Blacklist?</h3>
-            <p style={{ fontSize:14,color:"#555",margin:"0 0 4px" }}><strong>{entry.name}</strong></p>
-            <p style={{ fontSize:13,color:"#888",margin:"0 0 20px" }}>This person will be able to rent cars again.</p>
-            <div style={{ display:"flex",gap:8 }}>
-              <button style={{ ...S.btn,background:"#f3f4f6",color:"#555",flex:1,marginTop:0 }} onClick={onClose}>Cancel</button>
-              <button style={{ ...S.btn,background:"#dc2626",flex:1,marginTop:0,opacity:deleting?0.65:1 }} onClick={handleDelete} disabled={deleting}>
-                {deleting?"Removing…":"Yes, Remove"}
-              </button>
+              {canDelete && (
+                <button onClick={() => handleDelete(lightbox)}
+                  style={{ width:"100%",marginTop:16,padding:"11px",fontSize:14,fontWeight:600,background:"#dc2626",color:"#fff",border:"none",borderRadius:8,cursor:"pointer" }}>
+                  🗑 Remove from Blacklist
+                </button>
+              )}
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Add Modal ─────────────────────────────────────────────────
+function AddModal({ staffName, onClose, onSaved }) {
+  const [name,       setName]       = useState("");
+  const [phone,      setPhone]      = useState("");
+  const [licenseNo,  setLicenseNo]  = useState("");
+  const [imageFile,  setImageFile]  = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [saving,     setSaving]     = useState(false);
+  const [err,        setErr]        = useState("");
+  const [progress,   setProgress]   = useState("");
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setImagePreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    if (!name.trim() && !phone.trim() && !licenseNo.trim())
+      { setErr("Please enter at least a name, phone or license number."); return; }
+    setSaving(true); setErr(""); setProgress("");
+    try {
+      let imageUrl = ""; let fileId = "";
+
+      if (imageFile) {
+        setProgress("Uploading image…");
+        const base64 = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload  = () => res(r.result.split(",")[1]);
+          r.onerror = () => rej(new Error("Read failed"));
+          r.readAsDataURL(imageFile);
+        });
+        const upRes = await api.uploadBlacklistImage({
+          imageBase64: base64,
+          mimeType:    imageFile.type,
+          filename:    licenseNo ? `${licenseNo}.${imageFile.name.split(".").pop()}` : imageFile.name,
+        });
+        if (upRes.success) { imageUrl = upRes.url; fileId = upRes.fileId; }
+      }
+
+      setProgress("Saving…");
+      await api.addToBlacklist({ name, phone, licenseNo, imageUrl, fileId, addedBy: staffName });
+      onSaved();
+    } catch(e) { setErr(e.message); }
+    finally { setSaving(false); setProgress(""); }
+  };
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={S.modal} onClick={e => e.stopPropagation()}>
+        <div style={{ background:"#dc2626",padding:"1rem 1.25rem",borderRadius:"14px 14px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <p style={{ fontSize:16,fontWeight:700,color:"#fff",margin:0 }}>⛔ Add to Blacklist</p>
+          <button style={{ background:"rgba(255,255,255,0.25)",border:"none",color:"#fff",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14 }} onClick={onClose}>✕</button>
+        </div>
+        <div style={{ padding:"1.25rem" }}>
+          <div style={{ background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#b91c1c" }}>
+            This person will be hard-blocked during checkout — staff cannot proceed.
+          </div>
+
+          {/* Image upload */}
+          <div style={{ marginBottom:"1rem" }}>
+            <label style={S.label}>License Image</label>
+            <div style={{ border:"2px dashed #e5e7eb",borderRadius:10,overflow:"hidden",cursor:"pointer",position:"relative",background:"#fafafa",minHeight:160,display:"flex",alignItems:"center",justifyContent:"center" }}
+              onClick={() => document.getElementById("bl-image-input").click()}>
+              {imagePreview ? (
+                <img src={imagePreview} alt="Preview" style={{ width:"100%",maxHeight:200,objectFit:"cover" }} />
+              ) : (
+                <div style={{ textAlign:"center",color:"#9ca3af",padding:"1.5rem" }}>
+                  <div style={{ fontSize:36,marginBottom:8 }}>📷</div>
+                  <div style={{ fontSize:13,fontWeight:500 }}>Click to upload license image</div>
+                  <div style={{ fontSize:11,marginTop:4 }}>JPG, PNG, PDF</div>
+                </div>
+              )}
+              <input id="bl-image-input" type="file" accept="image/*,application/pdf"
+                style={{ display:"none" }} onChange={handleFileChange} />
+            </div>
+          </div>
+
+          <div style={S.field}><label style={S.label}>Full Name</label>
+            <input style={S.input} value={name} onChange={e=>setName(e.target.value)} placeholder="As on driving license" autoFocus /></div>
+          <div style={S.field}><label style={S.label}>Phone Number</label>
+            <input style={S.input} value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+255..." /></div>
+          <div style={S.field}><label style={S.label}>License Number</label>
+            <input style={S.input} value={licenseNo} onChange={e=>setLicenseNo(e.target.value)} placeholder="Driving license number" /></div>
+
+          {err      && <p style={{ color:"#dc2626",fontSize:13,margin:"6px 0" }}>{err}</p>}
+          {progress && <p style={{ color:"#888",fontSize:12,margin:"6px 0" }}>{progress}</p>}
+
+          <button style={{ width:"100%",padding:"11px",fontSize:14,fontWeight:600,color:"#fff",background:"#dc2626",border:"none",borderRadius:8,cursor:"pointer",marginTop:4,fontFamily:"inherit",opacity:saving?0.65:1 }}
+            onClick={handleSave} disabled={saving}>
+            {saving ? progress||"Saving…" : "Add to Blacklist"}
+          </button>
         </div>
       </div>
     </div>
@@ -188,13 +258,7 @@ function DeleteModal({ entry, onClose, onDeleted }) {
 const S = {
   overlay: { position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16 },
   modal:   { background:"#fff",borderRadius:14,width:440,maxWidth:"100%",maxHeight:"92vh",overflow:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" },
-  mHead:   { padding:"1rem 1.25rem",borderRadius:"14px 14px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center" },
-  mTitle:  { fontSize:16,fontWeight:700,color:"#fff",margin:0 },
-  closeBtn:{ background:"rgba(255,255,255,0.25)",border:"none",color:"#fff",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14 },
-  mBody:   { padding:"1.25rem" },
   field:   { marginBottom:"0.85rem" },
   label:   { fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:4 },
   input:   { width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",color:"#111",boxSizing:"border-box",fontFamily:"inherit" },
-  btn:     { width:"100%",padding:"11px",fontSize:14,fontWeight:600,color:"#fff",border:"none",borderRadius:8,cursor:"pointer",marginTop:4,fontFamily:"inherit" },
-  err:     { color:"#dc2626",fontSize:13,margin:"6px 0" },
 };
