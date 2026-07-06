@@ -145,9 +145,16 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
 
             {/* Blacklist check */}
             {(() => {
+              const normalize = str => (str||"").toLowerCase().trim();
+              const words = str => normalize(str).split(/\s+/).filter(w => w.length >= 3);
               const bl = (blacklist||[]).find(b => {
-                const nameMatch  = b.name  && client.trim()      && client.trim().toLowerCase().includes(b.name.toLowerCase());
-                const phoneMatch = b.phone && clientPhone.trim() && clientPhone.replace(/\s/g,"").includes(b.phone.replace(/\s/g,""));
+                const blWords     = words(b.name);
+                const clientWords = words(client);
+                const nameMatch   = blWords.length > 0 && clientWords.length > 0 &&
+                  (blWords.some(w => normalize(client).includes(w)) ||
+                   clientWords.some(w => normalize(b.name).includes(w)));
+                const phoneMatch  = b.phone && clientPhone.trim() &&
+                  clientPhone.replace(/\s/g,"").includes(b.phone.replace(/\s/g,""));
                 return nameMatch || phoneMatch;
               });
               return bl ? (
@@ -358,9 +365,16 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
 
           {err && <p style={S.error}>{err}</p>}
           {(() => {
+            const normalize = str => (str||"").toLowerCase().trim();
+            const words = str => normalize(str).split(/\s+/).filter(w => w.length >= 3);
             const isBlocked = needsClient && (blacklist||[]).some(b => {
-              const nameMatch  = b.name  && client.trim()      && client.trim().toLowerCase().includes(b.name.toLowerCase());
-              const phoneMatch = b.phone && clientPhone.trim() && clientPhone.replace(/\s/g,"").includes(b.phone.replace(/\s/g,""));
+              const blWords     = words(b.name);
+              const clientWords = words(client);
+              const nameMatch   = blWords.length > 0 && clientWords.length > 0 &&
+                (blWords.some(w => normalize(client).includes(w)) ||
+                 clientWords.some(w => normalize(b.name).includes(w)));
+              const phoneMatch  = b.phone && clientPhone.trim() &&
+                clientPhone.replace(/\s/g,"").includes(b.phone.replace(/\s/g,""));
               return nameMatch || phoneMatch;
             });
             return (
