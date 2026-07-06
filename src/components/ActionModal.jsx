@@ -171,15 +171,6 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 </div>
               );
             })()}
-              return bl ? (
-                <div style={{ background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:10,padding:"14px 16px",marginBottom:8,textAlign:"center" }}>
-                  <div style={{ fontSize:28,marginBottom:6 }}>⛔</div>
-                  <div style={{ fontSize:16,fontWeight:700,color:"#b91c1c",marginBottom:4 }}>There is a person with this name on the Blacklist</div>
-                  <div style={{ fontSize:12,color:"#dc2626" }}>Please check and confirm before checking out</div>
-                  {bl.licenseNo && <div style={{ fontSize:12,color:"#888",marginTop:6 }}>License: {bl.licenseNo}</div>}
-                </div>
-              ) : null;
-            })()}
             <div style={S.two}>
               <div style={S.field}><label style={S.label}>Booked From *</label>
                 <input style={S.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} /></div>
