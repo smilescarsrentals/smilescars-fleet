@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../lib/api";
+import { toTitleCase } from "../lib/textFormat";
 
 export default function AddCarModal({ locations, onClose, onSaved }) {
   const [plate,    setPlate]    = useState("");
@@ -42,7 +43,7 @@ export default function AddCarModal({ locations, onClose, onSaved }) {
           </div>
           <div style={S.field}>
             <label style={S.label}>Type *</label>
-            <input style={S.input} value={type} onChange={e=>setType(e.target.value)} placeholder="e.g. Harrier" />
+            <input style={S.input} value={type} onChange={e=>setType(e.target.value)} onBlur={e=>setType(toTitleCase(e.target.value))} placeholder="e.g. Harrier" />
           </div>
           <div style={S.field}>
             <label style={S.label}>Location *</label>
@@ -51,7 +52,7 @@ export default function AddCarModal({ locations, onClose, onSaved }) {
                 {locations.map(l => <option key={l}>{l}</option>)}
               </select>
             ) : (
-              <input style={S.input} value={location} onChange={e=>setLocation(e.target.value)} placeholder="e.g. Dar Es Salaam" />
+              <input style={S.input} value={location} onChange={e=>setLocation(e.target.value)} onBlur={e=>setLocation(toTitleCase(e.target.value))} placeholder="e.g. Dar Es Salaam" />
             )}
           </div>
 

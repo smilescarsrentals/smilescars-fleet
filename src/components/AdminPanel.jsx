@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../lib/api";
 import AddCarModal from "./AddCarModal";
+import { toTitleCase } from "../lib/textFormat";
 
 const TABS = [
   { key: "fleet",    label: "Fleet"    },
@@ -108,6 +109,7 @@ function ConfigListEditor({ title, type, values, onChanged }) {
             {editing === v ? (
               <input style={{ ...S.input, flex: 1 }} value={editText} autoFocus
                 onChange={e => setEditText(e.target.value)}
+                onBlur={e => setEditText(toTitleCase(e.target.value))}
                 onKeyDown={e => e.key === "Enter" && rename(v)} />
             ) : (
               <span style={{ flex: 1, fontSize: 13 }}>{v}</span>
@@ -130,7 +132,7 @@ function ConfigListEditor({ title, type, values, onChanged }) {
       {adding ? (
         <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
           <input style={{ ...S.input, flex: 1 }} value={newValue} autoFocus placeholder={`New ${title.slice(0, -1).toLowerCase()}…`}
-            onChange={e => setNewValue(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />
+            onChange={e => setNewValue(e.target.value)} onBlur={e => setNewValue(toTitleCase(e.target.value))} onKeyDown={e => e.key === "Enter" && add()} />
           <button type="button" style={S.miniBtn} disabled={busy} onClick={add}>Add</button>
           <button type="button" style={S.miniBtn} disabled={busy} onClick={() => { setAdding(false); setNewValue(""); }}>✕</button>
         </div>
@@ -211,7 +213,7 @@ function AddStaffModal({ onClose, onSaved }) {
         <div style={S.head}><p style={S.title}>Add Staff</p><button type="button" style={S.closeBtn} onClick={onClose}>✕</button></div>
         <div style={S.body}>
           <div style={S.field}><label style={S.label}>Name *</label>
-            <input style={S.input} value={name} onChange={e => setName(e.target.value)} autoFocus /></div>
+            <input style={S.input} value={name} onChange={e => setName(e.target.value)} onBlur={e => setName(toTitleCase(e.target.value))} autoFocus /></div>
           <div style={S.field}><label style={S.label}>Password</label>
             <input style={S.input} value={password} onChange={e => setPassword(e.target.value)} /></div>
           <div style={S.field}><label style={S.label}>Role</label>

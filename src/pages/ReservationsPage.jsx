@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { toTitleCase } from "../lib/textFormat";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const COLORS  = ["#3b82f6","#16a34a","#d97706","#dc2626","#7c3aed","#0284c7","#be185d","#b45309"];
@@ -267,7 +268,7 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
           <div style={S.field}><label style={S.label}>Staff</label><div style={S.readOnly}>{staffName}</div></div>
 
           <div style={S.field}><label style={S.label}>Client Name *</label>
-            <input style={S.input} value={form.client} onChange={e=>set("client",e.target.value)} placeholder="Full name" autoFocus /></div>
+            <input style={S.input} value={form.client} onChange={e=>set("client",e.target.value)} onBlur={e=>set("client",toTitleCase(e.target.value))} placeholder="Full name" autoFocus /></div>
           <div style={S.field}><label style={S.label}>Contact No.</label>
             <input style={S.input} value={form.phone} onChange={e=>set("phone",e.target.value)} placeholder="+255..." /></div>
 
@@ -290,7 +291,7 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
           </div>
 
           <div style={S.field}><label style={S.label}>Pick Up Location</label>
-            <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} placeholder="e.g. Airport, Hotel name" /></div>
+            <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} onBlur={e=>set("pickUpFrom",toTitleCase(e.target.value))} placeholder="e.g. Airport, Hotel name" /></div>
           <div style={S.field}><label style={S.label}>Remarks</label>
             <textarea style={S.textarea} rows={2} value={form.remarks} onChange={e=>set("remarks",e.target.value)} placeholder="Any special notes…" /></div>
 
@@ -414,7 +415,7 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
         </div>
         <div style={S.mBody}>
           <div style={S.field}><label style={S.label}>Client Name *</label>
-            <input style={S.input} value={form.client} onChange={e=>set("client",e.target.value)} autoFocus /></div>
+            <input style={S.input} value={form.client} onChange={e=>set("client",e.target.value)} onBlur={e=>set("client",toTitleCase(e.target.value))} autoFocus /></div>
           <div style={S.field}><label style={S.label}>Contact No.</label>
             <input style={S.input} value={form.phone} onChange={e=>set("phone",e.target.value)} /></div>
 
@@ -436,7 +437,7 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
               <input style={S.input} type="date" value={form.returnDate} min={form.pickupDate} onChange={e=>set("returnDate",e.target.value)} /></div>
           </div>
           <div style={S.field}><label style={S.label}>Pick Up Location</label>
-            <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} /></div>
+            <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} onBlur={e=>set("pickUpFrom",toTitleCase(e.target.value))} /></div>
           <div style={S.field}><label style={S.label}>Remarks</label>
             <textarea style={S.textarea} rows={2} value={form.remarks} onChange={e=>set("remarks",e.target.value)} /></div>
 

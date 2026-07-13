@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toTitleCase } from "../lib/textFormat";
 
 const ACTIONS = {
   checkOut:       { title: "Check Out Car",      color: "#16a34a", btnLabel: "Confirm Check Out"  },
@@ -128,7 +129,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
         </select>
       ) : (
         <div style={{ display: "flex", gap: 6 }}>
-          <input style={{ ...S.input, flex: 1 }} placeholder="New location name" value={newLoc} onChange={e => setNewLoc(e.target.value)} autoFocus />
+          <input style={{ ...S.input, flex: 1 }} placeholder="New location name" value={newLoc} onChange={e => setNewLoc(e.target.value)} onBlur={e => setNewLoc(toTitleCase(e.target.value))} autoFocus />
           <button type="button" style={S.cancelSmall} onClick={() => setAddingLoc(false)}>✕</button>
         </div>
       )}
@@ -148,7 +149,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
           {/* Check Out */}
           {needsClient && (<>
             <div style={S.field}><label style={S.label}>Client Name *</label>
-              <input style={S.input} value={client} onChange={e => setClient(e.target.value)} placeholder="Full name" autoFocus /></div>
+              <input style={S.input} value={client} onChange={e => setClient(e.target.value)} onBlur={e => setClient(toTitleCase(e.target.value))} placeholder="Full name" autoFocus /></div>
             <div style={S.field}><label style={S.label}>Client Phone</label>
               <input style={S.input} value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="+255..." /></div>
 
@@ -212,7 +213,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 </select>
               ) : (
                 <div style={{ display:"flex", gap:6 }}>
-                  <input style={{ ...S.input, flex:1 }} placeholder="Driver name" value={newDriver} onChange={e => setNewDriver(e.target.value)} autoFocus />
+                  <input style={{ ...S.input, flex:1 }} placeholder="Driver name" value={newDriver} onChange={e => setNewDriver(e.target.value)} onBlur={e => setNewDriver(toTitleCase(e.target.value))} autoFocus />
                   <button type="button" style={S.cancelSmall} onClick={() => setAddingDriver(false)}>✕</button>
                 </div>
               )}
@@ -304,7 +305,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 </select>
               ) : (
                 <div style={{ display:"flex", gap:6 }}>
-                  <input style={{ ...S.input, flex:1 }} placeholder="New garage name" value={newGarage} onChange={e => setNewGarage(e.target.value)} autoFocus />
+                  <input style={{ ...S.input, flex:1 }} placeholder="New garage name" value={newGarage} onChange={e => setNewGarage(e.target.value)} onBlur={e => setNewGarage(toTitleCase(e.target.value))} autoFocus />
                   <button type="button" style={S.cancelSmall} onClick={() => setAddingGarage(false)}>✕</button>
                 </div>
               )}
