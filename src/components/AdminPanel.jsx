@@ -246,7 +246,7 @@ function FeaturesTab() {
   const toggleAgreement = async () => {
     setBusy(true);
     try {
-      const next = settings.RentalAgreementEnabled === "TRUE" ? "FALSE" : "TRUE";
+      const next = String(settings.RentalAgreementEnabled).trim().toUpperCase() === "TRUE" ? "FALSE" : "TRUE";
       await api.updateSetting({ key: "RentalAgreementEnabled", value: next });
       setSettings(s => ({ ...s, RentalAgreementEnabled: next }));
     } catch (e) { alert(e.message); }
@@ -263,7 +263,7 @@ function FeaturesTab() {
 
   if (!settings || syncOn === null) return <p style={{ fontSize: 13, color: "#888" }}>Loading…</p>;
 
-  const agreementOn = settings.RentalAgreementEnabled === "TRUE";
+  const agreementOn = String(settings.RentalAgreementEnabled).trim().toUpperCase() === "TRUE";
 
   return (
     <div>

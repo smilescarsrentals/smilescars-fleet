@@ -141,15 +141,21 @@ export default function FleetPage({ staffName, role }) {
           }
         }
         setModal(null);
-        cache.clear();
-        load(true).catch(() => {}); // refresh in the background, don't block opening the agreement
-        // Rental Agreement generation can be toggled off from the Admin Panel —
-        // fetched fresh (not cached) so a toggle takes effect immediately.
+        // Check the setting BEFORE kicking off load(true)'s 4 parallel calls —
+        // Apps Script handles simultaneous requests to the same URL poorly,
+        // and this getSettings call was silently losing that race, always
+        // falling back to "enabled" no matter what the toggle actually said.
         let agreementEnabled = true;
         try {
           const s = await api.getSettings();
-          agreementEnabled = s.settings.RentalAgreementEnabled !== "FALSE";
-        } catch {}
+          // Robust to Sheets ever returning an actual boolean instead of the
+          // string "FALSE" — compare against a normalized uppercase string.
+          agreementEnabled = String(s.settings.RentalAgreementEnabled).trim().toUpperCase() !== "FALSE";
+        } catch (err) {
+          console.warn("getSettings failed, defaulting Rental Agreement to enabled:", err);
+        }
+        cache.clear();
+        load(true).catch(() => {}); // refresh in the background, doesn't block opening the agreement
         if (agreementEnabled) {
           setAgreement({ car, checkout: payload });
         } else {
