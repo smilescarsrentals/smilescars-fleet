@@ -146,10 +146,10 @@ export default function FleetPage({ staffName, role }) {
         // Rental Agreement generation can be toggled off from the Admin Panel —
         // fetched fresh (not cached) so a toggle takes effect immediately.
         let agreementEnabled = true;
-        try {
-          const s = await api.getSettings();
-          agreementEnabled = s.settings.RentalAgreementEnabled !== "FALSE";
-        } catch {}
+try {
+  const s = await api.getSettings();
+  agreementEnabled = s.settings.RentalAgreementEnabled !== "FALSE";
+} catch {}
         if (agreementEnabled) {
           setAgreement({ car, checkout: payload });
         } else {
