@@ -7,6 +7,7 @@ import ActionModal from "../components/ActionModal";
 import MoveCarModal from "../components/MoveCarModal";
 import RentalAgreementModal from "../components/RentalAgreementModal";
 import AddCarModal from "../components/AddCarModal";
+import MultiSelect from "../components/MultiSelect";
 
 function fmtDate(val) {
   if (!val) return "—";
@@ -58,9 +59,9 @@ export default function FleetPage({ staffName, role }) {
   const [loading,      setLoading]      = useState(true);
   const [error,     setError]     = useState("");
   const [search,    setSearch]    = useState("");
-  const [fStatus,   setFStatus]   = useState("");
-  const [fLocation, setFLocation] = useState("");
-  const [fType,     setFType]     = useState("");
+  const [fStatus,   setFStatus]   = useState([]);
+  const [fLocation, setFLocation] = useState([]);
+  const [fType,     setFType]     = useState([]);
   const [view,      setView]      = useState("all");
   const [expiringFilter, setExpiringFilter] = useState("all"); // all | overdue | soon
   const [modal,        setModal]        = useState(null);
@@ -268,9 +269,9 @@ export default function FleetPage({ staffName, role }) {
     const q = search.toLowerCase();
     return baseList.filter(c =>
       (!q || c.plate.toLowerCase().includes(q) || c.type.toLowerCase().includes(q) || (c.currentClient||"").toLowerCase().includes(q)) &&
-      (!fStatus   || c.status   === fStatus) &&
-      (!fLocation || c.location === fLocation) &&
-      (!fType     || c.type     === fType)
+      (fStatus.length===0   || fStatus.includes(c.status)) &&
+      (fLocation.length===0 || fLocation.includes(c.location)) &&
+      (fType.length===0     || fType.includes(c.type))
     );
   }, [baseList, search, fStatus, fLocation, fType]);
 
@@ -310,10 +311,10 @@ export default function FleetPage({ staffName, role }) {
             onClick={() => {
               if (s.view !== "all") {
                 setView(s.view);
-                setFStatus("");
+                setFStatus([]);
                 setExpiringFilter("all");
               } else {
-                setFStatus(fStatus === s.label ? "" : s.label);
+                setFStatus(fStatus.length===1 && fStatus[0]===s.label ? [] : [s.label]);
                 setView("all");
               }
               setPage(1);
@@ -350,20 +351,13 @@ export default function FleetPage({ staffName, role }) {
       <div className="sc-filter-row">
         <input style={{ ...sel,width:220 }} className="sc-search" placeholder="Search plate, type or client…"
           value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} />
-        <select style={sel} value={fStatus} onChange={e=>{setFStatus(e.target.value);setPage(1);}}>
-          <option value="">All statuses</option>
-          {["Available","Rented","Staff Use","Maintenance"].map(s=><option key={s}>{s}</option>)}
-        </select>
-        <select style={sel} value={fLocation} onChange={e=>{setFLocation(e.target.value);setPage(1);}}>
-          <option value="">All locations</option>{locations.map(l=><option key={l}>{l}</option>)}
-        </select>
-        <select style={sel} value={fType} onChange={e=>{setFType(e.target.value);setPage(1);}}>
-          <option value="">All types</option>{types.map(t=><option key={t}>{t}</option>)}
-        </select>
-        {(search||fStatus||fLocation||fType) && <button type="button" style={{ ...sel,cursor:"pointer" }} onClick={()=>{setSearch("");setFStatus("");setFLocation("");setFType("");setPage(1);}}>Clear</button>}
+        <MultiSelect style={sel} label="All statuses" options={["Available","Rented","Staff Use","Maintenance"]} selected={fStatus} onChange={v=>{setFStatus(v);setPage(1);}} />
+        <MultiSelect style={sel} label="All locations" options={locations} selected={fLocation} onChange={v=>{setFLocation(v);setPage(1);}} />
+        <MultiSelect style={sel} label="All types" options={types} selected={fType} onChange={v=>{setFType(v);setPage(1);}} />
+        {(search||fStatus.length||fLocation.length||fType.length) && <button type="button" style={{ ...sel,cursor:"pointer" }} onClick={()=>{setSearch("");setFStatus([]);setFLocation([]);setFType([]);setPage(1);}}>Clear</button>}
         <span style={{ fontSize:12,color:"#888",marginLeft:"auto" }}>
-          {(search||fStatus||fLocation||fType||view!=="all")
-            ? `${filtered.length} ${[fStatus,fLocation,fType,view==="expiring"?"Expiring/Expired":view==="unpaid"?"Unpaid":view==="staffuse"?"Staff Use":""].filter(Boolean).join(" · ")}`
+          {(search||fStatus.length||fLocation.length||fType.length||view!=="all")
+            ? `${filtered.length} ${[...fStatus,...fLocation,...fType,view==="expiring"?"Expiring/Expired":view==="unpaid"?"Unpaid":view==="staffuse"?"Staff Use":""].filter(Boolean).join(" · ")}`
             : `${fleet.length} cars total`}
         </span>
         {canExportOrSell && <button type="button" style={{ padding:"8px 12px",fontSize:13,border:"1.5px solid #16a34a",borderRadius:7,background:"#f0fdf4",cursor:"pointer",color:"#15803d",fontWeight:500 }} onClick={handleExport}>⬇ Export</button>}

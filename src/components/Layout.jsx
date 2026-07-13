@@ -225,25 +225,25 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
           Own reservations show full detail; Admin/Manager additionally see a
           count-only line for other staff's upcoming reservations. */}
       {(myUpcoming.length > 0 || othersUpcomingCount > 0) && (
-        <div style={{ background:"#fffbeb", borderBottom:"1.5px solid #fde68a", padding:"8px 16px" }}>
+        <div style={{ background:"#fef2f2", borderBottom:"1.5px solid #fca5a5", padding:"8px 16px" }}>
           <div style={{ maxWidth:1200, margin:"0 auto" }}>
             {myUpcoming.map(r => {
               const now    = new Date(); now.setHours(0,0,0,0);
               const diff   = Math.ceil((new Date(r.pickupDate) - now) / (1000*60*60*24));
               return (
-                <div key={r.id} style={{ fontSize:13, color:"#92400e", display:"flex", alignItems:"center", gap:8, padding:"2px 0" }}>
+                <div key={r.id} style={{ fontSize:15, fontWeight:700, color:"#dc2626", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"3px 0", textAlign:"center" }}>
                   <span>⏰</span>
-                  <span style={{ fontWeight:700 }}>{diff===0?"Today":"Tomorrow"}:</span>
-                  <span style={{ fontWeight:600 }}>{r.client}</span>
-                  <span style={{ color:"#b45309" }}>·</span>
+                  <span>{diff===0?"Today":"Tomorrow"}:</span>
+                  <span>{r.client}</span>
+                  <span>·</span>
                   <span>{r.plate || r.carType || "Any"}</span>
-                  <span style={{ color:"#b45309" }}>·</span>
+                  <span>·</span>
                   <span>pickup not yet checked out</span>
                 </div>
               );
             })}
             {canViewAll && othersUpcomingCount > 0 && (
-              <div style={{ fontSize:12, color:"#b45309", padding:"2px 0" }}>
+              <div style={{ fontSize:14, fontWeight:700, color:"#dc2626", padding:"3px 0", textAlign:"center" }}>
                 + {othersUpcomingCount} other upcoming reservation{othersUpcomingCount>1?"s":""} from other staff
               </div>
             )}
