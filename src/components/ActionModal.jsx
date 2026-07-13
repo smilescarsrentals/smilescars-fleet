@@ -35,7 +35,7 @@ function FineInput({ value, onChange, label }) {
   );
 }
 
-export default function ActionModal({ car, action, locations, garages, drivers, staff, staffName, role, blacklist, onConfirm, onClose, loading }) {
+export default function ActionModal({ car, action, locations, garages, drivers, staff, staffName, role, blacklist, onConfirm, onClose, loading, embedded }) {
   const today = new Date().toISOString().split("T")[0];
   const canAddLocGarage = role === "Admin" || role === "Manager";
 
@@ -73,6 +73,15 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const cfg = ACTIONS[action] || { title: "", color: "#16a34a", btnLabel: "Confirm" };
   const sel = { ...S.input, fontFamily: "inherit" };
 
+  // Guards against duplicate rows in the Config sheet (e.g. the same driver or
+  // staff name listed twice) causing React "duplicate key" warnings, which can
+  // destabilize this component's identity mid-render and reset its state.
+  const uniq = (arr) => Array.from(new Set((arr || []).filter(Boolean)));
+  const locationsList = uniq(locations);
+  const garagesList   = uniq(garages);
+  const driversList   = uniq(drivers);
+  const staffList     = uniq(staff);
+
   const needsClient   = action === "checkOut";
   const isExtend      = action === "extendBooking";
   const isReturn      = action === "markReturned";
@@ -82,8 +91,8 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const isStaffUse    = action === "setStaffUse";
 
   const filteredStaff = assignedQuery.trim()
-    ? (staff || []).filter(s => s.toLowerCase().includes(assignedQuery.toLowerCase()))
-    : (staff || []);
+    ? staffList.filter(s => s.toLowerCase().includes(assignedQuery.toLowerCase()))
+    : staffList;
 
   const handleSubmit = () => {
     setErr("");
@@ -114,24 +123,23 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
       {!addingLoc ? (
         <select style={sel} value={location} onChange={e => { if (e.target.value === "__new__") setAddingLoc(true); else setLocation(e.target.value); }}>
           <option value="">— Select —</option>
-          {(locations || []).map(l => <option key={l}>{l}</option>)}
+          {locationsList.map(l => <option key={l}>{l}</option>)}
           {canAddLocGarage && <option value="__new__">+ Add new location</option>}
         </select>
       ) : (
         <div style={{ display: "flex", gap: 6 }}>
           <input style={{ ...S.input, flex: 1 }} placeholder="New location name" value={newLoc} onChange={e => setNewLoc(e.target.value)} autoFocus />
-          <button style={S.cancelSmall} onClick={() => setAddingLoc(false)}>✕</button>
+          <button type="button" style={S.cancelSmall} onClick={() => setAddingLoc(false)}>✕</button>
         </div>
       )}
     </div>
   );
 
-  return (
-    <div style={S.overlay} onClick={onClose}>
-      <div style={S.modal} onClick={e => e.stopPropagation()}>
+  const content = (
+    <>
         <div style={{ ...S.header, background: cfg.color }}>
           <div><p style={S.plate}>{car.plate}</p><p style={S.type}>{car.type}</p></div>
-          <button style={S.closeBtn} onClick={onClose}>✕</button>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={S.body}>
           <p style={S.title}>{cfg.title}</p>
@@ -199,13 +207,13 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
               {!addingDriver ? (
                 <select style={sel} value={driver} onChange={e => { if (e.target.value === "__new__") setAddingDriver(true); else setDriver(e.target.value); }}>
                   <option value="">— No driver —</option>
-                  {(drivers || []).map(d => <option key={d} value={d}>{d}</option>)}
+                  {driversList.map(d => <option key={d} value={d}>{d}</option>)}
                   <option value="__new__">+ Add new driver</option>
                 </select>
               ) : (
                 <div style={{ display:"flex", gap:6 }}>
                   <input style={{ ...S.input, flex:1 }} placeholder="Driver name" value={newDriver} onChange={e => setNewDriver(e.target.value)} autoFocus />
-                  <button style={S.cancelSmall} onClick={() => setAddingDriver(false)}>✕</button>
+                  <button type="button" style={S.cancelSmall} onClick={() => setAddingDriver(false)}>✕</button>
                 </div>
               )}
             </div>
@@ -291,13 +299,13 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
               {!addingGarage ? (
                 <select style={sel} value={garage} onChange={e => { if (e.target.value === "__new__") setAddingGarage(true); else setGarage(e.target.value); }}>
                   <option value="">— Select garage —</option>
-                  {(garages || []).map(g => <option key={g}>{g}</option>)}
+                  {garagesList.map(g => <option key={g}>{g}</option>)}
                   {canAddLocGarage && <option value="__new__">+ Add new garage</option>}
                 </select>
               ) : (
                 <div style={{ display:"flex", gap:6 }}>
                   <input style={{ ...S.input, flex:1 }} placeholder="New garage name" value={newGarage} onChange={e => setNewGarage(e.target.value)} autoFocus />
-                  <button style={S.cancelSmall} onClick={() => setAddingGarage(false)}>✕</button>
+                  <button type="button" style={S.cancelSmall} onClick={() => setAddingGarage(false)}>✕</button>
                 </div>
               )}
             </div>
@@ -381,7 +389,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
             });
             const isBlocked = hasMatch && !blOverride;
             return (
-              <button style={{ ...S.confirmBtn, background: cfg.color,
+              <button type="button" style={{ ...S.confirmBtn, background: cfg.color,
                 opacity: (loading || isBlocked) ? 0.65 : 1,
                 cursor: isBlocked ? "not-allowed" : "pointer" }}
                 onClick={isBlocked ? undefined : handleSubmit}
@@ -391,7 +399,14 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
             );
           })()}
         </div>
-      </div>
+    </>
+  );
+
+  if (embedded) return <div style={S.embeddedWrap}>{content}</div>;
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={S.modal} onClick={e => e.stopPropagation()}>{content}</div>
     </div>
   );
 }
@@ -399,6 +414,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
 const S = {
   overlay:    { position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100, padding:16 },
   modal:      { background:"#fff", borderRadius:14, width:500, maxWidth:"100%", maxHeight:"92vh", overflow:"auto", boxShadow:"0 8px 40px rgba(0,0,0,0.18)" },
+  embeddedWrap: { flex:1, minHeight:0, overflowY:"auto" },
   header:     { padding:"1rem 1.25rem", borderRadius:"14px 14px 0 0", display:"flex", justifyContent:"space-between", alignItems:"flex-start" },
   plate:      { fontSize:18, fontWeight:700, color:"#fff", margin:0 },
   type:       { fontSize:13, color:"rgba(255,255,255,0.8)", margin:"2px 0 0" },

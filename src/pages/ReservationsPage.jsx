@@ -89,31 +89,29 @@ export default function ReservationsPage({ staffName, role }) {
           <p style={{ fontSize:13,color:"#888",margin:"4px 0 0" }}>{reservations.length} reservations this month</p>
         </div>
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          <button onClick={prevMonth} style={S.navBtn}>‹</button>
+          <button type="button" onClick={prevMonth} style={S.navBtn}>‹</button>
           <span style={{ fontSize:16,fontWeight:700,color:"#111",minWidth:160,textAlign:"center" }}>{MONTHS[month-1]} {year}</span>
-          <button onClick={nextMonth} style={S.navBtn}>›</button>
-          <button onClick={()=>{setMonth(today.getMonth()+1);setYear(today.getFullYear());}} style={{ ...S.navBtn,fontSize:12,padding:"6px 12px" }}>Today</button>
+          <button type="button" onClick={nextMonth} style={S.navBtn}>›</button>
+          <button type="button" onClick={()=>{setMonth(today.getMonth()+1);setYear(today.getFullYear());}} style={{ ...S.navBtn,fontSize:12,padding:"6px 12px" }}>Today</button>
         </div>
       </div>
 
       {urgentReservations.length > 0 && (
         <div style={{ background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:10,padding:"12px 16px",marginBottom:"1rem" }}>
-          <div style={{ fontWeight:700,color:"#b91c1c",fontSize:14,marginBottom:6 }}>
+          <div style={{ fontWeight:700,color:"#b91c1c",fontSize:14,marginBottom:8 }}>
             🚨 {urgentReservations.length} reservation{urgentReservations.length>1?"s":""} need{urgentReservations.length===1?"s":""} a car assigned
           </div>
-          <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
+          <div>
             {urgentReservations.map(r => {
               const now    = new Date(); now.setHours(0,0,0,0);
               const pickup = new Date(r.pickupDate);
               const diff   = Math.ceil((pickup - now) / (1000*60*60*24));
               return (
-                <div key={r.id} style={{ fontSize:13,color:"#dc2626",display:"flex",alignItems:"center",gap:8 }}>
-                  <span style={{ fontWeight:600 }}>{r.client}</span>
-                  <span style={{ color:"#888" }}>·</span>
-                  <span>{r.carType||"Any"}</span>
-                  <span style={{ color:"#888" }}>·</span>
-                  <span style={{ fontWeight:600 }}>{diff===0?"Today":diff===1?"Tomorrow":`In ${diff} days`}</span>
-                  <span style={{ color:"#888",fontSize:12 }}>({fmtDate(r.pickupDate)})</span>
+                <div key={r.id} style={{ display:"flex",fontSize:13,color:"#dc2626",padding:"3px 0" }}>
+                  <span style={{ width:160,flexShrink:0,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:8 }}>{r.client}</span>
+                  <span style={{ width:120,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:8 }}>{r.carType||"Any"}</span>
+                  <span style={{ width:90,flexShrink:0,fontWeight:600 }}>{diff===0?"Today":diff===1?"Tomorrow":`In ${diff} days`}</span>
+                  <span style={{ width:90,flexShrink:0,color:"#888",fontSize:12 }}>{fmtDate(r.pickupDate)}</span>
                 </div>
               );
             })}
@@ -150,7 +148,7 @@ export default function ReservationsPage({ staffName, role }) {
                       </div>
                     );
                   })}
-                  <button style={S.addSlot} onClick={() => setShowAdd(day)} title="Add reservation">+</button>
+                  <button type="button" style={S.addSlot} onClick={() => setShowAdd(day)} title="Add reservation">+</button>
                 </div>
               </div>
             );
@@ -262,7 +260,7 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
       <div style={S.modal} onClick={e=>e.stopPropagation()}>
         <div style={{ ...S.mHead,background:"#7c3aed" }}>
           <div><p style={S.mTitle}>New Reservation</p><p style={S.mSub}>{displayDate}</p></div>
-          <button style={S.closeBtn} onClick={onClose}>✕</button>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={S.mBody}>
           <div style={S.field}><label style={S.label}>Staff</label><div style={S.readOnly}>{staffName}</div></div>
@@ -296,7 +294,7 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
             <textarea style={S.textarea} rows={2} value={form.remarks} onChange={e=>set("remarks",e.target.value)} placeholder="Any special notes…" /></div>
 
           {err && <p style={S.err}>{err}</p>}
-          <button style={{ ...S.btn,background:"#7c3aed",opacity:saving?0.65:1 }} onClick={handleSave} disabled={saving}>
+          <button type="button" style={{ ...S.btn,background:"#7c3aed",opacity:saving?0.65:1 }} onClick={handleSave} disabled={saving}>
             {saving?"Saving…":"Add Reservation"}
           </button>
         </div>
@@ -328,7 +326,7 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
             <p style={S.mTitle}>{res.client}</p>
             <p style={S.mSub}>{res.plate ? `${res.plate} · ` : ""}{fmtDate(res.pickupDate)} → {fmtDate(res.returnDate)}</p>
           </div>
-          <button style={S.closeBtn} onClick={onClose}>✕</button>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={S.mBody}>
           {[
@@ -350,7 +348,7 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
 
           {/* Check Out button for today's reservations */}
           {canCheckOut && (
-            <button onClick={() => { onClose(); onCheckOut(res.plate); }}
+            <button type="button" onClick={() => { onClose(); onCheckOut(res.plate); }}
               style={{ display:"block",width:"100%",textAlign:"center",marginTop:16,padding:"11px",fontSize:14,fontWeight:600,background:"#16a34a",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit" }}>
               🚗 Check Out from Fleet
             </button>
@@ -358,7 +356,7 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
           {(isToday || isActive) && !res.plate && (
             <div style={{ marginTop:12,padding:"10px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,fontSize:13,color:"#92400e",textAlign:"center" }}>
               ⚠️ No car assigned yet
-              <button onClick={() => onAssignPlate(res)}
+              <button type="button" onClick={() => onAssignPlate(res)}
                 style={{ display:"block",width:"100%",marginTop:8,padding:"8px",fontSize:13,fontWeight:600,background:"#f59e0b",color:"#fff",border:"none",borderRadius:6,cursor:"pointer" }}>
                 Assign a Plate Now
               </button>
@@ -367,8 +365,8 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
 
           {canEdit && (
             <div style={{ display:"flex",gap:8,marginTop:12 }}>
-              <button style={{ ...S.btn,background:"#f59e0b",flex:1 }} onClick={onEdit}>✏️ Edit</button>
-              <button style={{ ...S.btn,background:"#dc2626",flex:1,opacity:deleting?0.65:1 }} onClick={handleDelete} disabled={deleting}>
+              <button type="button" style={{ ...S.btn,background:"#f59e0b",flex:1 }} onClick={onEdit}>✏️ Edit</button>
+              <button type="button" style={{ ...S.btn,background:"#dc2626",flex:1,opacity:deleting?0.65:1 }} onClick={handleDelete} disabled={deleting}>
                 {deleting?"Deleting…":"🗑 Delete"}
               </button>
             </div>
@@ -411,7 +409,7 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
       <div style={S.modal} onClick={e=>e.stopPropagation()}>
         <div style={{ ...S.mHead,background:"#7c3aed" }}>
           <div><p style={S.mTitle}>Edit Reservation</p></div>
-          <button style={S.closeBtn} onClick={onClose}>✕</button>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={S.mBody}>
           <div style={S.field}><label style={S.label}>Client Name *</label>
@@ -442,7 +440,7 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
             <textarea style={S.textarea} rows={2} value={form.remarks} onChange={e=>set("remarks",e.target.value)} /></div>
 
           {err && <p style={S.err}>{err}</p>}
-          <button style={{ ...S.btn,background:"#7c3aed",opacity:saving?0.65:1 }} onClick={handleSave} disabled={saving}>
+          <button type="button" style={{ ...S.btn,background:"#7c3aed",opacity:saving?0.65:1 }} onClick={handleSave} disabled={saving}>
             {saving?"Saving…":"Save Changes"}
           </button>
         </div>

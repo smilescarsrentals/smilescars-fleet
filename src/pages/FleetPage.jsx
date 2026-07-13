@@ -5,6 +5,8 @@ import { cache } from "../lib/cache";
 import { exportToExcel } from "../lib/exportExcel";
 import ActionModal from "../components/ActionModal";
 import MoveCarModal from "../components/MoveCarModal";
+import RentalAgreementModal from "../components/RentalAgreementModal";
+import AddCarModal from "../components/AddCarModal";
 
 function fmtDate(val) {
   if (!val) return "—";
@@ -62,8 +64,10 @@ export default function FleetPage({ staffName, role }) {
   const [view,      setView]      = useState("all");
   const [expiringFilter, setExpiringFilter] = useState("all"); // all | overdue | soon
   const [modal,        setModal]        = useState(null);
+  const [agreement,    setAgreement]    = useState(null);
   const [moveCar,      setMoveCar]      = useState(null);
   const [replaceCar,   setReplaceCar]   = useState(null);
+  const [showAddCar,   setShowAddCar]   = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [toast,        setToast]        = useState("");
   const [overdueBlock, setOverdueBlock] = useState(false);
@@ -88,14 +92,15 @@ export default function FleetPage({ staffName, role }) {
   useEffect(() => { load(); }, []);
 
   const myOverdueCount = useMemo(() => {
-    if (!staffName) return 0;
+    if (!staffName || role === "Admin" || role === "Manager") return 0;
     return fleet.filter(c =>
       c.status === "Rented" &&
-      c.checkedOutBy === staffName &&
+      c.checkedOutBy &&
+      c.checkedOutBy.trim().toLowerCase() === staffName.trim().toLowerCase() &&
       c.returnDate &&
       daysUntil(c.returnDate) < 0
     ).length;
-  }, [fleet, staffName]);
+  }, [fleet, staffName, role]);
 
   const todayStr2 = `${new Date().getFullYear()}-${pad(new Date().getMonth()+1)}-${pad(new Date().getDate())}`;
 
@@ -117,7 +122,41 @@ export default function FleetPage({ staffName, role }) {
     try {
       const { car, action } = modal;
       const payload = { plate: car.plate, type: car.type, staffName, ...fields };
-      if (action === "checkOut")       await api.checkOut(payload);
+      if (action === "checkOut") {
+        try {
+          await api.checkOut(payload);
+        } catch (err) {
+          // Apps Script can occasionally report a failure even though the write
+          // already went through (e.g. a hiccup in a secondary step server-side,
+          // or a dropped response). Before treating this as a real failure,
+          // check whether the car is actually checked out already — don't make
+          // the staff member redo something that worked.
+          try {
+            const check = await api.getCarByPlate(car.plate);
+            const alreadyDone = check && check.data && check.data.status === "Rented" && check.data.currentClient === fields.client;
+            if (!alreadyDone) throw err;
+          } catch {
+            throw err; // genuinely failed — surface the original error
+          }
+        }
+        setModal(null);
+        cache.clear();
+        load(true).catch(() => {}); // refresh in the background, don't block opening the agreement
+        // Rental Agreement generation can be toggled off from the Admin Panel —
+        // fetched fresh (not cached) so a toggle takes effect immediately.
+        let agreementEnabled = true;
+        try {
+          const s = await api.getSettings();
+          agreementEnabled = s.settings.RentalAgreementEnabled !== "FALSE";
+        } catch {}
+        if (agreementEnabled) {
+          setAgreement({ car, checkout: payload });
+        } else {
+          showToast("✅ Checkout complete");
+        }
+        setSaving(false);
+        return;
+      }
       if (action === "markReturned")   await api.markReturned(payload);
       if (action === "extendBooking")  await api.extendBooking(payload);
       if (action === "setMaintenance") await api.setMaintenance(payload);
@@ -252,7 +291,7 @@ export default function FleetPage({ staffName, role }) {
   const sel = { padding:"8px 10px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",color:"#111" };
 
   if (loading) return <div style={{ textAlign:"center",padding:"3rem",color:"#666" }}>Loading fleet…</div>;
-  if (error)   return <div style={{ textAlign:"center",padding:"3rem" }}><p style={{ color:"#dc2626" }}>{error}</p><button onClick={()=>{cache.clear();load(true);}}>Retry</button></div>;
+  if (error)   return <div style={{ textAlign:"center",padding:"3rem" }}><p style={{ color:"#dc2626" }}>{error}</p><button type="button" onClick={()=>{cache.clear();load(true);}}>Retry</button></div>;
 
   return (
     <div>
@@ -295,14 +334,14 @@ export default function FleetPage({ staffName, role }) {
                 ["overdue", `Overdue (${expired.length})`,                  "#b91c1c", "#fecaca"],
                 ["soon",    `Due Soon (${expiringSoon.length})`,             "#b45309", "#fef3c7"],
               ].map(([val, label, color, bg]) => (
-                <button key={val} onClick={() => { setExpiringFilter(val); setPage(1); }}
+                <button type="button" key={val} onClick={() => { setExpiringFilter(val); setPage(1); }}
                   style={{ fontSize:12, fontWeight:600, padding:"5px 14px", borderRadius:20, border:"none", background:expiringFilter===val ? color : bg, color:expiringFilter===val ? "#fff" : color, cursor:"pointer" }}>
                   {label}
                 </button>
               ))}
               <span style={{ width:1, background:"#fca5a5", height:18, display:"inline-block", margin:"0 2px" }} />
             </>)}
-            <button style={{ fontSize:12, fontWeight:500, border:"1.5px solid currentColor", background:"transparent", color:"inherit", padding:"4px 12px", borderRadius:20, cursor:"pointer" }}
+            <button type="button" style={{ fontSize:12, fontWeight:500, border:"1.5px solid currentColor", background:"transparent", color:"inherit", padding:"4px 12px", borderRadius:20, cursor:"pointer" }}
               onClick={() => { setView("all"); setExpiringFilter("all"); setPage(1); }}>✕ Clear</button>
           </div>
         </div>
@@ -321,14 +360,15 @@ export default function FleetPage({ staffName, role }) {
         <select style={sel} value={fType} onChange={e=>{setFType(e.target.value);setPage(1);}}>
           <option value="">All types</option>{types.map(t=><option key={t}>{t}</option>)}
         </select>
-        {(search||fStatus||fLocation||fType) && <button style={{ ...sel,cursor:"pointer" }} onClick={()=>{setSearch("");setFStatus("");setFLocation("");setFType("");setPage(1);}}>Clear</button>}
+        {(search||fStatus||fLocation||fType) && <button type="button" style={{ ...sel,cursor:"pointer" }} onClick={()=>{setSearch("");setFStatus("");setFLocation("");setFType("");setPage(1);}}>Clear</button>}
         <span style={{ fontSize:12,color:"#888",marginLeft:"auto" }}>
           {(search||fStatus||fLocation||fType||view!=="all")
             ? `${filtered.length} ${[fStatus,fLocation,fType,view==="expiring"?"Expiring/Expired":view==="unpaid"?"Unpaid":view==="staffuse"?"Staff Use":""].filter(Boolean).join(" · ")}`
             : `${fleet.length} cars total`}
         </span>
-        {canExportOrSell && <button style={{ padding:"8px 12px",fontSize:13,border:"1.5px solid #16a34a",borderRadius:7,background:"#f0fdf4",cursor:"pointer",color:"#15803d",fontWeight:500 }} onClick={handleExport}>⬇ Export</button>}
-        <button style={{ padding:"8px 12px",fontSize:16,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer",color:"#555" }} onClick={()=>{cache.clear();load(true);}}>↻</button>
+        {canExportOrSell && <button type="button" style={{ padding:"8px 12px",fontSize:13,border:"1.5px solid #16a34a",borderRadius:7,background:"#f0fdf4",cursor:"pointer",color:"#15803d",fontWeight:500 }} onClick={handleExport}>⬇ Export</button>}
+        {canExportOrSell && <button type="button" style={{ padding:"8px 12px",fontSize:13,border:"none",borderRadius:7,background:"#1d4ed8",cursor:"pointer",color:"#fff",fontWeight:600 }} onClick={()=>setShowAddCar(true)}>+ Add Car</button>}
+        <button type="button" style={{ padding:"8px 12px",fontSize:16,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer",color:"#555" }} onClick={()=>{cache.clear();load(true);}}>↻</button>
       </div>
 
       <div className="sc-table-wrap">
@@ -411,7 +451,7 @@ export default function FleetPage({ staffName, role }) {
                     </td>
                   )}
                   <td data-label="Action" style={{ padding:"11px 12px" }}>
-                    <ActionButtons car={car} onAction={(c,a)=>setModal({car:c,action:a})} onMove={c=>setMoveCar(c)} onReplace={c=>setReplaceCar(c)} canSell={canExportOrSell} myOverdueCount={myOverdueCount} setOverdueBlock={setOverdueBlock} />
+                    <ActionButtons car={car} onAction={(c,a)=>setModal({car:c,action:a})} onMove={c=>setMoveCar(c)} onReplace={c=>setReplaceCar(c)} canSell={canExportOrSell} role={role} myOverdueCount={myOverdueCount} setOverdueBlock={setOverdueBlock} />
                   </td>
                 </tr>
               );
@@ -422,9 +462,9 @@ export default function FleetPage({ staffName, role }) {
 
       {totalPages>1 && (
         <div style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:16,padding:"1rem 0" }}>
-          <button style={{ padding:"7px 16px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer" }} onClick={()=>setPage(p=>p-1)} disabled={page===1}>‹ Prev</button>
+          <button type="button" style={{ padding:"7px 16px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer" }} onClick={()=>setPage(p=>p-1)} disabled={page===1}>‹ Prev</button>
           <span style={{ fontSize:13,color:"#555" }}>Page {page} of {totalPages}</span>
-          <button style={{ padding:"7px 16px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer" }} onClick={()=>setPage(p=>p+1)} disabled={page===totalPages}>Next ›</button>
+          <button type="button" style={{ padding:"7px 16px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer" }} onClick={()=>setPage(p=>p+1)} disabled={page===totalPages}>Next ›</button>
         </div>
       )}
 
@@ -441,10 +481,15 @@ export default function FleetPage({ staffName, role }) {
             <p style={{ fontSize:13,color:"#888",margin:"0 0 20px" }}>
               Please contact your Manager or Admin to authorize a new check out.
             </p>
-            <button style={{ padding:"10px 24px",fontSize:14,fontWeight:600,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer" }}
+            <button type="button" style={{ padding:"10px 24px",fontSize:14,fontWeight:600,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer" }}
               onClick={() => setOverdueBlock(false)}>OK</button>
           </div>
         </div>
+      )}
+      {agreement && (
+        <RentalAgreementModal
+          car={agreement.car} checkout={agreement.checkout} staffName={staffName}
+          onClose={() => setAgreement(null)} />
       )}
       {modal && (
         <ActionModal car={modal.car} action={modal.action}
@@ -460,23 +505,29 @@ export default function FleetPage({ staffName, role }) {
         <ReplaceCarModal car={replaceCar} fleet={fleet} garages={config.garages} staffName={staffName}
           onConfirm={handleReplaceConfirm} onClose={()=>!saving&&setReplaceCar(null)} loading={saving} />
       )}
+      {showAddCar && (
+        <AddCarModal locations={config.locations}
+          onClose={()=>setShowAddCar(false)}
+          onSaved={()=>{ setShowAddCar(false); showToast("✅ Car added to fleet"); cache.clear(); load(true); }} />
+      )}
     </div>
   );
 }
 
-function ActionButtons({ car, onAction, onMove, onReplace, canSell, myOverdueCount, setOverdueBlock }) {
+function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOverdueCount, setOverdueBlock }) {
   const row = { display:"flex",alignItems:"center",flexWrap:"nowrap",gap:3 };
   const btn = (label, action, color, bg, onClick) => (
-    <button key={action}
+    <button type="button" key={action}
       style={{ fontSize:10,padding:"3px 7px",borderRadius:5,border:`1px solid ${color}`,background:bg,color,cursor:"pointer",marginRight:3,fontWeight:500,whiteSpace:"nowrap" }}
       onClick={onClick||(() => onAction(car, action))}>
       {label}
     </button>
   );
+  const isStaff = role !== "Admin" && role !== "Manager";
   if (car.status==="Available") return (
     <div style={row}>
       {btn("Check Out","checkOut","#15803d","#dcfce7", () => {
-        if (!canSell && myOverdueCount >= 2) { setOverdueBlock(true); return; }
+        if (isStaff && myOverdueCount >= 2) { setOverdueBlock(true); return; }
         onAction(car, "checkOut");
       })}
       {btn("Staff Use","setStaffUse","#1d4ed8","#eff6ff")}
@@ -548,7 +599,7 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
             <p style={{ fontSize:16,fontWeight:700,color:"#fff",margin:0 }}>Replace Vehicle</p>
             <p style={{ fontSize:12,color:"rgba(255,255,255,0.8)",margin:"2px 0 0" }}>{car.plate} · {car.type}</p>
           </div>
-          <button style={{ background:"rgba(255,255,255,0.25)",border:"none",color:"#fff",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14 }} onClick={onClose}>✕</button>
+          <button type="button" style={{ background:"rgba(255,255,255,0.25)",border:"none",color:"#fff",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14 }} onClick={onClose}>✕</button>
         </div>
         <div style={{ padding:"1.25rem" }}>
           <p style={{ fontSize:14,fontWeight:600,color:"#111",margin:"0 0 12px" }}>Replace Vehicle</p>
@@ -591,7 +642,7 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
             <label style={{ fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:8 }}>What happens to {car.plate}?</label>
             <div style={{ display:"flex",gap:8,marginBottom:10 }}>
               {[["garage","🔧 Send to Garage"],["available","✅ Mark Available"]].map(([val,label])=>(
-                <button key={val} onClick={()=>setOriginalAction(val)}
+                <button type="button" key={val} onClick={()=>setOriginalAction(val)}
                   style={{ flex:1,padding:"9px",fontSize:13,fontWeight:600,borderRadius:8,border:`1.5px solid ${originalAction===val?"#7c3aed":"#e5e7eb"}`,background:originalAction===val?"#f5f3ff":"#fff",color:originalAction===val?"#7c3aed":"#555",cursor:"pointer" }}>
                   {label}
                 </button>
@@ -609,7 +660,7 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
                 <div style={{ display:"flex",gap:6 }}>
                   <input style={{ flex:1,padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,fontFamily:"inherit" }}
                     placeholder="New garage name" value={newGarage} onChange={e=>setNewGarage(e.target.value)} autoFocus />
-                  <button style={{ padding:"9px 12px",border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer",color:"#666" }} onClick={()=>setAddingGarage(false)}>✕</button>
+                  <button type="button" style={{ padding:"9px 12px",border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer",color:"#666" }} onClick={()=>setAddingGarage(false)}>✕</button>
                 </div>
               )
             )}
@@ -623,7 +674,7 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
           </div>
 
           {err && <p style={{ color:"#dc2626",fontSize:13,margin:"6px 0" }}>{err}</p>}
-          <button style={{ width:"100%",padding:"11px",fontSize:14,fontWeight:600,color:"#fff",background:"#7c3aed",border:"none",borderRadius:8,cursor:"pointer",opacity:loading?0.65:1,fontFamily:"inherit" }}
+          <button type="button" style={{ width:"100%",padding:"11px",fontSize:14,fontWeight:600,color:"#fff",background:"#7c3aed",border:"none",borderRadius:8,cursor:"pointer",opacity:loading?0.65:1,fontFamily:"inherit" }}
             onClick={handleSubmit} disabled={loading}>
             {loading ? "Processing…" : `Confirm Replacement`}
           </button>

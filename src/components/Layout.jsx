@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { api } from "../lib/api";
+import AdminPanel from "./AdminPanel";
 
 function fmtDate(val) {
   if (!val) return "—";
@@ -41,22 +42,60 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const [staffList,    setStaffList]    = useState([]);
   const [viewingStaff, setViewingStaff] = useState(staffName);
   const [urgentCount,  setUrgentCount]  = useState(0);
+  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  const [myUpcoming,        setMyUpcoming]        = useState([]); // my own reservations picking up within 24h, not yet checked out
+  const [othersUpcomingCount, setOthersUpcomingCount] = useState(0); // Admin/Manager only — count of other staff's, no details
 
   const canViewAll = role === "Admin" || role === "Manager";
 
-  // Load urgent reservations count on mount
+  // Load reservation-related notification data. Runs on mount and every 60s
+  // so the "pickup within 24h" banner and nav badge count stay current
+  // without requiring a manual page refresh.
   useEffect(() => {
-    api.getAllReservations().then(res => {
-      const now = new Date(); now.setHours(0,0,0,0);
-      const count = (res.data||[]).filter(r => {
-        if (r.plate) return false;
-        if (!r.pickupDate) return false;
-        const diff = Math.ceil((new Date(r.pickupDate) - now) / (1000*60*60*24));
-        return diff >= 0 && diff <= 5;
-      }).length;
-      setUrgentCount(count);
-    }).catch(()=>{});
-  }, []);
+    const load = () => {
+      Promise.all([api.getAllReservations(), api.getFleet()]).then(([resRes, fleetRes]) => {
+        const reservations = resRes.data || [];
+        const fleet = fleetRes.data || [];
+        const now = new Date(); now.setHours(0,0,0,0);
+
+        // Nav badge (assign-car urgency, unchanged trigger): no plate + pickup within 5 days.
+        // Admin/Manager see the org-wide total; Staff only see their own.
+        const assignUrgent = reservations.filter(r => {
+          if (r.plate) return false;
+          if (!r.pickupDate) return false;
+          const diff = Math.ceil((new Date(r.pickupDate) - now) / (1000*60*60*24));
+          if (diff < 0 || diff > 5) return false;
+          if (!canViewAll && r.staffName !== staffName) return false;
+          return true;
+        });
+        setUrgentCount(assignUrgent.length);
+
+        // "Checked out" = the assigned plate is currently Rented to this reservation's client.
+        // Reservations have no direct link to a checkout record, so this is inferred by
+        // cross-referencing Fleet — same approach the rest of the app already uses.
+        const isCheckedOut = (r) => {
+          if (!r.plate) return false;
+          const car = fleet.find(c => c.plate === r.plate);
+          if (!car) return false;
+          return car.status === "Rented" && (car.currentClient||"").trim().toLowerCase() === (r.client||"").trim().toLowerCase();
+        };
+
+        // "Within 24h" — reservation data only stores a date (no time), so this is
+        // approximated at day granularity: pickup is today or tomorrow.
+        const within24h = reservations.filter(r => {
+          if (!r.pickupDate) return false;
+          const diff = Math.ceil((new Date(r.pickupDate) - now) / (1000*60*60*24));
+          return diff >= 0 && diff <= 1 && !isCheckedOut(r);
+        });
+
+        setMyUpcoming(within24h.filter(r => r.staffName === staffName));
+        setOthersUpcomingCount(canViewAll ? within24h.filter(r => r.staffName !== staffName).length : 0);
+      }).catch(()=>{});
+    };
+    load();
+    const interval = setInterval(load, 60000);
+    return () => clearInterval(interval);
+  }, [staffName, canViewAll]);
 
   const loadHistory = async (name) => {
     setLoading(true);
@@ -123,7 +162,8 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
 
   return (
     <div style={{ minHeight:"100vh", background:"#f9fafb" }}>
-      <header style={{ background:"#fff", borderBottom:"1px solid #e5e7eb", position:"sticky", top:0, zIndex:10 }}>
+      <div style={{ position:"sticky", top:0, zIndex:10 }}>
+      <header style={{ background:"#fff", borderBottom:"1px solid #e5e7eb" }}>
         <div className="sc-header-inner">
           <div style={{ display:"flex", alignItems:"center", gap:10, flex:1 }}>
             {logo
@@ -153,8 +193,8 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
             <NavLink to="/blacklist"    style={navStyle}>⛔ Blacklist</NavLink>
           </nav>
           <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-            {/* Clickable avatar + name */}
-            <button onClick={() => setPanelOpen(true)}
+            {/* Clickable avatar + name — opens Activity Panel */}
+            <button type="button" onClick={() => setPanelOpen(true)}
               style={{ display:"flex", alignItems:"center", gap:8, background:"none", border:"none", cursor:"pointer", padding:"4px 8px", borderRadius:8, transition:"background .15s" }}
               onMouseEnter={e => e.currentTarget.style.background="#f3f4f6"}
               onMouseLeave={e => e.currentTarget.style.background="none"}>
@@ -163,13 +203,54 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
               </div>
               <div style={{ textAlign:"left" }}>
                 <div className="sc-user-name">{staffName}</div>
-                <div style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:".4px", background:roleBadge.bg, color:roleBadge.color, padding:"1px 6px", borderRadius:4, display:"inline-block", marginTop:2 }}>{role}</div>
+                {role !== "Admin" && (
+                  <div style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:".4px", background:roleBadge.bg, color:roleBadge.color, padding:"1px 6px", borderRadius:4, display:"inline-block", marginTop:2 }}>{role}</div>
+                )}
               </div>
             </button>
-            <button className="sc-sign-out" onClick={onSignOut}>↩</button>
+            {/* Role badge — for Admins, this is a separate button that opens the Admin Panel */}
+            {role === "Admin" && (
+              <button type="button" onClick={() => setAdminPanelOpen(true)}
+                style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:".4px", background:roleBadge.bg, color:roleBadge.color, padding:"3px 9px", borderRadius:4, border:"none", cursor:"pointer", marginLeft:-4 }}
+                title="Open Admin Panel">
+                {role}
+              </button>
+            )}
+            <button type="button" className="sc-sign-out" onClick={onSignOut}>↩</button>
           </div>
         </div>
       </header>
+
+      {/* Personal reservation reminder — pickup within 24h, not yet checked out.
+          Own reservations show full detail; Admin/Manager additionally see a
+          count-only line for other staff's upcoming reservations. */}
+      {(myUpcoming.length > 0 || othersUpcomingCount > 0) && (
+        <div style={{ background:"#fffbeb", borderBottom:"1.5px solid #fde68a", padding:"8px 16px" }}>
+          <div style={{ maxWidth:1200, margin:"0 auto" }}>
+            {myUpcoming.map(r => {
+              const now    = new Date(); now.setHours(0,0,0,0);
+              const diff   = Math.ceil((new Date(r.pickupDate) - now) / (1000*60*60*24));
+              return (
+                <div key={r.id} style={{ fontSize:13, color:"#92400e", display:"flex", alignItems:"center", gap:8, padding:"2px 0" }}>
+                  <span>⏰</span>
+                  <span style={{ fontWeight:700 }}>{diff===0?"Today":"Tomorrow"}:</span>
+                  <span style={{ fontWeight:600 }}>{r.client}</span>
+                  <span style={{ color:"#b45309" }}>·</span>
+                  <span>{r.plate || r.carType || "Any"}</span>
+                  <span style={{ color:"#b45309" }}>·</span>
+                  <span>pickup not yet checked out</span>
+                </div>
+              );
+            })}
+            {canViewAll && othersUpcomingCount > 0 && (
+              <div style={{ fontSize:12, color:"#b45309", padding:"2px 0" }}>
+                + {othersUpcomingCount} other upcoming reservation{othersUpcomingCount>1?"s":""} from other staff
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      </div>
 
       <main style={{ maxWidth:1200, margin:"0 auto", padding:"1.25rem 1rem" }}>{children}</main>
 
@@ -201,7 +282,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
                 </div>
               </div>
             </div>
-            <button onClick={() => setPanelOpen(false)}
+            <button type="button" onClick={() => setPanelOpen(false)}
               style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"#fff", borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:16 }}>✕</button>
           </div>
 
@@ -237,14 +318,14 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
           <input style={{ flex:1, minWidth:140, padding:"7px 10px", fontSize:13, border:"1.5px solid #e5e7eb", borderRadius:7, boxSizing:"border-box", fontFamily:"inherit" }}
             placeholder="Search plate, client…"
             value={search} onChange={e => { setSearch(e.target.value); setViewAll(false); }} />
-          <button onClick={() => { setStatFilter(statFilter==="checkouts"?"":"checkouts"); setViewAll(false); }}
+          <button type="button" onClick={() => { setStatFilter(statFilter==="checkouts"?"":"checkouts"); setViewAll(false); }}
             style={{ padding:"7px 12px", fontSize:12, fontWeight:600, borderRadius:7, border:"1.5px solid #1d4ed8", background: statFilter==="checkouts"?"#1d4ed8":"#eff6ff", color: statFilter==="checkouts"?"#fff":"#1d4ed8", cursor:"pointer", whiteSpace:"nowrap" }}>
             🚗 Currently Rented
           </button>
           <input type="date" value={fDate} onChange={e => { setFDate(e.target.value); setViewAll(false); }}
             style={{ padding:"7px 8px", fontSize:12, border:"1.5px solid #e5e7eb", borderRadius:7, fontFamily:"inherit", cursor:"pointer" }} />
           {(search || fDate || statFilter) && (
-            <button onClick={() => { setSearch(""); setFDate(""); setStatFilter(""); setViewAll(false); }}
+            <button type="button" onClick={() => { setSearch(""); setFDate(""); setStatFilter(""); setViewAll(false); }}
               style={{ padding:"7px 10px", fontSize:12, border:"1.5px solid #e5e7eb", borderRadius:7, background:"#fff", cursor:"pointer", color:"#555" }}>Clear</button>
           )}
         </div>
@@ -278,7 +359,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
               );
             })}
             {!viewAll && myHistory.length > 20 && (
-              <button onClick={() => setViewAll(true)}
+              <button type="button" onClick={() => setViewAll(true)}
                 style={{ width:"100%", padding:"10px", fontSize:13, border:"1.5px solid #e5e7eb", borderRadius:8, background:"#fff", cursor:"pointer", color:"#555", margin:"12px 0" }}>
                 Show all {myHistory.length} entries
               </button>
@@ -286,6 +367,8 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
           </>)}
         </div>
       </div>
+
+      {adminPanelOpen && <AdminPanel onClose={() => setAdminPanelOpen(false)} />}
     </div>
   );
 }

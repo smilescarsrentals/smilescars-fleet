@@ -12,6 +12,7 @@ import CarProfilePage from "./pages/CarProfilePage";
 import FuelPage from "./pages/FuelPage";
 import ReservationsPage from "./pages/ReservationsPage";
 import BlacklistPage from "./pages/BlacklistPage";
+import SignaturePage from "./pages/SignaturePage";
 import logo from "./assets/logo.js";
 
 export default function App() {
@@ -41,6 +42,12 @@ export default function App() {
     setFuelAccess([]);
   };
 
+  // Public signature page — no login required
+  if (window.location.pathname.startsWith("/sign/")) {
+    const token = window.location.pathname.replace("/sign/", "");
+    return <BrowserRouter><Routes><Route path="/sign/:token" element={<SignaturePage />} /></Routes></BrowserRouter>;
+  }
+
   if (!staffName) {
     return <StaffGate onConfirm={handleStaffSet} logo={logo} />;
   }
@@ -58,6 +65,7 @@ export default function App() {
           <Route path="/reservations" element={<ReservationsPage staffName={staffName} role={role} />} />
           <Route path="/sold"         element={<SoldPage />} />
           <Route path="/blacklist"    element={<BlacklistPage staffName={staffName} role={role} />} />
+          <Route path="/sign/:token"  element={<SignaturePage />} />
           <Route path="*"           element={<Navigate to="/" />} />
         </Routes>
       </Layout>

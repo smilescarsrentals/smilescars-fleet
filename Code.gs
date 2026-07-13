@@ -7,6 +7,7 @@ const SPREADSHEET_ID     = "1xK1tVQa1bHR-FVb1Tr2MjZdtm3_QHt1PdulfVLgoFtc";
 const FLEET_SHEET        = "Fleet";
 const HISTORY_SHEET      = "History";
 const CONFIG_SHEET       = "Config";
+const SETTINGS_SHEET     = "Settings";
 const SOLD_SHEET         = "Sold";
 const SUBHIRE_SHEET      = "SubHire";
 const FUEL_SHEET         = "Fuel";
@@ -38,6 +39,12 @@ function doGet(e) {
     if (action === "getAllReservations") return respond(getReservations("", ""));
     if (action === "getBlacklist")    return respond(getBlacklist());
     if (action === "testRole")        return respond(testRole(e.parameter.name         || ""));
+    if (action === "getSignature")      return respond(getSignature(e));
+    if (action === "getStaffSignature") return respond(getStaffSignature(e));
+    if (action === "getNextAgreementRef") return respond(getNextAgreementRef());
+    if (action === "getStaffList")        return respond(getStaffList());
+    if (action === "getSettings")         return respond(getSettings());
+    if (action === "getDropboxSyncStatus") return respond(getDropboxSyncStatus());
     return respond({ error: "Unknown action: " + action });
   } catch (err) {
     return respond({ error: err.message });
@@ -51,6 +58,7 @@ function doPost(e) {
   try {
     if (action === "verifyStaff")          return respond(verifyStaff(body));
     if (action === "checkOut")             return respond(checkOut(body));
+    if (action === "addCar")               return respond(addCar(body));
     if (action === "markReturned")         return respond(markReturned(body));
     if (action === "extendBooking")        return respond(extendBooking(body));
     if (action === "setMaintenance")       return respond(setMaintenance(body));
@@ -60,9 +68,16 @@ function doPost(e) {
     if (action === "updatePayment")        return respond(updatePayment(body));
     if (action === "markSold")             return respond(markSold(body));
     if (action === "addStaff")             return respond(addStaff(body));
+    if (action === "setStaffActive")       return respond(setStaffActive(body));
     if (action === "addLocation")          return respond(addConfigItem("Location", body.name));
     if (action === "addGarage")            return respond(addConfigItem("Garage",   body.name));
     if (action === "addDriver")            return respond(addConfigItem("Driver",   body.name));
+    if (action === "updateConfigItem")     return respond(updateConfigItem(body));
+    if (action === "deleteConfigItem")     return respond(deleteConfigItem(body));
+    if (action === "updateSetting")        return respond(updateSetting(body));
+    if (action === "enableDropboxSync")    return respond(enableDropboxSync());
+    if (action === "disableDropboxSync")   return respond(disableDropboxSync());
+    if (action === "createBackupSnapshot") return respond(createBackupSnapshot());
     if (action === "addCarNote")           return respond(addCarNote(body));
     if (action === "addSubHire")           return respond(addSubHire(body));
     if (action === "returnSubHire")        return respond(returnSubHire(body));
@@ -76,6 +91,10 @@ function doPost(e) {
     if (action === "addToBlacklist")       return respond(addToBlacklist(body));
     if (action === "uploadBlacklistImage") return respond(uploadBlacklistImage(body));
     if (action === "deleteFromBlacklist")  return respond(deleteFromBlacklist(body));
+    if (action === "storeSignature")       return respond(storeSignature(body));
+    if (action === "storeStaffSignature")  return respond(storeStaffSignature(body));
+    if (action === "deleteStaffSignature") return respond(deleteStaffSignature(body));
+    if (action === "uploadAgreement")      return respond(uploadAgreement(body));
     return respond({ error: "Unknown action: " + action });
   } catch (err) {
     return respond({ error: err.message });
@@ -154,6 +173,43 @@ function mapFleetRow(row, i) {
     regCardUrl:     row[19] || "",
     photosUrl:      row[20] || "",
     checkedOutBy:   row[21] || "",  };
+}
+
+// Adds a brand-new car to the Fleet sheet. Only the fields that make sense
+// before a car has ever been rented — everything else (client, dates,
+// amounts, etc.) stays blank until the first checkout populates it.
+function addCar(body) {
+  if (!body.plate)    throw new Error("Plate is required");
+  if (!body.type)     throw new Error("Type is required");
+  if (!body.location) throw new Error("Location is required");
+  const sheet  = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(FLEET_SHEET);
+  const plates = sheet.getRange("A:A").getValues().flat();
+  if (plates.includes(body.plate)) throw new Error("A car with this plate already exists: " + body.plate);
+  sheet.appendRow([
+    body.plate,           // A  plate
+    body.type,            // B  type
+    body.location,        // C  location
+    "Available",          // D  status
+    "",                   // E  currentClient
+    "",                   // F  clientPhone
+    "",                   // G  bookedFrom
+    "",                   // H  returnDate
+    "",                   // I  remarks
+    "",                   // J  fuelOut
+    "",                   // K  amount
+    "TZS",                // L  currency
+    "",                   // M  garage
+    "",                   // N  paymentStatus
+    "",                   // O  amountPaid
+    "",                   // P  policeFineOut
+    "",                   // Q  parkingFineOut
+    "",                   // R  kmOut
+    "",                   // S  driver
+    body.regCardUrl || "",// T  regCardUrl
+    body.photosUrl  || "",// U  photosUrl
+    "",                   // V  checkedOutBy
+  ]);
+  return { success: true };
 }
 
 function getCarByPlate(plate) {
@@ -284,9 +340,18 @@ function requireManagerOrAdmin(staffName) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
   const rows  = sheet.getDataRange().getValues();
   const match = rows.find(r => r[0] === "Staff" && r[1].toString().trim() === staffName.toString().trim());
+  if (match && !isStaffActive_(match)) throw new Error("This account has been deactivated.");
   const role  = match ? (match[3] || "Staff").toString().trim() : "Staff";
   if (role !== "Manager" && role !== "Admin")
     throw new Error("This action requires a Manager or Admin account.");
+}
+
+// Config "Staff" rows: [Type, Name, Password, Role, Active]. The Active column
+// is new — existing rows won't have it yet, so a blank/missing value defaults
+// to TRUE (active). Only an explicit "FALSE" counts as deactivated.
+function isStaffActive_(row) {
+  const v = (row[4] === undefined || row[4] === null || row[4] === "") ? "TRUE" : row[4].toString().trim().toUpperCase();
+  return v !== "FALSE";
 }
 
 function verifyStaff(body) {
@@ -295,6 +360,7 @@ function verifyStaff(body) {
   const rows  = sheet.getDataRange().getValues();
   const match = rows.find(r => r[0] === "Staff" && r[1].toString().trim() === body.name.toString().trim());
   if (!match)  return { success: false, message: "Staff not found" };
+  if (!isStaffActive_(match)) return { success: false, message: "This account has been deactivated." };
   if (!match[2]) return { success: false, message: "No password set for this account" };
   if (match[2].toString().trim() !== body.password.toString().trim())
     return { success: false, message: "Incorrect password" };
@@ -305,7 +371,28 @@ function verifyStaff(body) {
 function addStaff(body) {
   if (!body.name) throw new Error("Name is required");
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
-  sheet.appendRow(["Staff", body.name, body.password || "", body.role || "Staff"]);
+  sheet.appendRow(["Staff", body.name, body.password || "", body.role || "Staff", "TRUE"]);
+  return { success: true };
+}
+
+// Admin-only: full staff list including inactive ones, with role/active status.
+// (getConfig's plain `staff` array stays active-only, for everyday pickers.)
+function getStaffList() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+  const staff = rows
+    .filter(r => r[0] === "Staff" && r[1])
+    .map(r => ({ name: r[1], role: r[3] || "Staff", active: isStaffActive_(r) }));
+  return { success: true, staff };
+}
+
+function setStaffActive(body) {
+  if (!body.name) throw new Error("Staff name is required");
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+  const idx   = rows.findIndex(r => r[0] === "Staff" && r[1].toString().trim() === body.name.toString().trim());
+  if (idx < 0) throw new Error("Staff not found: " + body.name);
+  sheet.getRange(idx + 1, 5).setValue(body.active ? "TRUE" : "FALSE");
   return { success: true };
 }
 
@@ -326,18 +413,28 @@ function checkOut(body) {
     kmOut: body.kmOut || "", driver: body.driver || "",
     checkedOutBy: body.staffName,
   });
-  addHistory({
-    plate: body.plate, type: body.type, action: "Checked Out",
-    client: body.client, clientPhone: body.clientPhone || "",
-    bookedFrom: body.bookedFrom || "", returnDate: body.returnDate || "",
-    location: body.location || "", remarks: body.remarks || "",
-    staffName: body.staffName, fuelOut: body.fuelOut || "",
-    amount: body.amount || "", currency: body.currency || "TZS",
-    policeFine: body.policeFine || "", parkingFine: body.parkingFine || "",
-    paymentStatus: body.paymentStatus || "Unpaid",
-    amountPaid: body.amountPaid || "", kmOut: body.kmOut || "",
-    driver: body.driver || "",
-  });
+  // The Fleet row above is the source of truth for the car's status — it's
+  // already saved at this point. Don't let a hiccup in the secondary History
+  // log (Apps Script + concurrent Sheets access can throw transient lock
+  // errors on appendRow) report the whole checkout as failed to the client,
+  // which would otherwise send a staff member back to a "Confirm Check Out"
+  // screen for a car that's already checked out.
+  try {
+    addHistory({
+      plate: body.plate, type: body.type, action: "Checked Out",
+      client: body.client, clientPhone: body.clientPhone || "",
+      bookedFrom: body.bookedFrom || "", returnDate: body.returnDate || "",
+      location: body.location || "", remarks: body.remarks || "",
+      staffName: body.staffName, fuelOut: body.fuelOut || "",
+      amount: body.amount || "", currency: body.currency || "TZS",
+      policeFine: body.policeFine || "", parkingFine: body.parkingFine || "",
+      paymentStatus: body.paymentStatus || "Unpaid",
+      amountPaid: body.amountPaid || "", kmOut: body.kmOut || "",
+      driver: body.driver || "",
+    });
+  } catch (err) {
+    console.error("addHistory failed after a successful checkOut for " + body.plate + ": " + err.message);
+  }
   return { success: true };
 }
 
@@ -505,7 +602,7 @@ function addCarNote(body) {
 function getConfigV7() {
   const sheet     = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
   const rows      = sheet.getDataRange().getValues();
-  const staff     = rows.filter(r => r[0] === "Staff").map(r => r[1]).filter(Boolean);
+  const staff     = rows.filter(r => r[0] === "Staff" && isStaffActive_(r)).map(r => r[1]).filter(Boolean);
   const locations = rows.filter(r => r[0] === "Location").map(r => r[1]).filter(Boolean);
   const garages    = rows.filter(r => r[0] === "Garage").map(r => r[1]).filter(Boolean);
   const drivers    = rows.filter(r => r[0] === "Driver").map(r => r[1]).filter(Boolean);
@@ -517,6 +614,60 @@ function addConfigItem(type, name) {
   if (!name) throw new Error("Name is required");
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
   sheet.appendRow([type, name]);
+  return { success: true };
+}
+
+// Rename/delete a Location, Garage, or Driver entry. Notably does NOT check
+// whether it's currently referenced by a Fleet row — deleting an in-use value
+// is allowed; existing rows just keep the old text. Acceptable for this scale.
+function updateConfigItem(body) {
+  if (!body.type || !body.oldValue || !body.newValue) throw new Error("type, oldValue, and newValue are required");
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+  const idx   = rows.findIndex(r => r[0] === body.type && (r[1]||"").toString().trim() === body.oldValue.toString().trim());
+  if (idx < 0) throw new Error("Not found: " + body.oldValue);
+  sheet.getRange(idx + 1, 2).setValue(body.newValue);
+  return { success: true };
+}
+
+function deleteConfigItem(body) {
+  if (!body.type || !body.value) throw new Error("type and value are required");
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+  const idx   = rows.findIndex(r => r[0] === body.type && (r[1]||"").toString().trim() === body.value.toString().trim());
+  if (idx < 0) throw new Error("Not found: " + body.value);
+  sheet.deleteRow(idx + 1);
+  return { success: true };
+}
+
+// ── Settings (feature toggles) ──────────────────────────────────────────────
+function getOrCreateSettingsSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName(SETTINGS_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(SETTINGS_SHEET);
+    sh.getRange(1,1,1,2).setValues([["Key","Value"]]).setFontWeight("bold");
+    sh.appendRow(["RentalAgreementEnabled", "TRUE"]);
+  }
+  return sh;
+}
+
+function getSettings() {
+  const sh   = getOrCreateSettingsSheet_();
+  const rows = sh.getDataRange().getValues();
+  const settings = {};
+  rows.slice(1).forEach(r => { if (r[0]) settings[r[0]] = r[1]; });
+  if (!("RentalAgreementEnabled" in settings)) settings.RentalAgreementEnabled = "TRUE";
+  return { success: true, settings };
+}
+
+function updateSetting(body) {
+  if (!body.key) throw new Error("Setting key is required");
+  const sh   = getOrCreateSettingsSheet_();
+  const rows = sh.getDataRange().getValues();
+  const idx  = rows.findIndex(r => r[0] === body.key);
+  if (idx >= 1) sh.getRange(idx + 1, 2).setValue(String(body.value));
+  else sh.appendRow([body.key, String(body.value)]);
   return { success: true };
 }
 
@@ -968,7 +1119,7 @@ function updateHeaders() {
     "Fuel Out","Fuel In","Amount","Currency","Police Fine","Parking Fine",
     "Garage","Payment Status","Amount Paid","KM Out","KM In","Driver"
   ]]).setFontWeight("bold");
-  ss.getSheetByName(CONFIG_SHEET).getRange(1, 3, 1, 2).setValues([["Password","Role"]]).setFontWeight("bold");
+  ss.getSheetByName(CONFIG_SHEET).getRange(1, 3, 1, 3).setValues([["Password","Role","Active"]]).setFontWeight("bold");
   let sold = ss.getSheetByName(SOLD_SHEET);
   if (!sold) sold = ss.insertSheet(SOLD_SHEET);
   sold.getRange(1, 1, 1, 5).setValues([["Timestamp","Plate","Type","Remarks","Staff Name"]]).setFontWeight("bold");
@@ -1010,9 +1161,106 @@ const CAR_PICS_PATH  = "/Cars/Car Pics";
 
 function normPlate(p) { return p.toString().replace(/\s+/g, "").toUpperCase(); }
 
+// Writes a proper hyperlink cell with custom display text (e.g. "Open Reg Card")
+// instead of a raw, messy-looking URL — same visual result as Insert > Link
+// in the Sheets UI, done programmatically.
+function setLinkCell_(range, url, label) {
+  const richText = SpreadsheetApp.newRichTextValue().setText(label).setLinkUrl(url).build();
+  range.setRichTextValue(richText);
+}
+
+// Dropbox access tokens (Bearer tokens) expire after a few hours by design —
+// that's what caused the "expired_access_token" error, not a bug. The fix is
+// a refresh token (doesn't expire) that mints a fresh access token on demand.
+// One-time setup required — see setup instructions. Cached per-execution only
+// (Apps Script resets globals between runs), so each syncDropboxLinks() run
+// mints exactly one fresh token and reuses it for all its internal API calls.
+let _dropboxAccessTokenCache = null;
+function getDropboxAccessToken_() {
+  if (_dropboxAccessTokenCache) return _dropboxAccessTokenCache;
+  const props = PropertiesService.getScriptProperties();
+  const refreshToken = props.getProperty("DROPBOX_REFRESH_TOKEN");
+  const appKey        = props.getProperty("DROPBOX_APP_KEY");
+  const appSecret     = props.getProperty("DROPBOX_APP_SECRET");
+  if (!refreshToken || !appKey || !appSecret) {
+    throw new Error("Missing DROPBOX_REFRESH_TOKEN / DROPBOX_APP_KEY / DROPBOX_APP_SECRET in Script Properties — see one-time Dropbox setup instructions.");
+  }
+  const res = UrlFetchApp.fetch("https://api.dropbox.com/oauth2/token", {
+    method: "POST",
+    payload: {
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: appKey,
+      client_secret: appSecret,
+    },
+    muteHttpExceptions: true,
+  });
+  const json = JSON.parse(res.getContentText());
+  if (json.error || !json.access_token) throw new Error("Dropbox token refresh failed: " + JSON.stringify(json));
+  _dropboxAccessTokenCache = json.access_token;
+  return _dropboxAccessTokenCache;
+}
+
+// One-time helper — run this manually once, with the "code" from the
+// authorize-URL step, to obtain the refresh token. See setup instructions.
+// One-time helper — run this with the ▶ Run button (no arguments needed, since
+// the Apps Script editor's Run button can't actually pass function arguments —
+// that's what caused the "invalid_client" error last time).
+//
+// Before running, set these three temporary Script Properties
+// (Project Settings → Script Properties):
+//   DROPBOX_TEMP_CODE    — the "code" from the authorize URL step
+//   DROPBOX_APP_KEY      — your Dropbox app's App Key
+//   DROPBOX_APP_SECRET   — your Dropbox app's App Secret
+//
+// On success this saves DROPBOX_REFRESH_TOKEN directly — no copy-pasting the
+// token yourself — and removes DROPBOX_TEMP_CODE since it's single-use.
+// DROPBOX_APP_KEY / DROPBOX_APP_SECRET stay in place; getDropboxAccessToken_
+// needs them on every future run too.
+function exchangeDropboxAuthCode() {
+  const props     = PropertiesService.getScriptProperties();
+  const code      = props.getProperty("DROPBOX_TEMP_CODE");
+  const appKey    = props.getProperty("DROPBOX_APP_KEY");
+  const appSecret = props.getProperty("DROPBOX_APP_SECRET");
+  if (!code || !appKey || !appSecret) {
+    throw new Error("Set DROPBOX_TEMP_CODE, DROPBOX_APP_KEY, DROPBOX_APP_SECRET in Script Properties first, then run this again.");
+  }
+  const res = UrlFetchApp.fetch("https://api.dropbox.com/oauth2/token", {
+    method: "POST",
+    payload: {
+      grant_type: "authorization_code",
+      code: code,
+      client_id: appKey,
+      client_secret: appSecret,
+    },
+    muteHttpExceptions: true,
+  });
+  const json = JSON.parse(res.getContentText());
+  Logger.log(JSON.stringify(json, null, 2));
+  if (json.refresh_token) {
+    props.setProperty("DROPBOX_REFRESH_TOKEN", json.refresh_token);
+    props.deleteProperty("DROPBOX_TEMP_CODE");
+    Logger.log("✅ DROPBOX_REFRESH_TOKEN saved to Script Properties. You can now delete the old DROPBOX_TOKEN property.");
+  } else {
+    Logger.log("❌ No refresh_token in the response — see the error above. The code from the authorize URL is single-use and expires quickly; if this failed, generate a fresh one and update DROPBOX_TEMP_CODE before retrying.");
+  }
+  return json;
+}
+
+// The Apps Script editor's "Run" button calls a function with ZERO arguments —
+// it cannot pass code/appKey/appSecret in directly. Fill in the three values
+// below, select THIS function (not exchangeDropboxAuthCode) in the dropdown,
+// and run it instead. Delete this function once you have your refresh token.
+function TEMP_runDropboxExchange() {
+  exchangeDropboxAuthCode(
+    "PASTE_THE_CODE_FROM_THE_AUTHORIZE_URL_HERE",
+    "PASTE_YOUR_APP_KEY_HERE",
+    "PASTE_YOUR_APP_SECRET_HERE"
+  );
+}
+
 function dropboxPost(endpoint, payload) {
-  const token = PropertiesService.getScriptProperties().getProperty("DROPBOX_TOKEN");
-  if (!token) throw new Error("DROPBOX_TOKEN not set in Script Properties.");
+  const token = getDropboxAccessToken_();
   const res  = UrlFetchApp.fetch("https://api.dropboxapi.com/2/" + endpoint, {
     method: "POST",
     headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
@@ -1066,7 +1314,7 @@ function syncDropboxLinks() {
       listDropboxFolder(tf.path_lower).filter(e => e[".tag"] === "folder").forEach(folder => {
         const match = plateMap[normPlate(folder.name)];
         if (!match) return;
-        try { sheet.getRange(match.rowIndex, 20).setValue(getSharedLink(folder.path_lower)); regMatched++; }
+        try { setLinkCell_(sheet.getRange(match.rowIndex, 20), getSharedLink(folder.path_lower), "Open Reg Card"); regMatched++; }
         catch(e) { regFailed++; }
       });
       doneReg.push(tf.name);
@@ -1082,7 +1330,7 @@ function syncDropboxLinks() {
         topLevel.forEach(folder => {
           const match = plateMap[normPlate(folder.name)];
           if (!match) return;
-          try { sheet.getRange(match.rowIndex, 21).setValue(getSharedLink(folder.path_lower)); picsMatched++; }
+          try { setLinkCell_(sheet.getRange(match.rowIndex, 21), getSharedLink(folder.path_lower), "Open Car Pics"); picsMatched++; }
           catch(e) { picsFailed++; }
         });
         props.setProperty("SYNC_DONE_PICS", JSON.stringify(["done"]));
@@ -1094,7 +1342,7 @@ function syncDropboxLinks() {
         listDropboxFolder(tf.path_lower).filter(e => e[".tag"] === "folder").forEach(folder => {
           const match = plateMap[normPlate(folder.name)];
           if (!match) return;
-          try { sheet.getRange(match.rowIndex, 21).setValue(getSharedLink(folder.path_lower)); picsMatched++; }
+          try { setLinkCell_(sheet.getRange(match.rowIndex, 21), getSharedLink(folder.path_lower), "Open Car Pics"); picsMatched++; }
           catch(e) { picsFailed++; }
         });
         donePics.push(tf.name);
@@ -1106,10 +1354,22 @@ function syncDropboxLinks() {
     const regTotal = listDropboxFolder(REG_CARDS_PATH).filter(e => e[".tag"] === "folder").length;
     const regDone  = JSON.parse(props.getProperty("SYNC_DONE_REG")  || "[]").length;
     const picsDone = JSON.parse(props.getProperty("SYNC_DONE_PICS") || "[]").length;
-    if (regDone >= regTotal && picsDone > 0) {
+    const allDone  = regDone >= regTotal && picsDone > 0;
+    props.setProperty("SYNC_STATUS_JSON", JSON.stringify({
+      lastRun: new Date().toISOString(),
+      regDone, regTotal, picsDone: picsDone > 0,
+      regMatched, regFailed, picsMatched, picsFailed, allDone,
+    }));
+    if (allDone) {
       Logger.log("🎉 ALL DONE");
       props.deleteProperty("SYNC_DONE_REG");
       props.deleteProperty("SYNC_DONE_PICS");
+      // Stop the automatic trigger now that everything's synced — no reason to
+      // keep re-running (and re-fetching/re-sharing links) forever.
+      ScriptApp.getProjectTriggers().forEach(t => {
+        if (t.getHandlerFunction() === "syncDropboxLinks") ScriptApp.deleteTrigger(t);
+      });
+      Logger.log("🛑 Auto-sync trigger removed — everything is synced. Run setupDropboxSyncTrigger() again later if you add a lot of new cars/folders at once and want to bulk-sync them.");
     } else {
       Logger.log("▶ Run again. Reg: " + regDone + "/" + regTotal + " Pics: " + (picsDone > 0 ? "done" : "pending"));
     }
@@ -1117,10 +1377,65 @@ function syncDropboxLinks() {
   Logger.log("Reg +" + regMatched + " matched +" + regFailed + " failed | Pics +" + picsMatched + " matched +" + picsFailed + " failed");
 }
 
+// ── Admin Panel: Dropbox sync status/toggle ─────────────────────────────────
+function getDropboxSyncStatus() {
+  const props = PropertiesService.getScriptProperties();
+  const statusJson = props.getProperty("SYNC_STATUS_JSON");
+  const status = statusJson ? JSON.parse(statusJson) : null;
+  const triggerActive = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === "syncDropboxLinks");
+  return { success: true, status, triggerActive };
+}
+
+function enableDropboxSync() {
+  setupDropboxSyncTrigger();
+  return { success: true };
+}
+
+function disableDropboxSync() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === "syncDropboxLinks") ScriptApp.deleteTrigger(t);
+  });
+  return { success: true };
+}
+
 function syncDropboxReset() {
   PropertiesService.getScriptProperties().deleteProperty("SYNC_DONE_REG");
   PropertiesService.getScriptProperties().deleteProperty("SYNC_DONE_PICS");
   Logger.log("✅ Reset done.");
+}
+
+// One-time cleanup — reformats any Reg Card/Photos cells already written as
+// raw URLs (e.g. from before this hyperlink change) into the same
+// "Open Reg Card" / "Open Car Pics" clickable-text format going forward.
+// Safe to run any time; skips cells that are already blank.
+function reformatExistingLinks() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(FLEET_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+  let count = 0;
+  rows.slice(1).forEach((row, i) => {
+    const rowIndex = i + 2;
+    const regUrl  = row[19]; // column T
+    const picsUrl = row[20]; // column U
+    if (regUrl  && String(regUrl).indexOf("http")  === 0) { setLinkCell_(sheet.getRange(rowIndex, 20), regUrl,  "Open Reg Card"); count++; }
+    if (picsUrl && String(picsUrl).indexOf("http") === 0) { setLinkCell_(sheet.getRange(rowIndex, 21), picsUrl, "Open Car Pics"); count++; }
+  });
+  Logger.log("✅ Reformatted " + count + " existing link cell(s).");
+}
+
+// Run this once (▶ Run button, no arguments needed) to have syncDropboxLinks
+// run automatically every 5 minutes until every folder is processed. It
+// self-removes once syncDropboxLinks logs "ALL DONE" — safe to leave alone
+// after that. Re-run this function again in future if you bulk-add a lot of
+// new cars/Dropbox folders at once and want to catch them all up quickly.
+function setupDropboxSyncTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === "syncDropboxLinks") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("syncDropboxLinks")
+    .timeBased()
+    .everyMinutes(5)
+    .create();
+  Logger.log("✅ Trigger created — syncDropboxLinks will now run automatically every 5 minutes until fully done, then stop itself.");
 }
 
 // ── Reservations ─────────────────────────────────────────────
@@ -1386,4 +1701,182 @@ function deleteFromBlacklist(body) {
   if (body.fileId) { try { DriveApp.getFileById(body.fileId).setTrashed(true); } catch {} }
   sh.deleteRow(idx + 1);
   return { success: true };
+}
+
+// ── Signature Storage (Drive-based) ─────────────────────────────────────────
+// Signature images are saved as real Drive files (same pattern as Blacklist
+// photos above), with only the small resulting URL kept in Script Properties.
+// IMPORTANT: Script Properties has a ~9KB limit per value — a raw base64 PNG
+// signature can exceed that, which is why these are files, not property values.
+const SIGNATURES_DRIVE_FOLDER = "SmilesCars/Signatures";
+
+function getSignaturesFolder() {
+  const parts  = SIGNATURES_DRIVE_FOLDER.split("/");
+  let   folder = DriveApp.getRootFolder();
+  for (const part of parts) {
+    const found = folder.getFoldersByName(part);
+    folder = found.hasNext() ? found.next() : folder.createFolder(part);
+  }
+  return folder;
+}
+
+function uploadSignatureImage_(base64, filename) {
+  const folder = getSignaturesFolder();
+  const blob   = Utilities.newBlob(Utilities.base64Decode(base64), "image/png", filename);
+  const file   = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  const fileId = file.getId();
+  return { fileId, url: `https://lh3.googleusercontent.com/d/${fileId}` };
+}
+
+// Strips a "data:image/png;base64," prefix if present — the frontend sometimes
+// sends a full data URL, sometimes just the raw base64.
+function stripDataUrlPrefix_(s) {
+  const idx = s.indexOf(",");
+  return (s.indexOf("base64,") !== -1 && idx !== -1) ? s.slice(idx + 1) : s;
+}
+
+// ── Client Signatures (QR code / signature pad on RentalAgreementModal) ────
+// The URL pointer auto-expires after 24h since it's only needed long enough
+// to generate the one PDF; the Drive file itself is small and harmless to leave.
+function getSignature(e) {
+  const token = e.parameter.token || "";
+  if (!token) throw new Error("Missing token");
+  const props = PropertiesService.getScriptProperties();
+  const url = props.getProperty("SIG_URL_" + token);
+  const ts  = props.getProperty("SIG_TS_" + token);
+  if (!url || !ts) return { success: true, signature: null };
+  const ageMs = Date.now() - Number(ts);
+  if (ageMs > 24 * 60 * 60 * 1000) {
+    props.deleteProperty("SIG_URL_" + token);
+    props.deleteProperty("SIG_TS_" + token);
+    return { success: true, signature: null };
+  }
+  return { success: true, signature: url };
+}
+
+function storeSignature(body) {
+  if (!body.token || !body.signature) throw new Error("Missing token or signature");
+  const uploaded = uploadSignatureImage_(stripDataUrlPrefix_(body.signature), "client-" + body.token + ".png");
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty("SIG_URL_" + body.token, uploaded.url);
+  props.setProperty("SIG_TS_" + body.token, String(Date.now()));
+  return { success: true, url: uploaded.url };
+}
+
+// ── Staff Signatures (persist indefinitely, keyed by staff name) ───────────
+// Captured once per staff member, then reused automatically on every agreement.
+function getStaffSignature(e) {
+  const staffName = (e.parameter.staffName || "").trim().toLowerCase();
+  if (!staffName) throw new Error("Missing staffName");
+  const url = PropertiesService.getScriptProperties().getProperty("STAFFSIG_URL_" + staffName);
+  return { success: true, signature: url || null };
+}
+
+function storeStaffSignature(body) {
+  const staffName = (body.staffName || "").trim().toLowerCase();
+  if (!staffName || !body.signature) throw new Error("Missing staffName or signature");
+  const props = PropertiesService.getScriptProperties();
+  // Trash the previous file so re-signing (or switching from draw to upload)
+  // doesn't leave orphaned copies behind in Drive.
+  const oldFileId = props.getProperty("STAFFSIG_FILEID_" + staffName);
+  if (oldFileId) { try { DriveApp.getFileById(oldFileId).setTrashed(true); } catch (err) {} }
+  const uploaded = uploadSignatureImage_(stripDataUrlPrefix_(body.signature), staffName.replace(/[^a-z0-9]/gi, "_") + ".png");
+  props.setProperty("STAFFSIG_URL_" + staffName, uploaded.url);
+  props.setProperty("STAFFSIG_FILEID_" + staffName, uploaded.fileId);
+  return { success: true, url: uploaded.url };
+}
+
+// Clears a staff member's stored signature entirely — e.g. when they resign.
+// Trashes the Drive file too, not just the pointer, so it doesn't linger.
+function deleteStaffSignature(body) {
+  const staffName = (body.staffName || "").trim().toLowerCase();
+  if (!staffName) throw new Error("Missing staffName");
+  const props = PropertiesService.getScriptProperties();
+  const fileId = props.getProperty("STAFFSIG_FILEID_" + staffName);
+  if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch (err) {} }
+  props.deleteProperty("STAFFSIG_URL_" + staffName);
+  props.deleteProperty("STAFFSIG_FILEID_" + staffName);
+  return { success: true };
+}
+
+// ── Rental Agreement PDF storage ────────────────────────────────────────────
+// Saves each generated agreement to Drive and logs it in an "Agreements" sheet
+// (same folder-path pattern as the Blacklist photo upload above).
+const AGREEMENTS_DRIVE_FOLDER = "SmilesCars/Rental Agreements";
+const AGREEMENTS_SHEET        = "Agreements";
+
+function getAgreementsFolder() {
+  const parts  = AGREEMENTS_DRIVE_FOLDER.split("/");
+  let   folder = DriveApp.getRootFolder();
+  for (const part of parts) {
+    const found = folder.getFoldersByName(part);
+    folder = found.hasNext() ? found.next() : folder.createFolder(part);
+  }
+  return folder;
+}
+
+// ── Admin Panel: one-click full backup snapshot ─────────────────────────────
+// Copies the ENTIRE spreadsheet (every tab, as-is right now) into a dated
+// Drive folder — the same "pre-migration snapshot" concept from the Supabase
+// migration plan, just made a one-click action instead of a manual export.
+function createBackupSnapshot() {
+  const parts  = "SmilesCars/Backups".split("/");
+  let   folder = DriveApp.getRootFolder();
+  for (const part of parts) {
+    const found = folder.getFoldersByName(part);
+    folder = found.hasNext() ? found.next() : folder.createFolder(part);
+  }
+  const tz = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
+  const ts = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd_HH-mm");
+  const original = DriveApp.getFileById(SPREADSHEET_ID);
+  const copy = original.makeCopy("SmilesCars Fleet Backup - " + ts, folder);
+  return { success: true, url: copy.getUrl(), name: copy.getName() };
+}
+
+function uploadAgreement(body) {
+  if (!body.base64 || !body.refNo) throw new Error("Missing refNo or PDF data");
+  const folder   = getAgreementsFolder();
+  const safeName = String(body.refNo).replace(/\//g, "-"); // refs contain "/", not valid to lean on for a filename
+  const blob     = Utilities.newBlob(Utilities.base64Decode(body.base64), "application/pdf", safeName + ".pdf");
+  const file     = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  const url = file.getUrl();
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName(AGREEMENTS_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(AGREEMENTS_SHEET);
+    sh.getRange(1,1,1,6).setValues([["Ref","Plate","Client","Staff","Timestamp","Drive URL"]]).setFontWeight("bold");
+  }
+  sh.appendRow([body.refNo, body.plate||"", body.client||"", body.staffName||"", new Date(), url]);
+  return { success: true, url };
+}
+
+// Sequential agreement Ref, format SC/RA/YYYY/MM/1001+ — resets to 1001 each
+// month, same pattern as the existing Reservations ID scheme (RES/SC/YYYY/MM/100+).
+// Derived by scanning the "Agreements" sheet for the highest existing number
+// this month, rather than a separate counter, so it can never drift out of
+// sync with what's actually been logged.
+function getNextAgreementRef() {
+  const tz    = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
+  const now   = new Date();
+  const year  = Utilities.formatDate(now, tz, "yyyy");
+  const month = Utilities.formatDate(now, tz, "MM");
+  const prefix = "SC/RA/" + year + "/" + month + "/";
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(AGREEMENTS_SHEET);
+  let maxNum = 1000;
+  if (sh) {
+    const refs = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 0), 1).getValues();
+    refs.forEach(row => {
+      const ref = String(row[0] || "");
+      if (ref.indexOf(prefix) === 0) {
+        const num = parseInt(ref.slice(prefix.length), 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    });
+  }
+  return { success: true, refNo: prefix + (maxNum + 1) };
 }
