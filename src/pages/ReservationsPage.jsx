@@ -108,10 +108,11 @@ export default function ReservationsPage({ staffName, role }) {
               const diff   = Math.ceil((pickup - now) / (1000*60*60*24));
               return (
                 <div key={r.id} style={{ display:"flex",fontSize:13,color:"#dc2626",padding:"3px 0" }}>
-                  <span style={{ width:160,flexShrink:0,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:8 }}>{r.client}</span>
+                  <span style={{ width:220,flexShrink:0,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:8 }}>{r.client}</span>
                   <span style={{ width:120,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:8 }}>{r.carType||"Any"}</span>
                   <span style={{ width:90,flexShrink:0,fontWeight:600 }}>{diff===0?"Today":diff===1?"Tomorrow":`In ${diff} days`}</span>
                   <span style={{ width:90,flexShrink:0,color:"#888",fontSize:12 }}>{fmtDate(r.pickupDate)}</span>
+                  <span style={{ width:130,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#888",fontSize:12 }}>{r.staffName||"—"}</span>
                 </div>
               );
             })}
