@@ -70,6 +70,9 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const [assignedOpen,  setAssignedOpen] = useState(false);
   const [blOverride,    setBlOverride]   = useState(false);
   const [err,           setErr]          = useState("");
+  const [bookingType,   setBookingType]  = useState("Rental"); // "Rental" | "Transfer"
+  const [pickupFrom,    setPickupFrom]   = useState("");
+  const [dropoffTo,     setDropoffTo]    = useState("");
 
   const cfg = ACTIONS[action] || { title: "", color: "#16a34a", btnLabel: "Confirm" };
   const sel = { ...S.input, fontFamily: "inherit" };
@@ -95,11 +98,17 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
     ? staffList.filter(s => s.toLowerCase().includes(assignedQuery.toLowerCase()))
     : staffList;
 
+  const isTransfer = needsClient && bookingType === "Transfer";
+
   const handleSubmit = () => {
     setErr("");
     if (needsClient && !client.trim()) { setErr("Client name is required."); return; }
-    if (needsClient && !bookedFrom)    { setErr("Booked from date is required."); return; }
-    if ((needsClient || isExtend) && !returnDate) { setErr("Return date is required."); return; }
+    if (needsClient && bookingType === "Rental" && !bookedFrom) { setErr("Booked from date is required."); return; }
+    if (isTransfer && !bookedFrom)   { setErr("Transfer date is required."); return; }
+    if (isTransfer && !pickupFrom.trim()) { setErr("Pick-up location is required."); return; }
+    if (isTransfer && !dropoffTo.trim())  { setErr("Drop-off location is required."); return; }
+    if (isTransfer && !(addingDriver ? newDriver.trim() : driver)) { setErr("Driver Allocated is required for a Transfer."); return; }
+    if ((needsClient && bookingType === "Rental") || isExtend) { if (!returnDate) { setErr("Return date is required."); return; } }
     if (isMaintenance && !addingGarage && !garage) { setErr("Please select or add a garage."); return; }
     if (needsClient && paymentStatus === "Partial Paid" && !amountPaid) { setErr("Please enter amount paid."); return; }
     if (isStaffUse && !assignedTo) { setErr("Please select a staff member."); return; }
@@ -107,7 +116,8 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
     const gar = addingGarage ? newGarage.trim() : garage;
     const drv = addingDriver ? newDriver.trim() : driver;
     onConfirm({
-      client, clientPhone, bookedFrom, returnDate, actualReturn,
+      client, clientPhone,
+      bookedFrom, returnDate: isTransfer ? bookedFrom : returnDate, actualReturn,
       location: loc, remarks, fuelOut, fuelIn, kmOut, kmIn,
       amount: unformat(amount), currency,
       policeFine: unformat(policeFine), parkingFine: unformat(parkingFine),
@@ -116,6 +126,9 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
       newLocation: addingLoc    ? loc : null,
       newGarage:   addingGarage ? gar : null,
       newDriver:   addingDriver ? drv : null,
+      bookingType: needsClient ? bookingType : undefined,
+      pickupFrom: isTransfer ? pickupFrom.trim() : undefined,
+      dropoffTo:  isTransfer ? dropoffTo.trim()  : undefined,
     });
   };
 
@@ -148,6 +161,20 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
 
           {/* Check Out */}
           {needsClient && (<>
+            <div style={S.field}>
+              <label style={S.label}>Booking Type *</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {["Rental", "Transfer"].map(t => (
+                  <button type="button" key={t} onClick={() => setBookingType(t)}
+                    style={{ flex: 1, padding: "10px", fontSize: 13, fontWeight: 600, borderRadius: 8,
+                      border: `1.5px solid ${bookingType === t ? cfg.color : "#e5e7eb"}`,
+                      background: bookingType === t ? "#f0fdf4" : "#fff",
+                      color: bookingType === t ? "#15803d" : "#555", cursor: "pointer" }}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div style={S.field}><label style={S.label}>Client Name *</label>
               <input style={S.input} value={client} onChange={e => setClient(e.target.value)} onBlur={e => setClient(toTitleCase(e.target.value))} placeholder="Full name" autoFocus /></div>
             <div style={S.field}><label style={S.label}>Client Phone</label>
@@ -180,60 +207,115 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 </div>
               );
             })()}
-            <div style={S.two}>
-              <div style={S.field}><label style={S.label}>Booked From *</label>
-                <input style={S.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} /></div>
-              <div style={S.field}><label style={S.label}>Return Date *</label>
-                <input style={S.input} type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} /></div>
-            </div>
-            <div style={S.two}>
-              <div style={S.field}><label style={S.label}>Amount Charged</label>
-                <div style={{ display:"flex", gap:6 }}>
-                  <MoneyInput style={{ ...S.input, flex:1 }} value={amount} onChange={setAmount} placeholder="e.g. 150,000" />
-                  <select style={{ ...sel, width:76 }} value={currency} onChange={e => setCurrency(e.target.value)}>
-                    {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+            {bookingType === "Rental" ? (<>
+              <div style={S.two}>
+                <div style={S.field}><label style={S.label}>Booked From *</label>
+                  <input style={S.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} /></div>
+                <div style={S.field}><label style={S.label}>Return Date *</label>
+                  <input style={S.input} type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} /></div>
+              </div>
+              <div style={S.two}>
+                <div style={S.field}><label style={S.label}>Amount Charged</label>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <MoneyInput style={{ ...S.input, flex:1 }} value={amount} onChange={setAmount} placeholder="e.g. 150,000" />
+                    <select style={{ ...sel, width:76 }} value={currency} onChange={e => setCurrency(e.target.value)}>
+                      {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={S.field}><label style={S.label}>Payment Status</label>
+                  <select style={sel} value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)}>
+                    {PAYMENT_STATUSES.map(p => <option key={p}>{p}</option>)}
                   </select>
+                  {paymentStatus === "Partial Paid" && (
+                    <MoneyInput style={{ ...S.input, marginTop:6 }} value={amountPaid} onChange={setAmountPaid} placeholder="Amount paid" />
+                  )}
                 </div>
               </div>
-              <div style={S.field}><label style={S.label}>Payment Status</label>
-                <select style={sel} value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)}>
-                  {PAYMENT_STATUSES.map(p => <option key={p}>{p}</option>)}
-                </select>
-                {paymentStatus === "Partial Paid" && (
-                  <MoneyInput style={{ ...S.input, marginTop:6 }} value={amountPaid} onChange={setAmountPaid} placeholder="Amount paid" />
+              <div style={S.field}><label style={S.label}>Driver (optional)</label>
+                {!addingDriver ? (
+                  <select style={sel} value={driver} onChange={e => { if (e.target.value === "__new__") setAddingDriver(true); else setDriver(e.target.value); }}>
+                    <option value="">— No driver —</option>
+                    {driversList.map(d => <option key={d} value={d}>{d}</option>)}
+                    <option value="__new__">+ Add new driver</option>
+                  </select>
+                ) : (
+                  <div style={{ display:"flex", gap:6 }}>
+                    <input style={{ ...S.input, flex:1 }} placeholder="Driver name" value={newDriver} onChange={e => setNewDriver(e.target.value)} onBlur={e => setNewDriver(toTitleCase(e.target.value))} autoFocus />
+                    <button type="button" style={S.cancelSmall} onClick={() => setAddingDriver(false)}>✕</button>
+                  </div>
                 )}
               </div>
-            </div>
-            <div style={S.field}><label style={S.label}>Driver (optional)</label>
-              {!addingDriver ? (
-                <select style={sel} value={driver} onChange={e => { if (e.target.value === "__new__") setAddingDriver(true); else setDriver(e.target.value); }}>
-                  <option value="">— No driver —</option>
-                  {driversList.map(d => <option key={d} value={d}>{d}</option>)}
-                  <option value="__new__">+ Add new driver</option>
-                </select>
-              ) : (
-                <div style={{ display:"flex", gap:6 }}>
-                  <input style={{ ...S.input, flex:1 }} placeholder="Driver name" value={newDriver} onChange={e => setNewDriver(e.target.value)} onBlur={e => setNewDriver(toTitleCase(e.target.value))} autoFocus />
-                  <button type="button" style={S.cancelSmall} onClick={() => setAddingDriver(false)}>✕</button>
+              <div style={S.three}>
+                {locationField}
+                <div style={S.field}><label style={S.label}>Fuel Out</label>
+                  <select style={sel} value={fuelOut} onChange={e => setFuelOut(e.target.value)}>
+                    <option value="">— Select —</option>
+                    {FUEL_LEVELS.map(f => <option key={f}>{f}</option>)}
+                  </select>
                 </div>
-              )}
-            </div>
-            <div style={S.three}>
-              {locationField}
-              <div style={S.field}><label style={S.label}>Fuel Out</label>
-                <select style={sel} value={fuelOut} onChange={e => setFuelOut(e.target.value)}>
-                  <option value="">— Select —</option>
-                  {FUEL_LEVELS.map(f => <option key={f}>{f}</option>)}
-                </select>
+                <div style={S.field}><label style={S.label}>KM Out</label>
+                  <input style={S.input} type="text" inputMode="numeric" value={kmOut} onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" />
+                </div>
               </div>
-              <div style={S.field}><label style={S.label}>KM Out</label>
-                <input style={S.input} type="text" inputMode="numeric" value={kmOut} onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" />
+              <div style={S.two}>
+                <FineInput label="Police Fine"  value={policeFine}  onChange={setPoliceFine}  />
+                <FineInput label="Parking Fine" value={parkingFine} onChange={setParkingFine} />
               </div>
-            </div>
-            <div style={S.two}>
-              <FineInput label="Police Fine"  value={policeFine}  onChange={setPoliceFine}  />
-              <FineInput label="Parking Fine" value={parkingFine} onChange={setParkingFine} />
-            </div>
+            </>) : (<>
+              <div style={S.two}>
+                <div style={S.field}><label style={S.label}>PickUp From *</label>
+                  <input style={S.input} value={pickupFrom} onChange={e => setPickupFrom(e.target.value)} onBlur={e => setPickupFrom(toTitleCase(e.target.value))} placeholder="e.g. Airport" /></div>
+                <div style={S.field}><label style={S.label}>DropOff To *</label>
+                  <input style={S.input} value={dropoffTo} onChange={e => setDropoffTo(e.target.value)} onBlur={e => setDropoffTo(toTitleCase(e.target.value))} placeholder="e.g. Hotel name" /></div>
+              </div>
+              <div style={S.field}><label style={S.label}>Transfer Date *</label>
+                <input style={S.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} /></div>
+              <div style={S.field}><label style={S.label}>Driver Allocated *</label>
+                {!addingDriver ? (
+                  <select style={sel} value={driver} onChange={e => { if (e.target.value === "__new__") setAddingDriver(true); else setDriver(e.target.value); }}>
+                    <option value="">— Select —</option>
+                    {driversList.map(d => <option key={d} value={d}>{d}</option>)}
+                    <option value="__new__">+ Add new driver</option>
+                  </select>
+                ) : (
+                  <div style={{ display:"flex", gap:6 }}>
+                    <input style={{ ...S.input, flex:1 }} placeholder="Driver name" value={newDriver} onChange={e => setNewDriver(e.target.value)} onBlur={e => setNewDriver(toTitleCase(e.target.value))} autoFocus />
+                    <button type="button" style={S.cancelSmall} onClick={() => setAddingDriver(false)}>✕</button>
+                  </div>
+                )}
+              </div>
+              <div style={S.two}>
+                <div style={S.field}><label style={S.label}>Amount Charged</label>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <MoneyInput style={{ ...S.input, flex:1 }} value={amount} onChange={setAmount} placeholder="e.g. 150,000" />
+                    <select style={{ ...sel, width:76 }} value={currency} onChange={e => setCurrency(e.target.value)}>
+                      {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={S.field}><label style={S.label}>Payment Status</label>
+                  <select style={sel} value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)}>
+                    {PAYMENT_STATUSES.map(p => <option key={p}>{p}</option>)}
+                  </select>
+                  {paymentStatus === "Partial Paid" && (
+                    <MoneyInput style={{ ...S.input, marginTop:6 }} value={amountPaid} onChange={setAmountPaid} placeholder="Amount paid" />
+                  )}
+                </div>
+              </div>
+              <div style={S.three}>
+                {locationField}
+                <div style={S.field}><label style={S.label}>Fuel</label>
+                  <select style={sel} value={fuelOut} onChange={e => setFuelOut(e.target.value)}>
+                    <option value="">— Select —</option>
+                    {FUEL_LEVELS.map(f => <option key={f}>{f}</option>)}
+                  </select>
+                </div>
+                <div style={S.field}><label style={S.label}>KM Out</label>
+                  <input style={S.input} type="text" inputMode="numeric" value={kmOut} onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" />
+                </div>
+              </div>
+            </>)}
           </>)}
 
           {/* Extend */}
@@ -367,6 +449,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
           <div style={S.field}><label style={S.label}>Remarks / Notes</label>
             <textarea style={S.textarea} rows={2} value={remarks} onChange={e => setRemarks(e.target.value)}
               placeholder={
+                isTransfer                  ? "e.g. Client requested early pickup" :
                 action === "checkOut"       ? "e.g. Client heading to Mombasa" :
                 action === "extendBooking"  ? "e.g. Client requested 3 more days" :
                 action === "setMaintenance" ? "e.g. Engine oil leak, brake service" :
