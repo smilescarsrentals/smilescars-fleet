@@ -13,6 +13,14 @@ function colorFor(str) {
 }
 function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
 function pad(n) { return String(n).padStart(2,"0"); }
+// "2026-07-22" via new Date(str) parses as UTC midnight, not local midnight —
+// in a UTC+3 timezone (Tanzania) that silently adds most of a day to every
+// "days until pickup" calculation, making "Tomorrow" show as "In 2 days" etc.
+// Parsing the parts manually always constructs local midnight instead.
+function parseLocalDate(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
 function fmtDate(d) {
   if (!d) return "—";
   const [y,m,dd] = d.split("-");
@@ -58,7 +66,7 @@ export default function ReservationsPage({ staffName, role }) {
     return reservations.filter(r => {
       if (r.plate) return false; // already has a car assigned
       if (!r.pickupDate) return false;
-      const pickup = new Date(r.pickupDate);
+      const pickup = parseLocalDate(r.pickupDate);
       const diff   = Math.ceil((pickup - now) / (1000 * 60 * 60 * 24));
       return diff >= 0 && diff <= 5;
     });
@@ -105,7 +113,7 @@ export default function ReservationsPage({ staffName, role }) {
           <div>
             {urgentReservations.map(r => {
               const now    = new Date(); now.setHours(0,0,0,0);
-              const pickup = new Date(r.pickupDate);
+              const pickup = parseLocalDate(r.pickupDate);
               const diff   = Math.ceil((pickup - now) / (1000*60*60*24));
               return (
                 <div key={r.id} style={{ display:"flex",fontSize:13,color:"#dc2626",padding:"3px 0" }}>

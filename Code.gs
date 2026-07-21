@@ -8,7 +8,7 @@ const FLEET_SHEET        = "Fleet";
 const HISTORY_SHEET      = "History";
 const CONFIG_SHEET       = "Config";
 const SETTINGS_SHEET     = "Settings";
-const SYNC_QUEUE_SHEET   = "SyncQueue";
+const EXPORT_LOG_SHEET   = "ExportLog";
 const SOLD_SHEET         = "Sold";
 const SUBHIRE_SHEET      = "SubHire";
 const FUEL_SHEET         = "Fuel";
@@ -45,6 +45,7 @@ function doGet(e) {
     if (action === "getNextAgreementRef") return respond(getNextAgreementRef());
     if (action === "getStaffList")        return respond(getStaffList());
     if (action === "getSettings")         return respond(getSettings());
+    if (action === "getExportLog")        return respond(getExportLog());
     if (action === "getDropboxSyncStatus") return respond(getDropboxSyncStatus());
     return respond({ error: "Unknown action: " + action });
   } catch (err) {
@@ -76,6 +77,7 @@ function doPost(e) {
     if (action === "updateConfigItem")     return respond(updateConfigItem(body));
     if (action === "deleteConfigItem")     return respond(deleteConfigItem(body));
     if (action === "updateSetting")        return respond(updateSetting(body));
+    if (action === "logExport")            return respond(logExport(body));
     if (action === "enableDropboxSync")    return respond(enableDropboxSync());
     if (action === "disableDropboxSync")   return respond(disableDropboxSync());
     if (action === "createBackupSnapshot") return respond(createBackupSnapshot());
@@ -140,10 +142,6 @@ function updateFleetRow(plate, fields) {
   Object.keys(map).forEach(key => {
     if (fields[key] !== undefined) sheet.getRange(rowIndex, map[key]).setValue(fields[key]);
   });
-  // Queue the FULL current row (not just the fields that changed) — an
-  // upsert with only partial columns would null out everything else on the
-  // Supabase side, since PostgREST replaces, it doesn't merge-patch.
-  enqueueFleetSyncFromRow_(sheet, rowIndex);
 }
 
 function clearFleetRow(plate, status, extra) {
@@ -231,18 +229,6 @@ function addCar(body) {
     "",                   // V  checkedOutBy
     "",                   // W  bookingType
   ]);
-  try {
-    enqueueSync_("fleet", "upsert", {
-      plate: body.plate, type: body.type, location: body.location, status: "Available",
-      current_client: null, client_phone: null, booked_from: null, return_date: null,
-      remarks: null, fuel_out: null, amount: null, currency: "TZS", garage: null,
-      payment_status: null, amount_paid: null, police_fine_out: null, parking_fine_out: null,
-      km_out: null, driver: null, reg_card_url: body.regCardUrl || null, photos_url: body.photosUrl || null,
-      checked_out_by: null, booking_type: null, updated_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error("Failed to enqueue fleet sync for new car " + body.plate + ": " + err.message);
-  }
   return { success: true };
 }
 
@@ -261,20 +247,6 @@ function getCarByPlate(plate) {
 // ── History ──────────────────────────────────────────────────
 function addHistory(entry) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(HISTORY_SHEET);
-  try {
-    enqueueSync_("history", "insert", {
-      timestamp: new Date().toISOString(), plate: entry.plate || null, type: entry.type || null,
-      action: entry.action || null, client: entry.client || null, client_phone: entry.clientPhone || null,
-      booked_from: entry.bookedFrom || null, return_date: entry.returnDate || null, location: entry.location || null,
-      remarks: entry.remarks || null, staff_name: entry.staffName || null, fuel_out: entry.fuelOut || null,
-      fuel_in: entry.fuelIn || null, amount: entry.amount || null, currency: entry.currency || null,
-      police_fine: entry.policeFine || null, parking_fine: entry.parkingFine || null, garage: entry.garage || null,
-      payment_status: entry.paymentStatus || null, amount_paid: entry.amountPaid || null,
-      km_out: entry.kmOut || null, km_in: entry.kmIn || null, driver: entry.driver || null,
-    });
-  } catch (err) {
-    console.error("Failed to enqueue history sync: " + err.message);
-  }
   sheet.appendRow([
     new Date(),
     entry.plate         || "",
@@ -643,8 +615,6 @@ function markSold(body) {
   const soldSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SOLD_SHEET);
   soldSheet.appendRow([new Date(), body.plate, type, body.remarks || "", body.staffName]);
   sheet.deleteRow(rowIndex);
-  try { enqueueSync_("fleet", "delete", { column: "plate", value: body.plate }); }
-  catch (err) { console.error("Failed to enqueue fleet delete for " + body.plate + ": " + err.message); }
   addHistory({
     plate: body.plate, type, action: "Sold",
     remarks: body.remarks || "", staffName: body.staffName,
@@ -1379,11 +1349,8 @@ function syncDropboxLinks() {
       listDropboxFolder(tf.path_lower).filter(e => e[".tag"] === "folder").forEach(folder => {
         const match = plateMap[normPlate(folder.name)];
         if (!match) return;
-        try {
-          setLinkCell_(sheet.getRange(match.rowIndex, 20), getSharedLink(folder.path_lower), "Open Reg Card");
-          regMatched++;
-          enqueueFleetSyncFromRow_(sheet, match.rowIndex);
-        } catch(e) { regFailed++; }
+        try { setLinkCell_(sheet.getRange(match.rowIndex, 20), getSharedLink(folder.path_lower), "Open Reg Card"); regMatched++; }
+        catch(e) { regFailed++; }
       });
       doneReg.push(tf.name);
       props.setProperty("SYNC_DONE_REG", JSON.stringify(doneReg));
@@ -1398,11 +1365,8 @@ function syncDropboxLinks() {
         topLevel.forEach(folder => {
           const match = plateMap[normPlate(folder.name)];
           if (!match) return;
-          try {
-            setLinkCell_(sheet.getRange(match.rowIndex, 21), getSharedLink(folder.path_lower), "Open Car Pics");
-            picsMatched++;
-            enqueueFleetSyncFromRow_(sheet, match.rowIndex);
-          } catch(e) { picsFailed++; }
+          try { setLinkCell_(sheet.getRange(match.rowIndex, 21), getSharedLink(folder.path_lower), "Open Car Pics"); picsMatched++; }
+          catch(e) { picsFailed++; }
         });
         props.setProperty("SYNC_DONE_PICS", JSON.stringify(["done"]));
       } else { Logger.log("Car Pics: already done ✅"); }
@@ -1413,11 +1377,8 @@ function syncDropboxLinks() {
         listDropboxFolder(tf.path_lower).filter(e => e[".tag"] === "folder").forEach(folder => {
           const match = plateMap[normPlate(folder.name)];
           if (!match) return;
-          try {
-            setLinkCell_(sheet.getRange(match.rowIndex, 21), getSharedLink(folder.path_lower), "Open Car Pics");
-            picsMatched++;
-            enqueueFleetSyncFromRow_(sheet, match.rowIndex);
-          } catch(e) { picsFailed++; }
+          try { setLinkCell_(sheet.getRange(match.rowIndex, 21), getSharedLink(folder.path_lower), "Open Car Pics"); picsMatched++; }
+          catch(e) { picsFailed++; }
         });
         donePics.push(tf.name);
         props.setProperty("SYNC_DONE_PICS", JSON.stringify(donePics));
@@ -1597,16 +1558,6 @@ function addReservation(body) {
     body.staffName  || "",
     now,
   ]);
-  try {
-    supabaseInsert_("reservations", [{
-      id: id, plate: body.plate || null, car_type: body.carType || null, client_name: body.client,
-      phone: body.phone || null, pickup_date: toISODate_(body.pickupDate), return_date: toISODate_(body.returnDate),
-      pickup_from: body.pickUpFrom || null, remarks: body.remarks || null, staff_name: body.staffName || null,
-      created_at: now.toISOString(),
-    }]);
-  } catch (err) {
-    console.error("Supabase shadow-write failed for addReservation " + id + ": " + err.message);
-  }
   return { success: true, id };
 }
 
@@ -1624,17 +1575,6 @@ function editReservation(body) {
   if (body.returnDate)               sh.getRange(idx+1, 7).setValue(new Date(body.returnDate));
   if (body.pickUpFrom !== undefined) sh.getRange(idx+1, 8).setValue(body.pickUpFrom);
   if (body.remarks    !== undefined) sh.getRange(idx+1, 9).setValue(body.remarks);
-  try {
-    const r = sh.getRange(idx+1, 1, 1, 11).getValues()[0];
-    supabaseUpsert_("reservations", [{
-      id: r[0], plate: r[1] || null, car_type: r[2] || null, client_name: r[3],
-      phone: r[4] || null, pickup_date: toISODate_(r[5]), return_date: toISODate_(r[6]),
-      pickup_from: r[7] || null, remarks: r[8] || null, staff_name: r[9] || null,
-      created_at: toISOTimestamp_(r[10]),
-    }], "id");
-  } catch (err) {
-    console.error("Supabase shadow-write failed for editReservation " + body.id + ": " + err.message);
-  }
   return { success: true };
 }
 
@@ -1645,8 +1585,6 @@ function deleteReservation(body) {
   const idx  = rows.findIndex(r => r[0] === body.id);
   if (idx < 1) throw new Error("Reservation not found");
   sh.deleteRow(idx + 1);
-  try { supabaseDelete_("reservations", "id", body.id); }
-  catch (err) { console.error("Supabase shadow-delete failed for deleteReservation " + body.id + ": " + err.message); }
   return { success: true };
 }
 
@@ -1787,14 +1725,6 @@ function addToBlacklist(body) {
   const id = "BL-" + Utilities.getUuid().split("-")[0].toUpperCase();
   const ts = new Date();
   sh.appendRow([id, body.name||"", body.phone||"", body.licenseNo||"", body.imageUrl||"", body.fileId||"", body.addedBy||"", ts]);
-  try {
-    supabaseInsert_("blacklist", [{
-      sheet_id: id, name: body.name || null, phone: body.phone || null, license_no: body.licenseNo || null,
-      license_image_path: body.imageUrl || null, added_by: body.addedBy || null, created_at: ts.toISOString(),
-    }]);
-  } catch (err) {
-    console.error("Supabase shadow-write failed for addToBlacklist " + id + ": " + err.message);
-  }
   return { success: true, id };
 }
 
@@ -1806,8 +1736,6 @@ function deleteFromBlacklist(body) {
   if (idx < 1) throw new Error("Entry not found");
   if (body.fileId) { try { DriveApp.getFileById(body.fileId).setTrashed(true); } catch {} }
   sh.deleteRow(idx + 1);
-  try { supabaseDelete_("blacklist", "sheet_id", body.id); }
-  catch (err) { console.error("Supabase shadow-delete failed for deleteFromBlacklist " + body.id + ": " + err.message); }
   return { success: true };
 }
 
@@ -1892,13 +1820,6 @@ function storeStaffSignature(body) {
   const uploaded = uploadSignatureImage_(stripDataUrlPrefix_(body.signature), staffName.replace(/[^a-z0-9]/gi, "_") + ".png");
   props.setProperty("STAFFSIG_URL_" + staffName, uploaded.url);
   props.setProperty("STAFFSIG_FILEID_" + staffName, uploaded.fileId);
-  // Shadow-write to Supabase (Stage 2 pilot) — never blocks or breaks the
-  // real save if it fails; Sheets/Drive remain the source of truth for now.
-  try {
-    supabaseUpsert_("staff_signatures", [{ staff_name: staffName, image_path: uploaded.url, updated_at: new Date().toISOString() }], "staff_name");
-  } catch (err) {
-    console.error("Supabase shadow-write failed for storeStaffSignature (" + staffName + "): " + err.message);
-  }
   return { success: true, url: uploaded.url };
 }
 
@@ -1912,11 +1833,6 @@ function deleteStaffSignature(body) {
   if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch (err) {} }
   props.deleteProperty("STAFFSIG_URL_" + staffName);
   props.deleteProperty("STAFFSIG_FILEID_" + staffName);
-  try {
-    supabaseDelete_("staff_signatures", "staff_name", staffName);
-  } catch (err) {
-    console.error("Supabase shadow-delete failed for deleteStaffSignature (" + staffName + "): " + err.message);
-  }
   return { success: true };
 }
 
@@ -1938,8 +1854,7 @@ function getAgreementsFolder() {
 
 // ── Admin Panel: one-click full backup snapshot ─────────────────────────────
 // Copies the ENTIRE spreadsheet (every tab, as-is right now) into a dated
-// Drive folder — the same "pre-migration snapshot" concept from the Supabase
-// migration plan, just made a one-click action instead of a manual export.
+// Drive folder — a one-click backup snapshot.
 function createBackupSnapshot() {
   const parts  = "SmilesCars/Backups".split("/");
   let   folder = DriveApp.getRootFolder();
@@ -1952,6 +1867,45 @@ function createBackupSnapshot() {
   const original = DriveApp.getFileById(SPREADSHEET_ID);
   const copy = original.makeCopy("SmilesCars Fleet Backup - " + ts, folder);
   return { success: true, url: copy.getUrl(), name: copy.getName() };
+}
+
+// ── Export audit log ─────────────────────────────────────────────────────
+// Every data export (Fleet list, etc.) gets recorded — who, when, how many
+// rows, and what filters were active (did they export everything, or just a
+// filtered slice?). This is the direct response to "someone could quietly
+// export the client/fleet list" — it doesn't prevent that, but it makes it
+// traceable, and the exported file itself also carries a visible + metadata
+// watermark (see exportToExcel on the frontend) so a leaked file can be
+// traced back to who pulled it.
+function getOrCreateExportLogSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName(EXPORT_LOG_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(EXPORT_LOG_SHEET);
+    sh.getRange(1, 1, 1, 6).setValues([["Timestamp", "Staff", "Role", "Export Type", "Row Count", "Filters"]]).setFontWeight("bold");
+  }
+  return sh;
+}
+
+function logExport(body) {
+  if (!body.staffName) throw new Error("Staff name is required");
+  const ts = new Date();
+  getOrCreateExportLogSheet_().appendRow([
+    ts, body.staffName, body.role || "", body.exportType || "Fleet",
+    body.rowCount || 0, body.filters || "",
+  ]);
+  return { success: true };
+}
+
+// Admin Panel System tab reads recent exports from here.
+function getExportLog() {
+  const sh = getOrCreateExportLogSheet_();
+  const rows = sh.getDataRange().getValues().slice(1).filter(r => r[0]);
+  const entries = rows.map(r => ({
+    timestamp: toISOTimestamp_(r[0]), staffName: r[1], role: r[2],
+    exportType: r[3], rowCount: r[4], filters: r[5],
+  })).reverse().slice(0, 50); // most recent 50
+  return { success: true, entries };
 }
 
 function uploadAgreement(body) {
@@ -1970,22 +1924,6 @@ function uploadAgreement(body) {
     sh.getRange(1,1,1,6).setValues([["Ref","Plate","Client","Staff","Timestamp","Drive URL"]]).setFontWeight("bold");
   }
   sh.appendRow([body.refNo, body.plate||"", body.client||"", body.staffName||"", new Date(), url]);
-
-  // Shadow-write to Supabase (Stage 2 pilot) — never blocks or breaks the
-  // real save if it fails; Sheets/Drive remain the source of truth for now.
-  try {
-    supabaseInsert_("agreements", [{
-      ref: body.refNo, plate: body.plate || null, client: body.client || null,
-      staff_name: body.staffName || null, pdf_path: url,
-    }]);
-    // NOTE: agreement_ref_counters is NOT touched here anymore — the RPC in
-    // getNextAgreementRef is now the sole thing that increments it. Setting
-    // it again here (to whatever ref this specific request happened to get)
-    // could clobber a higher number issued by a concurrent request if the
-    // two shadow-writes land out of order.
-  } catch (err) {
-    console.error("Supabase shadow-write failed for uploadAgreement " + body.refNo + ": " + err.message);
-  }
   return { success: true, url };
 }
 
@@ -1994,30 +1932,7 @@ function uploadAgreement(body) {
 // Derived by scanning the "Agreements" sheet for the highest existing number
 // this month, rather than a separate counter, so it can never drift out of
 // sync with what's actually been logged.
-// Reads from Supabase now (Stage 4 — first real "read cutover"). The RPC
-// call below is atomic — Postgres row-level locking makes it genuinely
-// race-proof for two staff generating an agreement in the same instant,
-// unlike the old Sheets-scan approach, which only ever guessed the next
-// number rather than reserving it. Falls back to the old Sheets-scan method
-// if Supabase is unreachable, so this feature never goes down because of it.
-//
-// NOTE on the fallback: if the fallback ever fires, Sheets and Supabase's
-// counter can drift apart until Supabase is reachable again, which could in
-// rare cases cause one duplicate ref down the line. Same accepted-risk shape
-// as the original Sheets-only race condition — low probability, low
-// consequence (a cosmetic duplicate, easy to spot and fix), not worth
-// blocking this cutover over.
 function getNextAgreementRef() {
-  try {
-    const ref = supabaseRpc_("get_next_agreement_ref", {});
-    if (ref && typeof ref === "string") return { success: true, refNo: ref };
-  } catch (err) {
-    console.error("Supabase getNextAgreementRef failed, falling back to Sheets scan: " + err.message);
-  }
-  return getNextAgreementRefFromSheets_();
-}
-
-function getNextAgreementRefFromSheets_() {
   const tz    = SpreadsheetApp.openById(SPREADSHEET_ID).getSpreadsheetTimeZone();
   const now   = new Date();
   const year  = Utilities.formatDate(now, tz, "yyyy");
@@ -2038,410 +1953,4 @@ function getNextAgreementRefFromSheets_() {
     });
   }
   return { success: true, refNo: prefix + (maxNum + 1) };
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// SUPABASE BACKFILL — one-time migration, run manually, not called by the app
-// ════════════════════════════════════════════════════════════════════════
-//
-// Reads every Sheets tab and pushes it into the new Supabase project. This
-// is pure prep work — nothing here touches Sheets, and nothing in the live
-// app calls any of this. Safe to run, safe to re-run (though re-running
-// will duplicate rows — see the note on backfillAllToSupabase below).
-//
-// SETUP (one-time, before running anything below):
-//   1. Supabase Dashboard -> Project Settings -> API -> copy the "service_role"
-//      secret key (NOT the anon/publishable key -- this one bypasses RLS,
-//      which is required for a bulk backfill, and must never appear in any
-//      frontend code, only here in Code.gs).
-//   2. Apps Script -> Project Settings -> Script Properties, add:
-//        SUPABASE_URL          = https://vqfjjmxyvxwdvlyivdfz.supabase.co
-//        SUPABASE_SERVICE_KEY  = <the service_role secret from step 1>
-
-function toISODate_(v) {
-  if (!v) return null;
-  if (v instanceof Date) return Utilities.formatDate(v, "UTC", "yyyy-MM-dd");
-  const s = String(v).trim();
-  return s || null;
-}
-function toISOTimestamp_(v) {
-  if (!v) return null;
-  if (v instanceof Date) return v.toISOString();
-  const s = String(v).trim();
-  return s || null;
-}
-function toNum_(v) {
-  if (v === "" || v === null || v === undefined) return null;
-  const n = Number(String(v).replace(/,/g, ""));
-  return isNaN(n) ? null : n;
-}
-function toStr_(v) {
-  if (v === null || v === undefined) return null;
-  const s = String(v).trim();
-  return s || null;
-}
-
-function supabaseInsert_(table, rows) {
-  if (!rows || !rows.length) { Logger.log("(" + table + ": nothing to insert)"); return; }
-  const props = PropertiesService.getScriptProperties();
-  const url = props.getProperty("SUPABASE_URL");
-  const key = props.getProperty("SUPABASE_SERVICE_KEY");
-  if (!url || !key) throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in Script Properties — see setup notes above.");
-  const CHUNK = 500;
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk = rows.slice(i, i + CHUNK);
-    const res = UrlFetchApp.fetch(url + "/rest/v1/" + table, {
-      method: "POST",
-      headers: {
-        "apikey": key,
-        "Authorization": "Bearer " + key,
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal",
-      },
-      payload: JSON.stringify(chunk),
-      muteHttpExceptions: true,
-    });
-    const code = res.getResponseCode();
-    if (code >= 300) throw new Error("Supabase insert into " + table + " failed (" + code + "): " + res.getContentText());
-    Logger.log("✅ " + table + ": inserted " + (i + 1) + "-" + Math.min(i + CHUNK, rows.length) + " of " + rows.length);
-  }
-}
-
-// Insert-or-update on conflict (e.g. re-signing overwrites the existing row
-// rather than creating a duplicate). onConflictColumn must match a unique
-// constraint or primary key on the target table.
-function supabaseUpsert_(table, rows, onConflictColumn) {
-  if (!rows || !rows.length) return;
-  const props = PropertiesService.getScriptProperties();
-  const url = props.getProperty("SUPABASE_URL");
-  const key = props.getProperty("SUPABASE_SERVICE_KEY");
-  if (!url || !key) throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in Script Properties.");
-  const res = UrlFetchApp.fetch(url + "/rest/v1/" + table + "?on_conflict=" + onConflictColumn, {
-    method: "POST",
-    headers: {
-      "apikey": key,
-      "Authorization": "Bearer " + key,
-      "Content-Type": "application/json",
-      "Prefer": "resolution=merge-duplicates,return=minimal",
-    },
-    payload: JSON.stringify(rows),
-    muteHttpExceptions: true,
-  });
-  const code = res.getResponseCode();
-  if (code >= 300) throw new Error("Supabase upsert into " + table + " failed (" + code + "): " + res.getContentText());
-}
-
-function supabaseDelete_(table, column, value) {
-  const props = PropertiesService.getScriptProperties();
-  const url = props.getProperty("SUPABASE_URL");
-  const key = props.getProperty("SUPABASE_SERVICE_KEY");
-  if (!url || !key) throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in Script Properties.");
-  const res = UrlFetchApp.fetch(url + "/rest/v1/" + table + "?" + column + "=eq." + encodeURIComponent(value), {
-    method: "DELETE",
-    headers: { "apikey": key, "Authorization": "Bearer " + key, "Prefer": "return=minimal" },
-    muteHttpExceptions: true,
-  });
-  const code = res.getResponseCode();
-  if (code >= 300) throw new Error("Supabase delete from " + table + " failed (" + code + "): " + res.getContentText());
-}
-
-// Calls a Postgres function (RPC) — used where a plain table insert/upsert
-// can't express what's needed, e.g. atomic increment-by-1 for ref numbers.
-function supabaseRpc_(functionName, params) {
-  const props = PropertiesService.getScriptProperties();
-  const url = props.getProperty("SUPABASE_URL");
-  const key = props.getProperty("SUPABASE_SERVICE_KEY");
-  if (!url || !key) throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in Script Properties.");
-  const res = UrlFetchApp.fetch(url + "/rest/v1/rpc/" + functionName, {
-    method: "POST",
-    headers: { "apikey": key, "Authorization": "Bearer " + key, "Content-Type": "application/json" },
-    payload: JSON.stringify(params || {}),
-    muteHttpExceptions: true,
-  });
-  const code2 = res.getResponseCode();
-  if (code2 >= 300) throw new Error("Supabase RPC " + functionName + " failed (" + code2 + "): " + res.getContentText());
-  return JSON.parse(res.getContentText());
-}
-
-// ── Stage 3: queued shadow-sync for high-frequency tables (Fleet, History) ──
-// Unlike Agreements/Signatures (Stage 2, low-frequency, safe to shadow-write
-// inline), Fleet and History change constantly — checkout, return, extend,
-// maintenance, every one of them touches both. Apps Script has no true
-// "fire and forget" (UrlFetchApp always blocks), so calling Supabase inline
-// here would add real latency to every single one of those actions. Instead:
-// log to a queue (a fast, cheap sheet append) and let a scheduled trigger
-// drain it every couple of minutes. Zero added latency to anything staff does.
-function getOrCreateSyncQueueSheet_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sh = ss.getSheetByName(SYNC_QUEUE_SHEET);
-  if (!sh) {
-    sh = ss.insertSheet(SYNC_QUEUE_SHEET);
-    sh.getRange(1, 1, 1, 4).setValues([["Table", "Operation", "Payload", "EnqueuedAt"]]).setFontWeight("bold");
-  }
-  return sh;
-}
-
-function enqueueSync_(table, operation, payload) {
-  try {
-    getOrCreateSyncQueueSheet_().appendRow([table, operation, JSON.stringify(payload), new Date()]);
-  } catch (err) {
-    console.error("Failed to enqueue sync for " + table + ": " + err.message);
-  }
-}
-
-// Shared by updateFleetRow, addCar, and the Dropbox sync — reads the full
-// current row (resolving Reg Card/Photos rich-text hyperlinks to their real
-// URL, not their display text) and queues a complete Fleet upsert.
-function enqueueFleetSyncFromRow_(sheet, rowIndex) {
-  try {
-    const range = sheet.getRange(rowIndex, 1, 1, 22);
-    const fullRow = range.getValues()[0];
-    const richRow = range.getRichTextValues()[0];
-    const m = mapFleetRow(fullRow, rowIndex - 2, richRow);
-    enqueueSync_("fleet", "upsert", {
-      plate: m.plate, type: m.type, location: m.location, status: m.status,
-      current_client: m.currentClient, client_phone: m.clientPhone,
-      booked_from: m.bookedFrom || null, return_date: m.returnDate || null,
-      remarks: m.remarks, fuel_out: m.fuelOut, amount: m.amount || null,
-      currency: m.currency, garage: m.garage, payment_status: m.paymentStatus,
-      amount_paid: m.amountPaid || null, police_fine_out: m.policeFineOut || null,
-      parking_fine_out: m.parkingFineOut || null, km_out: m.kmOut || null,
-      driver: m.driver, reg_card_url: m.regCardUrl, photos_url: m.photosUrl,
-      checked_out_by: m.checkedOutBy, booking_type: m.bookingType, updated_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error("Failed to enqueue fleet sync for row " + rowIndex + ": " + err.message);
-  }
-}
-
-// Run on a time-driven trigger (see setupSyncQueueTrigger). Groups queued
-// items by table+operation for efficient batched calls, and only clears the
-// specific rows that actually succeeded — a partial failure leaves the
-// failed rows in the queue for the next run to retry, instead of either
-// losing them or re-sending everything (which would duplicate History rows,
-// since History is insert-only with no natural dedupe key).
-function processSyncQueue() {
-  const sh = getOrCreateSyncQueueSheet_();
-  const rows = sh.getDataRange().getValues();
-  if (rows.length <= 1) { Logger.log("Sync queue empty."); return; }
-
-  const items = [];
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    if (!r[0]) continue;
-    let payload;
-    try { payload = JSON.parse(r[2]); } catch (e) { continue; }
-    items.push({ rowIndex: i + 1, table: r[0], operation: r[1], payload: payload });
-  }
-
-  const groups = {};
-  items.forEach(it => {
-    const key = it.table + "|" + it.operation;
-    if (!groups[key]) groups[key] = { rowIndexes: [], payloads: [] };
-    groups[key].rowIndexes.push(it.rowIndex);
-    groups[key].payloads.push(it.payload);
-  });
-
-  const succeededRowIndexes = [];
-  Object.keys(groups).forEach(key => {
-    const parts = key.split("|");
-    const table = parts[0], operation = parts[1];
-    const g = groups[key];
-    try {
-      if (operation === "upsert") {
-        supabaseUpsert_(table, g.payloads, table === "fleet" ? "plate" : "id");
-      } else if (operation === "insert") {
-        supabaseInsert_(table, g.payloads);
-      } else if (operation === "delete") {
-        g.payloads.forEach(p => supabaseDelete_(table, p.column, p.value));
-      }
-      Logger.log("✅ Synced " + g.payloads.length + " " + operation + "(s) to " + table);
-      Array.prototype.push.apply(succeededRowIndexes, g.rowIndexes);
-    } catch (err) {
-      console.error("Sync failed for " + key + ": " + err.message);
-    }
-  });
-
-  // Delete highest row number first so earlier deletions don't shift the
-  // row indexes of rows still waiting to be deleted.
-  succeededRowIndexes.sort(function(a, b) { return b - a; }).forEach(function(rowIndex) { sh.deleteRow(rowIndex); });
-  Logger.log(succeededRowIndexes.length + " of " + items.length + " queue items cleared.");
-}
-
-// Run once (▶ Run button, no arguments needed) to have processSyncQueue run
-// automatically every 2 minutes. Safe to leave running indefinitely — an
-// empty queue just logs "Sync queue empty." and does nothing.
-function setupSyncQueueTrigger() {
-  ScriptApp.getProjectTriggers().forEach(t => {
-    if (t.getHandlerFunction() === "processSyncQueue") ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger("processSyncQueue")
-    .timeBased()
-    .everyMinutes(2)
-    .create();
-  Logger.log("✅ Trigger created — processSyncQueue will now run automatically every 2 minutes.");
-}
-
-function backfillStaffAndConfig() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CONFIG_SHEET);
-  const rows = sheet.getDataRange().getValues().slice(1);
-
-  const staff = rows.filter(r => r[0] === "Staff" && r[1]).map(r => ({
-    name: toStr_(r[1]),
-    // NOT actually hashed yet — carries over the current plaintext password
-    // as-is. Real bcrypt hashing (via a Supabase Edge Function) is separate
-    // follow-up work, required before this table is used for real login.
-    password_hash: toStr_(r[2]) || "",
-    role: toStr_(r[3]) || "Staff",
-    active: isStaffActive_(r),
-  }));
-  supabaseInsert_("staff", staff);
-
-  const lists = rows.filter(r => ["Location", "Garage", "Driver"].indexOf(r[0]) !== -1 && r[1]).map(r => ({
-    type: r[0].toLowerCase(),
-    value: toStr_(r[1]),
-  }));
-  supabaseInsert_("config_lists", lists);
-}
-
-function backfillFleet() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(FLEET_SHEET);
-  const rows = sheet.getDataRange().getValues().slice(1).filter(r => r[0]);
-  const mapped = rows.map(r => ({
-    plate: toStr_(r[0]), type: toStr_(r[1]), location: toStr_(r[2]), status: toStr_(r[3]) || "Available",
-    current_client: toStr_(r[4]), client_phone: toStr_(r[5]),
-    booked_from: toISODate_(r[6]), return_date: toISODate_(r[7]),
-    remarks: toStr_(r[8]), fuel_out: toStr_(r[9]), amount: toNum_(r[10]), currency: toStr_(r[11]) || "TZS",
-    garage: toStr_(r[12]), payment_status: toStr_(r[13]), amount_paid: toNum_(r[14]),
-    police_fine_out: toNum_(r[15]), parking_fine_out: toNum_(r[16]), km_out: toNum_(r[17]),
-    driver: toStr_(r[18]), reg_card_url: toStr_(r[19]), photos_url: toStr_(r[20]), checked_out_by: toStr_(r[21]),
-  }));
-  supabaseInsert_("fleet", mapped);
-}
-
-function backfillReservations() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(RESERVATIONS_SHEET);
-  const rows = sheet.getDataRange().getValues().slice(1).filter(r => r[0]);
-  const mapped = rows.map(r => ({
-    id: toStr_(r[0]), plate: toStr_(r[1]) || null, car_type: toStr_(r[2]), client_name: toStr_(r[3]),
-    phone: toStr_(r[4]), pickup_date: toISODate_(r[5]), return_date: toISODate_(r[6]),
-    pickup_from: toStr_(r[7]), remarks: toStr_(r[8]), staff_name: toStr_(r[9]),
-    created_at: toISOTimestamp_(r[10]),
-  }));
-  supabaseInsert_("reservations", mapped);
-}
-
-function backfillAgreements() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(AGREEMENTS_SHEET);
-  if (!sheet) { Logger.log("(no Agreements sheet yet)"); return; }
-  const rows = sheet.getDataRange().getValues().slice(1).filter(r => r[0]);
-  const mapped = rows.map(r => ({
-    ref: toStr_(r[0]), plate: toStr_(r[1]), client: toStr_(r[2]), staff_name: toStr_(r[3]),
-    created_at: toISOTimestamp_(r[4]), pdf_path: toStr_(r[5]),
-  }));
-  // Upsert, not insert — safe to re-run even if some refs already exist from
-  // live traffic that happened since the last backfill (e.g. real agreements
-  // generated through the app while this was being re-run).
-  supabaseUpsert_("agreements", mapped, "ref");
-
-  // NOTE: deliberately NOT re-seeding agreement_ref_counters here anymore.
-  // That was only ever needed for the original one-time Stage 1 backfill,
-  // before the get_next_agreement_ref RPC existed. Now that the RPC is the
-  // sole live authority on the counter, re-seeding it from historical Sheets
-  // data on every backfill re-run risks rolling it backward if Sheets is
-  // ever momentarily behind Supabase — worse than just leaving it alone.
-}
-
-function backfillStaffSignatures() {
-  const props = PropertiesService.getScriptProperties().getProperties();
-  const rows = Object.keys(props)
-    .filter(k => k.indexOf("STAFFSIG_URL_") === 0)
-    .map(k => ({
-      staff_name: k.replace("STAFFSIG_URL_", ""),
-      image_path: props[k],
-    }));
-  supabaseInsert_("staff_signatures", rows);
-}
-
-function backfillBlacklist() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(BLACKLIST_SHEET);
-  const rows = sheet.getDataRange().getValues().slice(1).filter(r => r[0]);
-  const mapped = rows.map(r => ({
-    name: toStr_(r[1]), phone: toStr_(r[2]), license_no: toStr_(r[3]),
-    license_image_path: toStr_(r[4]), added_by: toStr_(r[5]), created_at: toISOTimestamp_(r[6]),
-  }));
-  supabaseInsert_("blacklist", mapped);
-}
-
-function backfillHistory() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(HISTORY_SHEET);
-  const rows = sheet.getDataRange().getValues().slice(1).filter(r => r[0]);
-  const mapped = rows.map(r => ({
-    timestamp: toISOTimestamp_(r[0]), plate: toStr_(r[1]), type: toStr_(r[2]), action: toStr_(r[3]),
-    client: toStr_(r[4]), client_phone: toStr_(r[5]), booked_from: toISODate_(r[6]), return_date: toISODate_(r[7]),
-    location: toStr_(r[8]), remarks: toStr_(r[9]), staff_name: toStr_(r[10]),
-    fuel_out: toStr_(r[11]), fuel_in: toStr_(r[12]), amount: toNum_(r[13]), currency: toStr_(r[14]),
-    police_fine: toNum_(r[15]), parking_fine: toNum_(r[16]), garage: toStr_(r[17]), payment_status: toStr_(r[18]),
-    amount_paid: toNum_(r[19]), km_out: toNum_(r[20]), km_in: toNum_(r[21]), driver: toStr_(r[22]),
-  }));
-  supabaseInsert_("history", mapped);
-}
-
-function backfillSubHire() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SUBHIRE_SHEET);
-  const rows = sheet.getDataRange().getValues().slice(1).filter(r => r[0]);
-  const mapped = rows.map(r => ({
-    status: toStr_(r[1]), supplier_name: toStr_(r[2]), supplier_contact: toStr_(r[3]), vehicle_description: toStr_(r[4]),
-    client: toStr_(r[5]), client_phone: toStr_(r[6]), booked_from: toISODate_(r[7]), return_date: toISODate_(r[8]),
-    actual_return: toISODate_(r[9]), location: toStr_(r[10]), fuel_out: toStr_(r[11]), fuel_in: toStr_(r[12]),
-    amount: toNum_(r[13]), currency: toStr_(r[14]), payment_status: toStr_(r[15]), amount_paid: toNum_(r[16]),
-    supplier_amount: toNum_(r[17]), supplier_currency: toStr_(r[18]), supplier_pay_status: toStr_(r[19]),
-    supplier_amount_paid: toNum_(r[20]), police_fine: toNum_(r[21]), parking_fine: toNum_(r[22]),
-    remarks: toStr_(r[23]), staff_name: toStr_(r[24]), created_at: toISOTimestamp_(r[25]), plate: toStr_(r[26]),
-  }));
-  supabaseInsert_("sub_hire", mapped);
-}
-
-function backfillSold() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SOLD_SHEET);
-  const rows = sheet.getDataRange().getValues().slice(1).filter(r => r[1]);
-  const mapped = rows.map(r => ({
-    timestamp: toISOTimestamp_(r[0]), plate: toStr_(r[1]), type: toStr_(r[2]), remarks: toStr_(r[3]), staff_name: toStr_(r[4]),
-  }));
-  supabaseInsert_("sold", mapped);
-}
-
-function backfillFuel() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(FUEL_SHEET);
-  const rows = sheet.getDataRange().getValues().slice(1).filter(r => r[1]);
-  const mapped = rows.map(r => ({
-    date: toISODate_(r[0]), plate: toStr_(r[1]), vehicle_type: toStr_(r[2]), product: toStr_(r[3]),
-    amount_tsh: toNum_(r[4]), litres: toNum_(r[5]), authorised_by: toStr_(r[6]), submitted_by: toStr_(r[7]),
-    linked_client: toStr_(r[8]), current_km: toNum_(r[9]),
-  }));
-  supabaseInsert_("fuel", mapped);
-}
-
-// Run this once (Run button, no arguments needed), after completing the
-// SUPABASE_URL / SUPABASE_SERVICE_KEY setup above. Order matters — Fleet is
-// backfilled before Reservations/Agreements since they reference it.
-//
-// NOT safe to blindly re-run: every table here would insert duplicate rows
-// on a second run (nothing checks "does this already exist"). If a run
-// fails partway through and needs retrying, either clear the affected
-// Supabase tables first (Table Editor -> select rows -> delete), or comment
-// out the backfill*() calls for tables that already completed successfully.
-function backfillAllToSupabase() {
-  Logger.log("Starting Supabase backfill...");
-  backfillStaffAndConfig();
-  backfillFleet();
-  backfillReservations();
-  backfillAgreements();
-  backfillStaffSignatures();
-  backfillBlacklist();
-  backfillHistory();
-  backfillSubHire();
-  backfillSold();
-  backfillFuel();
-  Logger.log("Backfill complete.");
 }

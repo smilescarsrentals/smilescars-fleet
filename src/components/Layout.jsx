@@ -4,6 +4,15 @@ import { NavLink } from "react-router-dom";
 import { api } from "../lib/api";
 import AdminPanel from "./AdminPanel";
 
+// "2026-07-22" via new Date(str) parses as UTC midnight, not local midnight —
+// in a UTC+3 timezone (Tanzania) that silently adds most of a day to every
+// "days until pickup" calculation, making "Tomorrow" show as "In 2 days" etc.
+// Parsing the parts manually always constructs local midnight instead.
+function parseLocalDate(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function fmtDate(val) {
   if (!val) return "—";
   const d = String(val).split("T")[0];
@@ -63,7 +72,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
         const assignUrgent = reservations.filter(r => {
           if (r.plate) return false;
           if (!r.pickupDate) return false;
-          const diff = Math.ceil((new Date(r.pickupDate) - now) / (1000*60*60*24));
+          const diff = Math.ceil((parseLocalDate(r.pickupDate) - now) / (1000*60*60*24));
           if (diff < 0 || diff > 5) return false;
           if (!canViewAll && r.staffName !== staffName) return false;
           return true;
@@ -84,7 +93,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
         // approximated at day granularity: pickup is today or tomorrow.
         const within24h = reservations.filter(r => {
           if (!r.pickupDate) return false;
-          const diff = Math.ceil((new Date(r.pickupDate) - now) / (1000*60*60*24));
+          const diff = Math.ceil((parseLocalDate(r.pickupDate) - now) / (1000*60*60*24));
           return diff >= 0 && diff <= 1 && !isCheckedOut(r);
         });
 
@@ -229,7 +238,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
           <div style={{ maxWidth:1200, margin:"0 auto" }}>
             {myUpcoming.map(r => {
               const now    = new Date(); now.setHours(0,0,0,0);
-              const diff   = Math.ceil((new Date(r.pickupDate) - now) / (1000*60*60*24));
+              const diff   = Math.ceil((parseLocalDate(r.pickupDate) - now) / (1000*60*60*24));
               return (
                 <div key={r.id} style={{ fontSize:15, fontWeight:700, color:"#dc2626", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"3px 0", textAlign:"center" }}>
                   <span>⏰</span>
