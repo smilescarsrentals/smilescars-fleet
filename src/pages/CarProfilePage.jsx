@@ -107,7 +107,7 @@ export default function CarProfilePage({ staffName, role }) {
   };
 
   if (loading) return <div style={S.center}>Loading car profile…</div>;
-  if (error)   return <div style={S.center}><p style={{ color:"#dc2626" }}>{error}</p><button onClick={()=>navigate("/")} style={S.backBtn}>← Back to Fleet</button></div>;
+  if (error)   return <div style={S.center}><p style={{ color:"#dc2626" }}>{error}</p><button onClick={()=>navigate("/fleet")} style={S.backBtn}>← Back to Fleet</button></div>;
   if (!car)    return null;
 
   const ss = STATUS_COLORS[car.status] || STATUS_COLORS.Available;
@@ -135,7 +135,7 @@ export default function CarProfilePage({ staffName, role }) {
   if (!canSeeFullProfile) {
     return (
       <div>
-        <button style={S.backBtn} onClick={() => navigate("/")}>← Back to Fleet</button>
+        <button style={S.backBtn} onClick={() => navigate("/fleet")}>← Back to Fleet</button>
         <div style={S.staffCard}>
           <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:16 }}>
             <div>
@@ -183,7 +183,7 @@ export default function CarProfilePage({ staffName, role }) {
   // ── Admin / Manager Full Profile ──
   return (
     <div>
-      <button style={S.backBtn} onClick={() => navigate("/")}>← Back to Fleet</button>
+      <button style={S.backBtn} onClick={() => navigate("/fleet")}>← Back to Fleet</button>
       <div style={S.heroCard}>
         <div style={S.heroLeft}>
           <div style={S.plateHero}>{car.plate}</div>

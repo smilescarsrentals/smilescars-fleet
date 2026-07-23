@@ -58,8 +58,8 @@ const Icon = {
 
 const NAV_GROUPS = [
   { label: "Main", items: [
-    { to: "/dashboard", key: "dashboard", label: "Dashboard", icon: Icon.dashboard },
-    { to: "/",          key: "fleet",     label: "Fleet",     icon: Icon.fleet, end: true },
+    { to: "/",          key: "dashboard", label: "Dashboard", icon: Icon.dashboard, end: true },
+    { to: "/fleet",     key: "fleet",     label: "Fleet",     icon: Icon.fleet },
     { to: "/reservations", key: "reservations", label: "Reservations", icon: Icon.reservations, badgeKey: "urgent" },
     { to: "/clients",   key: "clients",   label: "Clients",   icon: Icon.clients },
   ]},

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import StaffGate from "./components/StaffGate";
 import Layout from "./components/Layout";
+import DashboardPage from "./pages/DashboardPage";
 import FleetPage from "./pages/FleetPage";
 import HistoryPage from "./pages/HistoryPage";
 import SoldPage from "./pages/SoldPage";
@@ -56,7 +57,8 @@ export default function App() {
     <BrowserRouter>
       <Layout staffName={staffName} role={role} onSignOut={handleSignOut} logo={logo}>
         <Routes>
-          <Route path="/"           element={<FleetPage staffName={staffName} role={role} />} />
+          <Route path="/"           element={<DashboardPage staffName={staffName} role={role} />} />
+          <Route path="/fleet"      element={<FleetPage staffName={staffName} role={role} />} />
           <Route path="/history"    element={<HistoryPage role={role} />} />
           <Route path="/clients"    element={<ClientsPage />} />
           <Route path="/car/:plate" element={<CarProfilePage staffName={staffName} role={role} />} />
