@@ -1,5 +1,6 @@
 // src/pages/SoldPage.jsx
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { exportToExcel } from "../lib/exportExcel";
 
@@ -12,6 +13,7 @@ function fmtDate(val) {
 }
 
 export default function SoldPage() {
+  const navigate = useNavigate();
   const [sold,    setSold]    = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState("");
@@ -44,44 +46,49 @@ export default function SoldPage() {
     exportToExcel(`SmilesCars_Sold_${new Date().toISOString().split("T")[0]}.xlsx`, [{ name: "Sold Cars", rows }]);
   };
 
-  if (loading) return <div style={styles.center}>Loading sold cars…</div>;
-  if (error)   return <div style={styles.center}><p style={{ color: "#dc2626" }}>{error}</p><button onClick={load} style={styles.retryBtn}>Retry</button></div>;
+  if (loading) return <div className="loading-screen"><div className="spinner" />Loading sold cars…</div>;
+  if (error)   return <div style={styles.center}><p style={{ color: "var(--red)" }}>{error}</p><button type="button" className="btn btn-ghost" onClick={load}>Retry</button></div>;
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.25rem", flexWrap:"wrap", gap:12 }}>
         <div>
-          <h2 style={styles.pageTitle}>Sold Cars</h2>
-          <p style={styles.pageSubtitle}>{sold.length} cars sold and removed from active fleet</p>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text)" }}>Sold Cars</div>
+          <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop:2 }}>{sold.length} cars sold and removed from active fleet. Tap a plate to see its rental history and revenue before sale.</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={styles.exportBtn} onClick={handleExport}>⬇ Export</button>
-          <button style={styles.refreshBtn} onClick={load}>↻ Refresh</button>
+          <button type="button" className="btn btn-success btn-sm" onClick={handleExport}>⬇ Export</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={load}>↻ Refresh</button>
         </div>
       </div>
 
-      <div style={styles.filterRow}>
-        <input style={styles.search} placeholder="Search plate or type…"
+      <div className="sc-filter-row">
+        <input className="sc-search" style={styles.search} placeholder="Search plate or type…"
           value={search} onChange={e => setSearch(e.target.value)} />
-        <span style={{ fontSize: 12, color: "#888", marginLeft: "auto" }}>{filtered.length} entries</span>
+        <span className="result-count">{filtered.length} entries</span>
       </div>
 
-      <div style={styles.tableWrap}>
+      <div className="table-wrap">
         <table style={styles.table}>
           <thead>
             <tr>{["Sold On","Plate","Type","Remarks","Staff"].map(h =>
-              <th key={h} style={styles.th}>{h}</th>)}
+              <th key={h} data-label={h} style={styles.th}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && <tr><td colSpan={5} style={styles.empty}>No sold cars yet.</td></tr>}
             {filtered.map((s, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                <td style={{ ...styles.td, fontSize: 12, color: "#888" }}>{fmtDate(s.saleDate || s.timestamp)}</td>
-                <td style={{ ...styles.td, fontWeight: 600, fontSize: 13 }}>{s.plate}</td>
-                <td style={{ ...styles.td, color: "#555" }}>{s.type}</td>
-                <td style={{ ...styles.td, fontSize: 12, color: "#777", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.remarks}>{s.remarks || "—"}</td>
-                <td style={{ ...styles.td, fontSize: 12, fontWeight: 500, color: "#374151" }}>{s.staffName || "—"}</td>
+              <tr key={i}>
+                <td data-label="Sold On" style={{ ...styles.td, fontSize: 12, color: "var(--text-muted)" }}>{fmtDate(s.saleDate || s.timestamp)}</td>
+                <td data-label="Plate" style={{ ...styles.td, fontWeight: 600, fontSize: 13 }}>
+                  <span style={{ cursor:"pointer", color:"var(--sc-blue)", textDecoration:"underline" }}
+                    onClick={() => navigate(`/car/${encodeURIComponent(s.plate)}`)}>
+                    {s.plate}
+                  </span>
+                </td>
+                <td data-label="Type" style={{ ...styles.td, color: "var(--text-muted)" }}>{s.type}</td>
+                <td data-label="Remarks" style={{ ...styles.td, fontSize: 12, color: "var(--text-muted)", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.remarks}>{s.remarks || "—"}</td>
+                <td data-label="Staff" style={{ ...styles.td, fontSize: 12, fontWeight: 500, color: "var(--text)" }}>{s.staffName || "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -92,17 +99,10 @@ export default function SoldPage() {
 }
 
 const styles = {
-  center:       { textAlign: "center", padding: "3rem", color: "#666" },
-  retryBtn:     { marginTop: 12, padding: "8px 20px", background: "#16a34a", color: "#fff", border: "none", borderRadius: 7, cursor: "pointer" },
-  pageTitle:    { fontSize: 20, fontWeight: 700, color: "#111", margin: 0 },
-  pageSubtitle: { fontSize: 13, color: "#888", margin: "4px 0 0" },
-  exportBtn:    { padding: "8px 14px", fontSize: 13, border: "1.5px solid #16a34a", borderRadius: 7, background: "#f0fdf4", cursor: "pointer", color: "#15803d", fontWeight: 500 },
-  refreshBtn:   { padding: "8px 14px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, background: "#fff", cursor: "pointer", color: "#555" },
-  filterRow:    { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: "1rem" },
-  search:       { padding: "8px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, background: "#fff", width: 240 },
-  tableWrap:    { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, overflow: "auto" },
+  center:       { textAlign: "center", padding: "3rem", color: "var(--text-muted)" },
+  search:       { padding: "8px 11px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 7, background: "var(--surface)", width: 240 },
   table:        { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  th:           { padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#888", borderBottom: "1px solid #e5e7eb", background: "#fafafa", textTransform: "uppercase", letterSpacing: ".4px", whiteSpace: "nowrap" },
+  th:           { padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "var(--text-muted)", borderBottom: "1px solid var(--border)", background: "var(--bg)", textTransform: "uppercase", letterSpacing: ".4px", whiteSpace: "nowrap" },
   td:           { padding: "10px 12px", verticalAlign: "middle" },
-  empty:        { textAlign: "center", padding: "2.5rem", color: "#aaa", fontSize: 14 },
+  empty:        { textAlign: "center", padding: "2.5rem", color: "var(--text-faint)", fontSize: 14 },
 };

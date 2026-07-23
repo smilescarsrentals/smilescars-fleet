@@ -203,7 +203,7 @@ function PlateSearch({ plates, value, onChange }) {
   return (
     <div style={{ position: "relative" }}>
       <input
-        style={{ ...S.input, background: value ? "#f0fdf4" : "#fff" }}
+        style={{ ...S.input, background: value ? "var(--green-bg)" : "var(--surface)" }}
         placeholder="Type plate number e.g. T 235 DYS"
         value={query}
         autoComplete="off"
@@ -211,21 +211,21 @@ function PlateSearch({ plates, value, onChange }) {
         onFocus={() => { setFocused(true); if (query) setOpen(true); }}
         onBlur={() => { setTimeout(() => { setOpen(false); setFocused(false); }, 150); }}
       />
-      {value && <span style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#16a34a",fontSize:14 }}>✓</span>}
+      {value && <span style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"var(--green)",fontSize:14 }}>✓</span>}
       {open && filtered.length > 0 && (
-        <div style={{ position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:8,boxShadow:"0 4px 16px rgba(0,0,0,0.1)",zIndex:50,maxHeight:200,overflowY:"auto",marginTop:2 }}>
+        <div style={{ position:"absolute",top:"100%",left:0,right:0,background:"var(--surface)",border:"1.5px solid var(--border)",borderRadius:8,boxShadow:"0 4px 16px rgba(0,0,0,0.1)",zIndex:50,maxHeight:200,overflowY:"auto",marginTop:2 }}>
           {filtered.slice(0, 20).map(p => (
             <div key={p} onMouseDown={() => select(p)}
-              style={{ padding:"9px 12px",cursor:"pointer",fontSize:13,fontWeight:500,color:"#111",borderBottom:"1px solid #f3f4f6" }}
-              onMouseEnter={e => e.currentTarget.style.background="#f0fdf4"}
-              onMouseLeave={e => e.currentTarget.style.background="#fff"}>
+              style={{ padding:"9px 12px",cursor:"pointer",fontSize:13,fontWeight:500,color:"var(--text)",borderBottom:"1px solid var(--border-light)" }}
+              onMouseEnter={e => e.currentTarget.style.background="var(--green-bg)"}
+              onMouseLeave={e => e.currentTarget.style.background="var(--surface)"}>
               {p}
             </div>
           ))}
         </div>
       )}
       {open && query.trim().length > 0 && filtered.length === 0 && (
-        <div style={{ position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#aaa",marginTop:2,zIndex:50 }}>
+        <div style={{ position:"absolute",top:"100%",left:0,right:0,background:"var(--surface)",border:"1.5px solid var(--border)",borderRadius:8,padding:"10px 12px",fontSize:13,color:"var(--text-faint)",marginTop:2,zIndex:50 }}>
           No matching plates found
         </div>
       )}
@@ -361,25 +361,25 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
 
     return (
       <div style={S.overlay}>
-        <div style={{ background:"#fff", borderRadius:16, width:340, maxWidth:"calc(100% - 32px)", padding:"2rem", textAlign:"center", boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }}>
+        <div style={{ background:"var(--surface)", borderRadius:16, width:340, maxWidth:"calc(100% - 32px)", padding:"2rem", textAlign:"center", boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }}>
           <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
-          <h3 style={{ fontSize:18, fontWeight:700, color:"#111", margin:"0 0 6px" }}>Fuel Request Saved</h3>
-          <p style={{ fontSize:14, color:"#888", margin:"0 0 24px" }}>Ref: <strong style={{ color:"#111" }}>{refNo}</strong><br/>What would you like to do with the PDF?</p>
+          <h3 style={{ fontSize:18, fontWeight:700, color:"var(--text)", margin:"0 0 6px" }}>Fuel Request Saved</h3>
+          <p style={{ fontSize:14, color:"var(--text-muted)", margin:"0 0 24px" }}>Ref: <strong style={{ color:"var(--text)" }}>{refNo}</strong><br/>What would you like to do with the PDF?</p>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             <button onClick={handleDownload}
-              style={{ padding:"12px", fontSize:14, fontWeight:600, background:"#1d4ed8", color:"#fff", border:"none", borderRadius:10, cursor:"pointer" }}>
+              style={{ padding:"12px", fontSize:14, fontWeight:600, background:"var(--sc-blue)", color:"var(--surface)", border:"none", borderRadius:10, cursor:"pointer" }}>
               ⬇ Download PDF
             </button>
             <button onClick={handleShare}
-              style={{ padding:"12px", fontSize:14, fontWeight:600, background:"#f0fdf4", color:"#15803d", border:"1.5px solid #bbf7d0", borderRadius:10, cursor:"pointer" }}>
+              style={{ padding:"12px", fontSize:14, fontWeight:600, background:"var(--green-bg)", color:"var(--green)", border:"1.5px solid var(--green-border)", borderRadius:10, cursor:"pointer" }}>
               📤 Share
             </button>
             <button onClick={handleWhatsApp}
-              style={{ padding:"12px", fontSize:14, fontWeight:600, background:"#dcfce7", color:"#15803d", border:"1.5px solid #86efac", borderRadius:10, cursor:"pointer" }}>
+              style={{ padding:"12px", fontSize:14, fontWeight:600, background:"var(--green-bg)", color:"var(--green)", border:"1.5px solid var(--green-border)", borderRadius:10, cursor:"pointer" }}>
               💬 Share to WhatsApp
             </button>
             <button onClick={onClose}
-              style={{ padding:"10px", fontSize:13, background:"none", color:"#888", border:"none", cursor:"pointer", marginTop:4 }}>
+              style={{ padding:"10px", fontSize:13, background:"none", color:"var(--text-muted)", border:"none", cursor:"pointer", marginTop:4 }}>
               Close
             </button>
           </div>
@@ -410,11 +410,11 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
 
           {carState && (() => {
             const themes = {
-              rented:   { bg:"#fef9c3", border:"#fde68a", color:"#854d0e", icon:"🚗" },
-              staff:    { bg:"#eff6ff", border:"#bfdbfe", color:"#1d4ed8", icon:"👤" },
-              garage:   { bg:"#fff7ed", border:"#fed7aa", color:"#c2410c", icon:"🔧" },
-              showroom: { bg:"#f0fdf4", border:"#bbf7d0", color:"#15803d", icon:"🏢" },
-              subhire:  { bg:"#f5f3ff", border:"#ddd6fe", color:"#7c3aed", icon:"🔄" },
+              rented:   { bg:"var(--yellow-bg)", border:"var(--yellow-border)", color:"var(--yellow)", icon:"🚗" },
+              staff:    { bg:"var(--blue-bg)", border:"var(--blue-border)", color:"var(--sc-blue)", icon:"👤" },
+              garage:   { bg:"var(--orange-bg)", border:"var(--orange-border)", color:"var(--orange)", icon:"🔧" },
+              showroom: { bg:"var(--green-bg)", border:"var(--green-border)", color:"var(--green)", icon:"🏢" },
+              subhire:  { bg:"var(--purple-bg)", border:"var(--purple-border)", color:"var(--purple)", icon:"🔄" },
             };
             const t = themes[carState.type];
             return (
@@ -427,7 +427,7 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
             );
           })()}
           {form.plate && !carState && (
-            <div style={{ marginTop:8,fontSize:12,color:"#aaa" }}>
+            <div style={{ marginTop:8,fontSize:12,color:"var(--text-faint)" }}>
               ℹ️ Car is available — no client will be linked
             </div>
           )}
@@ -477,7 +477,7 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
                   disabled={form.fullTank}
                   style={{ ...S.input, paddingLeft: 50, opacity: form.fullTank ? 0.5 : 1 }} />
               </div>
-              <label style={{ display:"flex",alignItems:"center",gap:8,marginTop:8,cursor:"pointer",fontSize:13,color:"#374151" }}>
+              <label style={{ display:"flex",alignItems:"center",gap:8,marginTop:8,cursor:"pointer",fontSize:13,color:"var(--text)" }}>
                 <input type="checkbox" checked={!!form.fullTank}
                   onChange={e => { set("fullTank", e.target.checked); if (e.target.checked) set("litres", "Full Tank"); else set("litres", ""); }}
                   style={{ width:16,height:16,cursor:"pointer" }} />
@@ -488,7 +488,7 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
 
           <label style={S.label}>Authorised By</label>
           <input value={staffName} readOnly
-            style={{ ...S.input, background: "#f3f4f6", color: "#6b7280" }} />
+            style={{ ...S.input, background: "var(--border-light)", color: "var(--text-muted)" }} />
 
           <label style={S.label}>Remarks (optional)</label>
           <textarea value={form.remarks}
@@ -674,24 +674,29 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
   return (
     <div style={{ padding: "4px 0" }}>
 
+      <div style={{ marginBottom: "1.25rem" }}>
+        <div style={{ fontSize:22,fontWeight:700,color:"var(--text)" }}>Fuel Requisitions</div>
+        <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{entries.length} entries logged.</div>
+      </div>
+
       {/* Stats */}
-      <div style={S.statsRow}>
-        <div style={S.statCard}>
-          <div style={S.statNum}>{entries.length}</div>
-          <div style={S.statLabel}>Total Entries</div>
+      <div className="sc-stat-grid" style={{ gridTemplateColumns:"repeat(3,1fr)" }}>
+        <div className="sc-stat-card tint-blue">
+          <div className="sc-stat-label">Total Entries</div>
+          <div className="sc-stat-value">{entries.length}</div>
         </div>
-        <div style={S.statCard}>
-          <div style={S.statNum}>TSH {fmtNum(totalAmount)}</div>
-          <div style={S.statLabel}>Total Amount</div>
+        <div className="sc-stat-card tint-green">
+          <div className="sc-stat-label">Total Amount</div>
+          <div className="sc-stat-value" style={{ fontSize:20 }}>TSH {fmtNum(totalAmount)}</div>
         </div>
-        <div style={S.statCard}>
-          <div style={S.statNum}>{totalLitres > 0 ? `${fmtNum(totalLitres)} Ltrs` : "—"}</div>
-          <div style={S.statLabel}>Total Litres</div>
+        <div className="sc-stat-card tint-yellow">
+          <div className="sc-stat-label">Total Litres</div>
+          <div className="sc-stat-value" style={{ fontSize:20 }}>{totalLitres > 0 ? `${fmtNum(totalLitres)} Ltrs` : "—"}</div>
         </div>
       </div>
 
       {/* Filter row */}
-      <div style={S.filterRow}>
+      <div className="sc-filter-row">
         <input placeholder="Search plate, client or type…" value={filterPlate}
           onChange={e => setFilterPlate(e.target.value)} style={{ ...S.filterInput, minWidth: 220 }} />
         <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)} style={S.filterInput}>
@@ -703,45 +708,42 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
           onChange={e => setFilterFrom(e.target.value)} style={S.filterInput} />
         <input type="date" value={filterTo}
           onChange={e => setFilterTo(e.target.value)} style={S.filterInput} />
-        <span style={{ color: "#6b7280", fontSize: 13, whiteSpace: "nowrap" }}>
-          {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
-        </span>
-        <div style={{ flex: 1 }} />
-        <button onClick={() => hasAccess ? setShowAdd(true) : setAccessDenied(true)} style={S.addBtn}>＋ Add New</button>
+        <span className="result-count">{filtered.length} {filtered.length === 1 ? "entry" : "entries"}</span>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => hasAccess ? setShowAdd(true) : setAccessDenied(true)}>＋ Add New</button>
       </div>
 
       {/* Table */}
       {loading ? (
-        <div style={{ textAlign: "center", padding: 48, color: "#9ca3af" }}>Loading…</div>
+        <div className="loading-screen"><div className="spinner" />Loading…</div>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 48, color: "#9ca3af" }}>No fuel entries found.</div>
+        <div style={{ textAlign: "center", padding: 48, color: "var(--text-faint)" }}>No fuel entries found.</div>
       ) : (
-        <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #e5e7eb" }}>
+        <div className="table-wrap">
           <table style={S.table}>
             <thead>
-              <tr style={{ background: "#f9fafb" }}>
-                {["Ref No","Date","Plate No.","Type","Product","Amount","Litres","Client Name","Authorised By",""].map(h => (
-                  <th key={h} style={S.th}>{h}</th>
+              <tr>
+                {["Ref No","Date","Plate No.","Type","Product","Amount","Litres","Client Name","Authorised By","Actions"].map(h => (
+                  <th key={h} data-label={h} style={S.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map((e, i) => (
-                <tr key={e.refNo} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                  <td style={{ ...S.td, fontWeight: 600, color: "#2563eb" }}>{e.refNo}</td>
-                  <td style={S.td}>{displayDate(e.date)}</td>
-                  <td style={{ ...S.td, fontWeight: 600 }}>{e.plate}</td>
-                  <td style={{ ...S.td, color: "#6b7280" }}>{e.type}</td>
-                  <td style={S.td}>
+                <tr key={e.refNo}>
+                  <td data-label="Ref No" style={{ ...S.td, fontWeight: 600, color: "var(--sc-blue)" }}>{e.refNo}</td>
+                  <td data-label="Date" style={S.td}>{displayDate(e.date)}</td>
+                  <td data-label="Plate No." style={{ ...S.td, fontWeight: 600 }}>{e.plate}</td>
+                  <td data-label="Type" style={{ ...S.td, color: "var(--text-muted)" }}>{e.type}</td>
+                  <td data-label="Product" style={S.td}>
                     <span style={{
                       padding: "2px 9px", borderRadius: 999, fontSize: 12, fontWeight: 600,
-                      background: e.product === "Diesel" ? "#dbeafe" : "#fef3c7",
-                      color:      e.product === "Diesel" ? "#1d4ed8" : "#92400e",
+                      background: e.product === "Diesel" ? "var(--blue-bg)" : "var(--amber-bg)",
+                      color:      e.product === "Diesel" ? "var(--sc-blue)" : "var(--amber)",
                     }}>{e.product}</span>
                   </td>
-                  <td style={S.td}>{e.amount ? `TSH ${fmtNum(e.amount)}` : "—"}</td>
-                  <td style={S.td}>{e.litres || "—"}</td>
-                  <td style={{ ...S.td, fontSize: 12 }}>
+                  <td data-label="Amount" style={S.td}>{e.amount ? `TSH ${fmtNum(e.amount)}` : "—"}</td>
+                  <td data-label="Litres" style={S.td}>{e.litres || "—"}</td>
+                  <td data-label="Client Name" style={{ ...S.td, fontSize: 12 }}>
                     {e.linkedClient ? (() => {
                       // Cross-reference with current fleet to get context icon
                       const norm = (e.plate||"").trim().toLowerCase().replace(/\s+/g,"");
@@ -752,16 +754,16 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
                         if (car.status === "Maintenance") icon = "🔧";
                         if ((car.location||"").toLowerCase().includes("showroom")) icon = "🏢";
                       }
-                      return <span style={{ fontWeight:500,color:"#374151" }}>{icon} {e.linkedClient}</span>;
+                      return <span style={{ fontWeight:500,color:"var(--text)" }}>{icon} {e.linkedClient}</span>;
                     })()
-                    : <span style={{ color:"#ccc" }}>—</span>}
+                    : <span style={{ color:"var(--text-faint)" }}>—</span>}
                   </td>
-                  <td style={S.td}>{e.authorisedBy}</td>
-                  <td style={{ ...S.td, whiteSpace: "nowrap" }}>
-                    <button onClick={() => handleDownloadPDF(e)}
+                  <td data-label="Authorised By" style={S.td}>{e.authorisedBy}</td>
+                  <td data-label="Actions" style={{ ...S.td, whiteSpace: "nowrap" }}>
+                    <button type="button" onClick={() => handleDownloadPDF(e)}
                       title="Download PDF" style={S.iconBtn}>📄</button>
                     {isAdmin && (
-                      <button onClick={() => setEditEntry(e)}
+                      <button type="button" onClick={() => setEditEntry(e)}
                         title="Edit" style={{ ...S.iconBtn, marginLeft: 4 }}>✏️</button>
                     )}
                   </td>
@@ -776,15 +778,15 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
       {accessDenied && (
         <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}
           onClick={() => setAccessDenied(false)}>
-          <div style={{ background:"#fff",borderRadius:14,width:340,maxWidth:"100%",padding:"2rem",textAlign:"center",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }}
+          <div style={{ background:"var(--surface)",borderRadius:14,width:340,maxWidth:"100%",padding:"2rem",textAlign:"center",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontSize:44,marginBottom:12 }}>⛽</div>
-            <h3 style={{ fontSize:18,fontWeight:700,color:"#111",margin:"0 0 8px" }}>Access Denied</h3>
-            <p style={{ fontSize:14,color:"#888",margin:"0 0 20px",lineHeight:1.5 }}>
+            <h3 style={{ fontSize:18,fontWeight:700,color:"var(--text)",margin:"0 0 8px" }}>Access Denied</h3>
+            <p style={{ fontSize:14,color:"var(--text-muted)",margin:"0 0 20px",lineHeight:1.5 }}>
               You are not authorised to submit fuel requests.<br/>
               Please contact your manager.
             </p>
-            <button style={{ padding:"10px 24px",fontSize:14,fontWeight:600,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer" }}
+            <button type="button" className="btn btn-primary"
               onClick={() => setAccessDenied(false)}>Close</button>
           </div>
         </div>
@@ -806,29 +808,29 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
 // ── Styles ───────────────────────────────────────────────────
 const S = {
   statsRow:  { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" },
-  statCard:  { flex: 1, minWidth: 150, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: "14px 18px" },
-  statNum:   { fontSize: 20, fontWeight: 700, color: "#111827" },
-  statLabel: { fontSize: 12, color: "#6b7280", marginTop: 2 },
+  statCard:  { flex: 1, minWidth: 150, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 18px" },
+  statNum:   { fontSize: 20, fontWeight: 700, color: "var(--text)" },
+  statLabel: { fontSize: 12, color: "var(--text-muted)", marginTop: 2 },
   filterRow: { display: "flex", gap: 8, alignItems: "center", marginBottom: 14, flexWrap: "wrap" },
-  filterInput:{ padding: "7px 10px", border: "1px solid #d1d5db", borderRadius: 7, fontSize: 13, minWidth: 110 },
-  addBtn:    { background: "#2563eb", color: "#fff", border: "none", borderRadius: 7, padding: "8px 16px", fontWeight: 600, cursor: "pointer", fontSize: 13, whiteSpace: "nowrap" },
+  filterInput:{ padding: "7px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13, minWidth: 110 },
+  addBtn:    { background: "var(--sc-blue)", color: "var(--surface)", border: "none", borderRadius: 7, padding: "8px 16px", fontWeight: 600, cursor: "pointer", fontSize: 13, whiteSpace: "nowrap" },
   table:     { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  th:        { padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb", whiteSpace: "nowrap" },
-  td:        { padding: "10px 14px", color: "#374151", borderBottom: "1px solid #f3f4f6" },
+  th:        { padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "var(--text)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" },
+  td:        { padding: "10px 14px", color: "var(--text)", borderBottom: "1px solid var(--border-light)" },
   iconBtn:   { background: "none", border: "none", cursor: "pointer", fontSize: 16, padding: "2px 4px", borderRadius: 4 },
   overlay:   { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 },
-  modal:     { background: "#fff", borderRadius: 14, width: "100%", maxWidth: 480, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px rgba(0,0,0,0.2)" },
-  mHead:     { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #e5e7eb" },
+  modal:     { background: "var(--surface)", borderRadius: 14, width: "100%", maxWidth: 480, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px rgba(0,0,0,0.2)" },
+  mHead:     { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid var(--border)" },
   mBody:     { padding: "16px 20px", overflowY: "auto", flex: 1 },
-  mFoot:     { padding: "12px 20px", borderTop: "1px solid #e5e7eb", display: "flex", gap: 8, justifyContent: "flex-end" },
-  closeBtn:  { background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#6b7280" },
-  label:     { display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4, marginTop: 14 },
-  input:     { width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, boxSizing: "border-box" },
+  mFoot:     { padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, justifyContent: "flex-end" },
+  closeBtn:  { background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--text-muted)" },
+  label:     { display: "block", fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 4, marginTop: 14 },
+  input:     { width: "100%", padding: "9px 12px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14, boxSizing: "border-box" },
   toggleRow: { display: "flex", gap: 8 },
-  toggleBtn: { flex: 1, padding: "9px 0", border: "1px solid #d1d5db", borderRadius: 8, background: "#f9fafb", cursor: "pointer", fontSize: 14, fontWeight: 500 },
-  toggleOn:  { background: "#2563eb", color: "#fff", border: "1px solid #2563eb" },
-  unit:      { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "#6b7280", fontWeight: 600, pointerEvents: "none" },
-  cancelBtn: { padding: "9px 20px", border: "1px solid #d1d5db", borderRadius: 8, background: "#fff", cursor: "pointer", fontSize: 14 },
-  saveBtn:   { padding: "9px 20px", border: "none", borderRadius: 8, background: "#2563eb", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600 },
-  error:     { marginTop: 10, color: "#dc2626", fontSize: 13, padding: "8px 12px", background: "#fef2f2", borderRadius: 6 },
+  toggleBtn: { flex: 1, padding: "9px 0", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)", cursor: "pointer", fontSize: 14, fontWeight: 500 },
+  toggleOn:  { background: "var(--sc-blue)", color: "var(--surface)", border: "1px solid var(--sc-blue)" },
+  unit:      { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--text-muted)", fontWeight: 600, pointerEvents: "none" },
+  cancelBtn: { padding: "9px 20px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)", cursor: "pointer", fontSize: 14 },
+  saveBtn:   { padding: "9px 20px", border: "none", borderRadius: 8, background: "var(--sc-blue)", color: "var(--surface)", cursor: "pointer", fontSize: 14, fontWeight: 600 },
+  error:     { marginTop: 10, color: "var(--red)", fontSize: 13, padding: "8px 12px", background: "var(--red-bg)", borderRadius: 6 },
 };

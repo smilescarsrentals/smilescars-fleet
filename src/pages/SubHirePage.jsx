@@ -47,30 +47,30 @@ export default function SubHirePage({ staffName }) {
     );
   }, [entries, search, fStatus]);
 
-  const sel = { padding:"8px 10px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",color:"#111" };
+  const sel = { padding:"8px 10px",fontSize:13,border:"1.5px solid var(--border)",borderRadius:7,background:"var(--surface)",color:"var(--text)" };
 
   return (
     <div>
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"1.25rem" }}>
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"1.25rem",flexWrap:"wrap",gap:12 }}>
         <div>
-          <h2 style={{ fontSize:20,fontWeight:700,color:"#111",margin:0 }}>Sub-Hire Bookings</h2>
-          <p style={{ fontSize:13,color:"#888",margin:"4px 0 0" }}>{entries.length} total bookings</p>
+          <div style={{ fontSize:22,fontWeight:700,color:"var(--text)" }}>Sub-Hire Bookings</div>
+          <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{entries.length} total bookings</div>
         </div>
         <div style={{ display:"flex",gap:8 }}>
-          <button onClick={() => setShowAdd(true)} style={{ padding:"8px 16px",fontSize:13,fontWeight:600,background:"#16a34a",color:"#fff",border:"none",borderRadius:7,cursor:"pointer" }}>+ Add Booking</button>
-          <button onClick={load} style={{ padding:"8px 12px",fontSize:16,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer" }}>↻</button>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Add Booking</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={load}>↻</button>
         </div>
       </div>
 
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:"1rem" }}>
+      <div className="sc-stat-grid" style={{ gridTemplateColumns:"repeat(3,1fr)" }}>
         {[
-          { label:"Active", value:stats.active, color:"#854d0e", bg:"#fef9c3" },
-          { label:"Returned", value:stats.returned, color:"#15803d", bg:"#dcfce7" },
-          { label:"Client Unpaid", value:stats.unpaid, color:"#b91c1c", bg:"#fee2e2" },
+          { label:"Active", value:stats.active, tint:"tint-yellow" },
+          { label:"Returned", value:stats.returned, tint:"tint-green" },
+          { label:"Client Unpaid", value:stats.unpaid, tint:"tint-red" },
         ].map(s => (
-          <div key={s.label} style={{ borderRadius:10,padding:"14px 10px",textAlign:"center",background:s.bg }}>
-            <div style={{ fontSize:26,fontWeight:700,color:s.color }}>{s.value}</div>
-            <div style={{ fontSize:11,color:s.color,fontWeight:500 }}>{s.label}</div>
+          <div key={s.label} className={`sc-stat-card ${s.tint}`}>
+            <div className="sc-stat-label">{s.label}</div>
+            <div className="sc-stat-value">{s.value}</div>
           </div>
         ))}
       </div>
@@ -83,49 +83,49 @@ export default function SubHirePage({ staffName }) {
           <option value="Active">Active</option>
           <option value="Returned">Returned</option>
         </select>
-        <span style={{ fontSize:12,color:"#888",marginLeft:"auto" }}>{filtered.length} bookings</span>
+        <span className="result-count">{filtered.length} bookings</span>
       </div>
 
-      {loading ? <div style={{ textAlign:"center",padding:"3rem",color:"#666" }}>Loading…</div> : (
-        <div className="sc-table-wrap">
+      {loading ? <div className="loading-screen"><div className="spinner" />Loading…</div> : (
+        <div className="table-wrap">
           <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
             <thead>
               <tr>{["Supplier","Vehicle","Plate","Client","From","To","Client Amount","Supplier Amount","Status","Action"].map(h =>
-                <th key={h} style={{ padding:"10px 12px",textAlign:"left",fontSize:11,fontWeight:600,color:"#888",borderBottom:"1px solid #e5e7eb",background:"#fafafa",textTransform:"uppercase",letterSpacing:".4px",whiteSpace:"nowrap" }}>{h}</th>)}
+                <th key={h} data-label={h} style={{ padding:"10px 12px",textAlign:"left",fontSize:11,fontWeight:600,color:"var(--text-muted)",borderBottom:"1px solid var(--border)",background:"var(--bg)",textTransform:"uppercase",letterSpacing:".4px",whiteSpace:"nowrap" }}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign:"center",padding:"2.5rem",color:"#aaa" }}>No bookings found.</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign:"center",padding:"2.5rem",color:"var(--text-faint)" }}>No bookings found.</td></tr>}
               {filtered.map((e, i) => (
-                <tr key={i} style={{ borderBottom:"1px solid #f3f4f6" }}>
+                <tr key={i} style={{ borderBottom:"1px solid var(--border-light)" }}>
                   <td data-label="Supplier" style={{ padding:"10px 12px",fontWeight:600 }}>
                     {e.supplierName}
-                    {e.supplierContact && <div style={{ fontSize:12,color:"#888" }}>{e.supplierContact}</div>}
+                    {e.supplierContact && <div style={{ fontSize:12,color:"var(--text-muted)" }}>{e.supplierContact}</div>}
                   </td>
-                  <td data-label="Vehicle" style={{ padding:"10px 12px",color:"#555" }}>{e.vehicleDesc}</td>
+                  <td data-label="Vehicle" style={{ padding:"10px 12px",color:"var(--text-muted)" }}>{e.vehicleDesc}</td>
                   <td data-label="Plate" style={{ padding:"10px 12px",fontWeight:600,fontSize:13 }}>{e.plate||"—"}</td>
                   <td data-label="Client" style={{ padding:"10px 12px" }}>
-                    {e.client}<br/>{e.clientPhone && <span style={{ fontSize:12,color:"#888" }}>{e.clientPhone}</span>}
+                    {e.client}<br/>{e.clientPhone && <span style={{ fontSize:12,color:"var(--text-muted)" }}>{e.clientPhone}</span>}
                   </td>
-                  <td data-label="From" style={{ padding:"10px 12px",fontSize:12,color:"#555" }}>{fmtDate(e.bookedFrom)}</td>
-                  <td data-label="To" style={{ padding:"10px 12px",fontSize:12,color:"#555" }}>{fmtDate(e.returnDate)}</td>
+                  <td data-label="From" style={{ padding:"10px 12px",fontSize:12,color:"var(--text-muted)" }}>{fmtDate(e.bookedFrom)}</td>
+                  <td data-label="To" style={{ padding:"10px 12px",fontSize:12,color:"var(--text-muted)" }}>{fmtDate(e.returnDate)}</td>
                   <td data-label="Client Amount" style={{ padding:"10px 12px",fontSize:12 }}>
                     {fmt(e.amount, e.currency)}
-                    <div style={{ fontSize:11,color:e.paymentStatus==="Unpaid"?"#b91c1c":"#15803d" }}>{e.paymentStatus}</div>
+                    <div style={{ fontSize:11,color:e.paymentStatus==="Unpaid"?"var(--red)":"var(--green)" }}>{e.paymentStatus}</div>
                   </td>
                   <td data-label="Supplier Amount" style={{ padding:"10px 12px",fontSize:12 }}>
                     {fmt(e.supplierAmount, e.supplierCurrency)}
-                    <div style={{ fontSize:11,color:e.supplierPayStatus==="Unpaid"?"#b91c1c":"#15803d" }}>{e.supplierPayStatus}</div>
+                    <div style={{ fontSize:11,color:e.supplierPayStatus==="Unpaid"?"var(--red)":"var(--green)" }}>{e.supplierPayStatus}</div>
                   </td>
                   <td data-label="Status" style={{ padding:"10px 12px" }}>
                     <span style={{ display:"inline-block",fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:99,
-                      background:e.status==="Active"?"#fef9c3":"#dcfce7",
-                      color:e.status==="Active"?"#854d0e":"#15803d" }}>{e.status}</span>
+                      background:e.status==="Active"?"var(--amber-bg)":"var(--green-bg)",
+                      color:e.status==="Active"?"var(--amber)":"var(--green)" }}>{e.status}</span>
                   </td>
                   <td style={{ padding:"10px 12px" }}>
                     {e.status === "Active" && (
                       <button onClick={() => setSelected(e)}
-                        style={{ fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid #2563eb",background:"#eff6ff",color:"#2563eb",cursor:"pointer",fontWeight:500 }}>
+                        style={{ fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid var(--sc-blue)",background:"var(--blue-bg)",color:"var(--sc-blue)",cursor:"pointer",fontWeight:500 }}>
                         Mark Returned
                       </button>
                     )}
@@ -169,17 +169,17 @@ function AddSubHireModal({ staffName, onClose, onSaved }) {
     finally { setSaving(false); }
   };
 
-  const inp = { width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",boxSizing:"border-box",fontFamily:"inherit" };
-  const lbl = { fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:4 };
+  const inp = { width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid var(--border)",borderRadius:7,background:"var(--surface)",boxSizing:"border-box",fontFamily:"inherit" };
+  const lbl = { fontSize:12,fontWeight:500,color:"var(--text-muted)",display:"block",marginBottom:4 };
   const row = { display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 };
   const sel = { ...inp };
 
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16 }} onClick={onClose}>
-      <div style={{ background:"#fff",borderRadius:14,width:520,maxWidth:"100%",maxHeight:"92vh",overflow:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }} onClick={e=>e.stopPropagation()}>
-        <div style={{ padding:"1rem 1.25rem",borderRadius:"14px 14px 0 0",background:"#16a34a",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-          <p style={{ fontSize:16,fontWeight:700,color:"#fff",margin:0 }}>New Sub-Hire Booking</p>
-          <button style={{ background:"rgba(255,255,255,0.25)",border:"none",color:"#fff",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14 }} onClick={onClose}>✕</button>
+      <div style={{ background:"var(--surface)",borderRadius:14,width:520,maxWidth:"100%",maxHeight:"92vh",overflow:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ padding:"1rem 1.25rem",borderRadius:"14px 14px 0 0",background:"var(--green)",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <p style={{ fontSize:16,fontWeight:700,color:"var(--surface)",margin:0 }}>New Sub-Hire Booking</p>
+          <button style={{ background:"rgba(255,255,255,0.25)",border:"none",color:"var(--surface)",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14 }} onClick={onClose}>✕</button>
         </div>
         <div style={{ padding:"1.25rem" }}>
           <div style={row}>
@@ -206,7 +206,7 @@ function AddSubHireModal({ staffName, onClose, onSaved }) {
             </div>
             <div style={{ marginBottom:"0.85rem" }}><label style={lbl}>Location</label><input style={inp} value={f.location} onChange={e=>set("location",e.target.value)} placeholder="e.g. Dar - NBAA" /></div>
           </div>
-          <p style={{ fontSize:12,fontWeight:600,color:"#374151",margin:"8px 0 6px",textTransform:"uppercase",letterSpacing:".3px" }}>Client Payment</p>
+          <p style={{ fontSize:12,fontWeight:600,color:"var(--text)",margin:"8px 0 6px",textTransform:"uppercase",letterSpacing:".3px" }}>Client Payment</p>
           <div style={row}>
             <div style={{ marginBottom:"0.85rem" }}><label style={lbl}>Client Amount</label>
               <div style={{ display:"flex",gap:6 }}>
@@ -219,7 +219,7 @@ function AddSubHireModal({ staffName, onClose, onSaved }) {
               {f.paymentStatus==="Partial Paid" && <input style={{ ...inp,marginTop:6 }} type="number" value={f.amountPaid} onChange={e=>set("amountPaid",e.target.value)} placeholder="Amount paid" />}
             </div>
           </div>
-          <p style={{ fontSize:12,fontWeight:600,color:"#374151",margin:"8px 0 6px",textTransform:"uppercase",letterSpacing:".3px" }}>Supplier Payment</p>
+          <p style={{ fontSize:12,fontWeight:600,color:"var(--text)",margin:"8px 0 6px",textTransform:"uppercase",letterSpacing:".3px" }}>Supplier Payment</p>
           <div style={row}>
             <div style={{ marginBottom:"0.85rem" }}><label style={lbl}>Supplier Amount</label>
               <div style={{ display:"flex",gap:6 }}>
@@ -232,8 +232,8 @@ function AddSubHireModal({ staffName, onClose, onSaved }) {
             </div>
           </div>
           <div style={{ marginBottom:"0.85rem" }}><label style={lbl}>Remarks</label><textarea style={{ ...inp,resize:"vertical" }} rows={2} value={f.remarks} onChange={e=>set("remarks",e.target.value)} placeholder="Optional notes" /></div>
-          {error && <p style={{ color:"#dc2626",fontSize:13,margin:"6px 0" }}>{error}</p>}
-          <button style={{ width:"100%",padding:11,fontSize:15,fontWeight:600,color:"#fff",background:"#16a34a",border:"none",borderRadius:8,cursor:"pointer",opacity:saving?0.65:1 }} onClick={handleSave} disabled={saving}>
+          {error && <p style={{ color:"var(--red)",fontSize:13,margin:"6px 0" }}>{error}</p>}
+          <button style={{ width:"100%",padding:11,fontSize:15,fontWeight:600,color:"var(--surface)",background:"var(--green)",border:"none",borderRadius:8,cursor:"pointer",opacity:saving?0.65:1 }} onClick={handleSave} disabled={saving}>
             {saving ? "Saving…" : "Confirm Booking"}
           </button>
         </div>
@@ -263,17 +263,17 @@ function ReturnSubHireModal({ entry, staffName, onClose, onSaved }) {
     finally { setSaving(false); }
   };
 
-  const inp = { width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",boxSizing:"border-box",fontFamily:"inherit" };
-  const lbl = { fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:4 };
+  const inp = { width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid var(--border)",borderRadius:7,background:"var(--surface)",boxSizing:"border-box",fontFamily:"inherit" };
+  const lbl = { fontSize:12,fontWeight:500,color:"var(--text-muted)",display:"block",marginBottom:4 };
   const sel = { ...inp };
 
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16 }} onClick={onClose}>
-      <div style={{ background:"#fff",borderRadius:14,width:440,maxWidth:"100%",maxHeight:"92vh",overflow:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }} onClick={e=>e.stopPropagation()}>
-        <div style={{ padding:"1rem 1.25rem",borderRadius:"14px 14px 0 0",background:"#2563eb",display:"flex",justifyContent:"space-between" }}>
-          <div><p style={{ fontSize:15,fontWeight:700,color:"#fff",margin:0 }}>Mark as Returned</p>
+      <div style={{ background:"var(--surface)",borderRadius:14,width:440,maxWidth:"100%",maxHeight:"92vh",overflow:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ padding:"1rem 1.25rem",borderRadius:"14px 14px 0 0",background:"var(--sc-blue)",display:"flex",justifyContent:"space-between" }}>
+          <div><p style={{ fontSize:15,fontWeight:700,color:"var(--surface)",margin:0 }}>Mark as Returned</p>
             <p style={{ fontSize:12,color:"rgba(255,255,255,0.8)",margin:"2px 0 0" }}>{entry.vehicleDesc} · {entry.supplierName}</p></div>
-          <button style={{ background:"rgba(255,255,255,0.25)",border:"none",color:"#fff",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14 }} onClick={onClose}>✕</button>
+          <button style={{ background:"rgba(255,255,255,0.25)",border:"none",color:"var(--surface)",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14 }} onClick={onClose}>✕</button>
         </div>
         <div style={{ padding:"1.25rem" }}>
           <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:"0.85rem" }}>
@@ -296,8 +296,8 @@ function ReturnSubHireModal({ entry, staffName, onClose, onSaved }) {
           </div>
           <div style={{ marginBottom:"0.85rem" }}><label style={lbl}>Remarks</label>
             <textarea style={{ ...inp,resize:"vertical" }} rows={2} value={remarks} onChange={e=>setRemarks(e.target.value)} placeholder="Optional notes on return" /></div>
-          {error && <p style={{ color:"#dc2626",fontSize:13,margin:"6px 0" }}>{error}</p>}
-          <button style={{ width:"100%",padding:11,fontSize:15,fontWeight:600,color:"#fff",background:"#2563eb",border:"none",borderRadius:8,cursor:"pointer",opacity:saving?0.65:1 }} onClick={handleReturn} disabled={saving}>
+          {error && <p style={{ color:"var(--red)",fontSize:13,margin:"6px 0" }}>{error}</p>}
+          <button style={{ width:"100%",padding:11,fontSize:15,fontWeight:600,color:"var(--surface)",background:"var(--sc-blue)",border:"none",borderRadius:8,cursor:"pointer",opacity:saving?0.65:1 }} onClick={handleReturn} disabled={saving}>
             {saving ? "Saving…" : "Confirm Return"}
           </button>
         </div>

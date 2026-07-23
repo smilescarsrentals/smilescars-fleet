@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { toTitleCase } from "../lib/textFormat";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const COLORS  = ["#3b82f6","#16a34a","#d97706","#dc2626","#7c3aed","#0284c7","#be185d","#b45309"];
+const COLORS  = ["#3b82f6","var(--green)","#d97706","var(--red)","var(--sc-blue)","#0284c7","#be185d","#b45309"];
 
 function colorFor(str) {
   let h = 0;
@@ -94,20 +94,20 @@ export default function ReservationsPage({ staffName, role }) {
     <div>
       <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",flexWrap:"wrap",gap:12 }}>
         <div>
-          <h2 style={{ fontSize:20,fontWeight:700,color:"#111",margin:0 }}>Reservations Board</h2>
-          <p style={{ fontSize:13,color:"#888",margin:"4px 0 0" }}>{reservations.length} reservations this month</p>
+          <div style={{ fontSize:22,fontWeight:700,color:"var(--text)" }}>Reservations</div>
+          <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{reservations.length} reservations this month</div>
         </div>
-        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          <button type="button" onClick={prevMonth} style={S.navBtn}>‹</button>
-          <span style={{ fontSize:16,fontWeight:700,color:"#111",minWidth:160,textAlign:"center" }}>{MONTHS[month-1]} {year}</span>
-          <button type="button" onClick={nextMonth} style={S.navBtn}>›</button>
-          <button type="button" onClick={()=>{setMonth(today.getMonth()+1);setYear(today.getFullYear());}} style={{ ...S.navBtn,fontSize:12,padding:"6px 12px" }}>Today</button>
+        <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+          <button type="button" onClick={prevMonth} className="btn btn-ghost btn-sm">‹</button>
+          <span style={{ fontSize:15,fontWeight:700,color:"var(--text)",minWidth:150,textAlign:"center" }}>{MONTHS[month-1]} {year}</span>
+          <button type="button" onClick={nextMonth} className="btn btn-ghost btn-sm">›</button>
+          <button type="button" onClick={()=>{setMonth(today.getMonth()+1);setYear(today.getFullYear());}} className="btn btn-ghost btn-sm">Today</button>
         </div>
       </div>
 
       {urgentReservations.length > 0 && (
-        <div style={{ background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:10,padding:"12px 16px",marginBottom:"1rem" }}>
-          <div style={{ fontWeight:700,color:"#b91c1c",fontSize:14,marginBottom:8 }}>
+        <div style={{ background:"var(--red-bg)",border:"1.5px solid var(--red-border)",borderRadius:10,padding:"12px 16px",marginBottom:"1rem" }}>
+          <div style={{ fontWeight:700,color:"var(--red)",fontSize:14,marginBottom:8 }}>
             🚨 {urgentReservations.length} reservation{urgentReservations.length>1?"s":""} need{urgentReservations.length===1?"s":""} a car assigned
           </div>
           <div>
@@ -116,12 +116,12 @@ export default function ReservationsPage({ staffName, role }) {
               const pickup = parseLocalDate(r.pickupDate);
               const diff   = Math.ceil((pickup - now) / (1000*60*60*24));
               return (
-                <div key={r.id} style={{ display:"flex",fontSize:13,color:"#dc2626",padding:"3px 0" }}>
-                  <span style={{ width:220,flexShrink:0,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:8 }}>{r.client}</span>
-                  <span style={{ width:120,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:8 }}>{r.carType||"Any"}</span>
-                  <span style={{ width:90,flexShrink:0,fontWeight:600 }}>{diff===0?"Today":diff===1?"Tomorrow":`In ${diff} days`}</span>
-                  <span style={{ width:90,flexShrink:0,color:"#888",fontSize:12 }}>{fmtDate(r.pickupDate)}</span>
-                  <span style={{ width:130,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#888",fontSize:12 }}>{r.staffName||"—"}</span>
+                <div key={r.id} className="sc-urgent-row">
+                  <span className="sc-urgent-client">{r.client}</span>
+                  <span className="sc-urgent-type">{r.carType||"Any"}</span>
+                  <span className="sc-urgent-diff">{diff===0?"Today":diff===1?"Tomorrow":`In ${diff} days`}</span>
+                  <span className="sc-urgent-date">{fmtDate(r.pickupDate)}</span>
+                  <span className="sc-urgent-staff">{r.staffName||"—"}</span>
                 </div>
               );
             })}
@@ -137,24 +137,24 @@ export default function ReservationsPage({ staffName, role }) {
             const dateStr = `${year}-${pad(month)}-${pad(day)}`;
             const isPast  = dateStr < todayStr;
             return (
-              <div key={day} style={{ ...S.row, background:isToday?"#f0fdf4":isPast?"#fafafa":"#fff", borderLeft:isToday?"3px solid #16a34a":"3px solid transparent" }}>
-                <div style={{ ...S.dayNum,color:isToday?"#16a34a":isPast?"#ccc":"#111",fontWeight:isToday?800:600 }}>
+              <div key={day} style={{ ...S.row, background:isToday?"var(--green-bg)":isPast?"var(--bg)":"var(--surface)", borderLeft:isToday?"3px solid var(--green)":"3px solid transparent" }}>
+                <div style={{ ...S.dayNum,color:isToday?"var(--green)":isPast?"var(--text-faint)":"var(--text)",fontWeight:isToday?800:600 }}>
                   {pad(day)}
-                  {isToday && <div style={{ fontSize:9,color:"#16a34a",fontWeight:700,letterSpacing:".5px" }}>TODAY</div>}
+                  {isToday && <div style={{ fontSize:9,color:"var(--green)",fontWeight:700,letterSpacing:".5px" }}>TODAY</div>}
                 </div>
                 <div style={S.slots}>
                   {slots.map(r => {
                     const isUrgent = urgentReservations.some(u => u.id === r.id);
                     return (
                       <div key={r.id} style={{ ...S.card,
-                        borderLeft:`3px solid ${isUrgent ? "#dc2626" : colorFor(r.plate||r.client)}`,
-                        background: isUrgent ? "#fef2f2" : "#f5f3ff" }}
+                        borderLeft:`3px solid ${isUrgent ? "var(--red)" : colorFor(r.plate||r.client)}`,
+                        background: isUrgent ? "var(--red-bg)" : "var(--bg)" }}
                         onClick={() => setShowDetail(r)}>
                         {isUrgent && <span title="No car assigned — urgent!">🚨</span>}
                         <span style={{ fontWeight:600,fontSize:12 }}>{r.client}</span>
-                        {r.plate && <span style={{ fontSize:11,color:"#888",marginLeft:5 }}>· {r.plate}</span>}
-                        {!r.plate && r.carType && <span style={{ fontSize:11,color:"#888",marginLeft:5 }}>· {r.carType}</span>}
-                        {r.returnDate && <span style={{ fontSize:11,color:"#aaa",marginLeft:5 }}>→ {fmtDate(r.returnDate)}</span>}
+                        {r.plate && <span style={{ fontSize:11,color:"var(--text-muted)",marginLeft:5 }}>· {r.plate}</span>}
+                        {!r.plate && r.carType && <span style={{ fontSize:11,color:"var(--text-muted)",marginLeft:5 }}>· {r.carType}</span>}
+                        {r.returnDate && <span style={{ fontSize:11,color:"var(--text-faint)",marginLeft:5 }}>→ {fmtDate(r.returnDate)}</span>}
                       </div>
                     );
                   })}
@@ -193,18 +193,18 @@ function PlateSearch({ fleet, value, carType, onChange }) {
 
   return (
     <div style={{ position:"relative" }}>
-      <input style={{ ...S.input, background: value ? "#f5f3ff" : "#fff", paddingRight: value ? 32 : 11 }}
+      <input style={{ ...S.input, background: value ? "var(--blue-bg)" : "var(--surface)", paddingRight: value ? 32 : 11 }}
         placeholder="Type plate number…" value={query} autoComplete="off"
         onChange={e => { setQuery(e.target.value); onChange("",""); setOpen(true); }}
         onFocus={() => setOpen(true)} onBlur={() => setTimeout(()=>setOpen(false),150)} />
-      {value && <span style={{ position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#7c3aed",fontWeight:700 }}>✓</span>}
+      {value && <span style={{ position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"var(--sc-blue)",fontWeight:700 }}>✓</span>}
       {open && filtered.length > 0 && (
-        <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:8,boxShadow:"0 4px 12px rgba(0,0,0,0.1)",zIndex:50,maxHeight:200,overflowY:"auto" }}>
+        <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"var(--surface)",border:"1.5px solid var(--border)",borderRadius:8,boxShadow:"var(--shadow)",zIndex:50,maxHeight:200,overflowY:"auto" }}>
           {filtered.slice(0,15).map(c => (
-            <div key={c.plate} style={{ padding:"9px 12px",cursor:"pointer",fontSize:13,borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between" }}
+            <div key={c.plate} style={{ padding:"9px 12px",cursor:"pointer",fontSize:13,borderBottom:"1px solid var(--border-light)",display:"flex",justifyContent:"space-between" }}
               onMouseDown={() => select(c)}>
               <span style={{ fontWeight:600 }}>{c.plate}</span>
-              <span style={{ color:"#888" }}>{c.type} · {c.status}</span>
+              <span style={{ color:"var(--text-muted)" }}>{c.type} · {c.status}</span>
             </div>
           ))}
         </div>
@@ -223,15 +223,15 @@ function TypeSearch({ fleetTypes, value, onChange }) {
   const select = (type) => { onChange(type); setQuery(type); setOpen(false); };
   return (
     <div style={{ position:"relative" }}>
-      <input style={{ ...S.input, background: value ? "#f5f3ff" : "#fff", paddingRight: value ? 32 : 11 }}
+      <input style={{ ...S.input, background: value ? "var(--blue-bg)" : "var(--surface)", paddingRight: value ? 32 : 11 }}
         placeholder="Type car type…" value={query} autoComplete="off"
         onChange={e => { setQuery(e.target.value); onChange(""); setOpen(true); }}
         onFocus={() => setOpen(true)} onBlur={() => setTimeout(()=>setOpen(false),150)} />
-      {value && <span style={{ position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#7c3aed",fontWeight:700 }}>✓</span>}
+      {value && <span style={{ position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"var(--sc-blue)",fontWeight:700 }}>✓</span>}
       {open && filtered.length > 0 && (
-        <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:8,boxShadow:"0 4px 12px rgba(0,0,0,0.1)",zIndex:50,maxHeight:200,overflowY:"auto" }}>
+        <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"var(--surface)",border:"1.5px solid var(--border)",borderRadius:8,boxShadow:"var(--shadow)",zIndex:50,maxHeight:200,overflowY:"auto" }}>
           {filtered.map(t => (
-            <div key={t} style={{ padding:"9px 12px",cursor:"pointer",fontSize:13,borderBottom:"1px solid #f3f4f6" }}
+            <div key={t} style={{ padding:"9px 12px",cursor:"pointer",fontSize:13,borderBottom:"1px solid var(--border-light)" }}
               onMouseDown={() => select(t)}>{t}</div>
           ))}
         </div>
@@ -268,7 +268,7 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
   return (
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={e=>e.stopPropagation()}>
-        <div style={{ ...S.mHead,background:"#7c3aed" }}>
+        <div style={{ ...S.mHead,background:"var(--sc-blue)" }}>
           <div><p style={S.mTitle}>New Reservation</p><p style={S.mSub}>{displayDate}</p></div>
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
@@ -280,9 +280,9 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
           <div style={S.field}><label style={S.label}>Contact No.</label>
             <input style={S.input} value={form.phone} onChange={e=>set("phone",e.target.value)} placeholder="+255..." /></div>
 
-          <div style={{ height:1,background:"#f3f4f6",margin:"4px 0 12px" }} />
+          <div style={{ height:1,background:"var(--border-light)",margin:"4px 0 12px" }} />
 
-          <div style={S.field}><label style={S.label}>Plate No. <span style={{ color:"#aaa",fontWeight:400 }}>(optional)</span></label>
+          <div style={S.field}><label style={S.label}>Plate No. <span style={{ color:"var(--text-faint)",fontWeight:400 }}>(optional)</span></label>
             <PlateSearch fleet={fleet} value={form.plate} carType={form.carType}
               onChange={(plate,type) => { set("plate",plate); if(type) set("carType",type); }} />
           </div>
@@ -304,7 +304,7 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
             <textarea style={S.textarea} rows={2} value={form.remarks} onChange={e=>set("remarks",e.target.value)} placeholder="Any special notes…" /></div>
 
           {err && <p style={S.err}>{err}</p>}
-          <button type="button" style={{ ...S.btn,background:"#7c3aed",opacity:saving?0.65:1 }} onClick={handleSave} disabled={saving}>
+          <button type="button" style={{ ...S.btn,background:"var(--sc-blue)",opacity:saving?0.65:1 }} onClick={handleSave} disabled={saving}>
             {saving?"Saving…":"Add Reservation"}
           </button>
         </div>
@@ -350,24 +350,24 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
             ["Remarks",      res.remarks    ||"—"],
             ["Added by",     res.staffName  ||"—"],
           ].map(([label,val])=>(
-            <div key={label} style={{ display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f3f4f6",fontSize:13 }}>
-              <span style={{ fontWeight:600,color:"#888",fontSize:12,textTransform:"uppercase",letterSpacing:".3px",flexShrink:0 }}>{label}</span>
-              <span style={{ color:"#111",textAlign:"right",marginLeft:12 }}>{val}</span>
+            <div key={label} style={{ display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid var(--border-light)",fontSize:13 }}>
+              <span style={{ fontWeight:600,color:"var(--text-muted)",fontSize:12,textTransform:"uppercase",letterSpacing:".3px",flexShrink:0 }}>{label}</span>
+              <span style={{ color:"var(--text)",textAlign:"right",marginLeft:12 }}>{val}</span>
             </div>
           ))}
 
           {/* Check Out button for today's reservations */}
           {canCheckOut && (
             <button type="button" onClick={() => { onClose(); onCheckOut(res.plate); }}
-              style={{ display:"block",width:"100%",textAlign:"center",marginTop:16,padding:"11px",fontSize:14,fontWeight:600,background:"#16a34a",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit" }}>
+              style={{ display:"block",width:"100%",textAlign:"center",marginTop:16,padding:"11px",fontSize:14,fontWeight:600,background:"var(--green)",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit" }}>
               🚗 Check Out from Fleet
             </button>
           )}
           {(isToday || isActive) && !res.plate && (
-            <div style={{ marginTop:12,padding:"10px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,fontSize:13,color:"#92400e",textAlign:"center" }}>
+            <div style={{ marginTop:12,padding:"10px",background:"var(--amber-bg)",border:"1px solid var(--amber-border)",borderRadius:8,fontSize:13,color:"var(--amber)",textAlign:"center" }}>
               ⚠️ No car assigned yet
               <button type="button" onClick={() => onAssignPlate(res)}
-                style={{ display:"block",width:"100%",marginTop:8,padding:"8px",fontSize:13,fontWeight:600,background:"#f59e0b",color:"#fff",border:"none",borderRadius:6,cursor:"pointer" }}>
+                style={{ display:"block",width:"100%",marginTop:8,padding:"8px",fontSize:13,fontWeight:600,background:"var(--amber)",color:"#fff",border:"none",borderRadius:6,cursor:"pointer" }}>
                 Assign a Plate Now
               </button>
             </div>
@@ -375,8 +375,8 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
 
           {canEdit && (
             <div style={{ display:"flex",gap:8,marginTop:12 }}>
-              <button type="button" style={{ ...S.btn,background:"#f59e0b",flex:1 }} onClick={onEdit}>✏️ Edit</button>
-              <button type="button" style={{ ...S.btn,background:"#dc2626",flex:1,opacity:deleting?0.65:1 }} onClick={handleDelete} disabled={deleting}>
+              <button type="button" style={{ ...S.btn,background:"var(--amber)",flex:1 }} onClick={onEdit}>✏️ Edit</button>
+              <button type="button" style={{ ...S.btn,background:"var(--red)",flex:1,opacity:deleting?0.65:1 }} onClick={handleDelete} disabled={deleting}>
                 {deleting?"Deleting…":"🗑 Delete"}
               </button>
             </div>
@@ -417,7 +417,7 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
   return (
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={e=>e.stopPropagation()}>
-        <div style={{ ...S.mHead,background:"#7c3aed" }}>
+        <div style={{ ...S.mHead,background:"var(--sc-blue)" }}>
           <div><p style={S.mTitle}>Edit Reservation</p></div>
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
@@ -427,9 +427,9 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
           <div style={S.field}><label style={S.label}>Contact No.</label>
             <input style={S.input} value={form.phone} onChange={e=>set("phone",e.target.value)} /></div>
 
-          <div style={{ height:1,background:"#f3f4f6",margin:"4px 0 12px" }} />
+          <div style={{ height:1,background:"var(--border-light)",margin:"4px 0 12px" }} />
 
-          <div style={S.field}><label style={S.label}>Plate No. <span style={{ color:"#aaa",fontWeight:400 }}>(optional)</span></label>
+          <div style={S.field}><label style={S.label}>Plate No. <span style={{ color:"var(--text-faint)",fontWeight:400 }}>(optional)</span></label>
             <PlateSearch fleet={fleet} value={form.plate} carType={form.carType}
               onChange={(plate,type) => { set("plate",plate); if(type) set("carType",type); }} />
           </div>
@@ -450,7 +450,7 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
             <textarea style={S.textarea} rows={2} value={form.remarks} onChange={e=>set("remarks",e.target.value)} /></div>
 
           {err && <p style={S.err}>{err}</p>}
-          <button type="button" style={{ ...S.btn,background:"#7c3aed",opacity:saving?0.65:1 }} onClick={handleSave} disabled={saving}>
+          <button type="button" style={{ ...S.btn,background:"var(--sc-blue)",opacity:saving?0.65:1 }} onClick={handleSave} disabled={saving}>
             {saving?"Saving…":"Save Changes"}
           </button>
         </div>
@@ -460,16 +460,16 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
 }
 
 const S = {
-  center:  { textAlign:"center",padding:"3rem",color:"#666" },
-  navBtn:  { padding:"6px 14px",fontSize:18,border:"1.5px solid #e5e7eb",borderRadius:8,background:"#fff",cursor:"pointer",color:"#374151",fontWeight:600 },
-  board:   { background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,overflow:"hidden" },
-  row:     { display:"flex",alignItems:"flex-start",borderBottom:"1px solid #f3f4f6",minHeight:48 },
+  center:  { textAlign:"center",padding:"3rem",color:"var(--text-muted)" },
+  navBtn:  { padding:"6px 14px",fontSize:18,border:"1.5px solid var(--border)",borderRadius:8,background:"var(--surface)",cursor:"pointer",color:"var(--text)",fontWeight:600 },
+  board:   { background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,overflow:"hidden" },
+  row:     { display:"flex",alignItems:"flex-start",borderBottom:"1px solid var(--border-light)",minHeight:48 },
   dayNum:  { width:52,flexShrink:0,padding:"12px 0 12px 16px",fontSize:16,lineHeight:1.2 },
   slots:   { display:"flex",flexWrap:"wrap",gap:6,padding:"8px 10px",flex:1,alignItems:"center" },
-  card:    { background:"#f5f3ff",borderRadius:6,padding:"4px 10px",cursor:"pointer",display:"flex",alignItems:"center",fontSize:12,gap:4,boxShadow:"0 1px 3px rgba(0,0,0,0.06)" },
-  addSlot: { background:"none",border:"1.5px dashed #d1d5db",borderRadius:6,color:"#9ca3af",width:28,height:28,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0 },
+  card:    { borderRadius:6,padding:"4px 10px",cursor:"pointer",display:"flex",alignItems:"center",fontSize:12,gap:4,boxShadow:"var(--shadow-sm)" },
+  addSlot: { background:"none",border:"1.5px dashed var(--border)",borderRadius:6,color:"var(--text-faint)",width:28,height:28,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0 },
   overlay: { position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16 },
-  modal:   { background:"#fff",borderRadius:14,width:460,maxWidth:"100%",maxHeight:"92vh",overflow:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" },
+  modal:   { background:"var(--surface)",borderRadius:14,width:460,maxWidth:"100%",maxHeight:"92vh",overflow:"auto",boxShadow:"var(--shadow-lg)" },
   mHead:   { padding:"1rem 1.25rem",borderRadius:"14px 14px 0 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start" },
   mTitle:  { fontSize:16,fontWeight:700,color:"#fff",margin:0 },
   mSub:    { fontSize:12,color:"rgba(255,255,255,0.8)",margin:"2px 0 0" },
@@ -477,10 +477,10 @@ const S = {
   mBody:   { padding:"1.25rem" },
   field:   { marginBottom:"0.85rem" },
   two:     { display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 },
-  label:   { fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:4 },
-  input:   { width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",color:"#111",boxSizing:"border-box",fontFamily:"inherit" },
-  textarea:{ width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",color:"#111",resize:"vertical",fontFamily:"inherit",boxSizing:"border-box" },
-  readOnly:{ padding:"9px 11px",fontSize:13,background:"#f3f4f6",borderRadius:7,color:"#555",border:"1.5px solid #e5e7eb" },
+  label:   { fontSize:12,fontWeight:500,color:"var(--text-muted)",display:"block",marginBottom:4 },
+  input:   { width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid var(--border)",borderRadius:7,background:"var(--surface)",color:"var(--text)",boxSizing:"border-box",fontFamily:"inherit" },
+  textarea:{ width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid var(--border)",borderRadius:7,background:"var(--surface)",color:"var(--text)",resize:"vertical",fontFamily:"inherit",boxSizing:"border-box" },
+  readOnly:{ padding:"9px 11px",fontSize:13,background:"var(--bg)",borderRadius:7,color:"var(--text-muted)",border:"1.5px solid var(--border)" },
   btn:     { width:"100%",padding:"11px",fontSize:14,fontWeight:600,color:"#fff",border:"none",borderRadius:8,cursor:"pointer",marginTop:4,fontFamily:"inherit" },
-  err:     { color:"#dc2626",fontSize:13,margin:"6px 0" },
+  err:     { color:"var(--red)",fontSize:13,margin:"6px 0" },
 };

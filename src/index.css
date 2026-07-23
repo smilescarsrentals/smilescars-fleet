@@ -204,7 +204,7 @@ body {
 }
 
 /* ---- Filter bar ---- */
-.filter-bar {
+.filter-bar, .sc-filter-row {
   display: flex;
   gap: 8px;
   margin-bottom: 1rem;
@@ -836,7 +836,35 @@ tbody tr:hover td { background: #fafaf8; }
 
 .sc-widget-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; margin-bottom: 1.5rem; }
 
+/* ---- Reservations: urgent row ---- */
+.sc-urgent-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 13px;
+  color: var(--red);
+  padding: 5px 0;
+  border-bottom: 1px solid var(--red-border);
+}
+.sc-urgent-row:last-child { border-bottom: none; }
+.sc-urgent-client { font-weight: 600; flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-urgent-type   { color: var(--red); opacity: .8; flex: 0 1 auto; }
+.sc-urgent-diff   { font-weight: 600; flex: 0 0 auto; }
+.sc-urgent-date   { color: var(--text-muted); font-size: 12px; flex: 0 0 auto; }
+.sc-urgent-staff  { color: var(--text-muted); font-size: 12px; flex: 1 1 100%; }
+@media (min-width: 700px) {
+  .sc-urgent-staff { flex: 0 1 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
 .sc-fleet-stats { grid-template-columns: repeat(6, 1fr); }
+
+@media (max-width: 900px) {
+  .sc-blacklist-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (max-width: 560px) {
+  .sc-blacklist-grid { grid-template-columns: 1fr !important; }
+}
 
 /* ---- Responsive ---- */
 @media (max-width: 900px) {
@@ -959,40 +987,82 @@ tbody tr:hover td { background: #fafaf8; }
   .sc-fleet-stats .sc-stat-value { font-size: 15px; }
 
   .sc-export-label { display: none; }
+  .sc-hist-export-grid { grid-template-columns: 1fr 1fr !important; }
 
-  /* ---- Fleet table -> cards ---- */
+  /* ---- Generic table -> cards (any page using .table-wrap) ---- */
   .table-wrap { overflow: visible; border: none; box-shadow: none; background: none; }
   .table-wrap table { min-width: 0; }
   .table-wrap thead { display: none; }
   .table-wrap table, .table-wrap tbody { display: block; width: 100%; }
   .table-wrap tr {
-    display: flex;
-    flex-wrap: wrap;
+    display: block;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 11px;
     margin-bottom: 8px;
-    row-gap: 4px;
-    column-gap: 8px;
   }
   .table-wrap td {
-    display: block;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
     border: none;
-    padding: 0;
+    padding: 4px 0;
     width: auto !important;
     max-width: none;
     white-space: normal;
+    text-align: right;
+    font-size: 12.5px;
   }
-  .table-wrap td[data-label="Plate"]       { order: 1; flex: 1 1 60%; font-size: 13px; }
-  .table-wrap td[data-label="Status"]      { order: 2; flex: 0 0 auto; margin-left: auto; }
-  .table-wrap td[data-label="Type"]        { order: 3; flex: 1 1 100%; font-size: 11.5px; color: var(--text-muted); }
-  .table-wrap td[data-label="Location"],
-  .table-wrap td[data-label="Payment"],
-  .table-wrap td[data-label="Staff"]       { display: none; }
-  .table-wrap td[data-label="Client"]      { order: 4; flex: 1 1 60%; font-size: 12px; }
-  .table-wrap td[data-label="Return Date"] { order: 5; flex: 0 0 auto; margin-left: auto; font-size: 11.5px; }
-  .table-wrap td[data-label="Action"]      { order: 6; flex: 1 1 100%; margin-top: 4px; }
-  .table-wrap td[data-label="Action"] > div { flex-wrap: wrap !important; }
+  .table-wrap td:empty { display: none; }
+  .table-wrap td::before {
+    content: attr(data-label);
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    flex-shrink: 0;
+    text-align: left;
+  }
+
+  /* ---- Fleet: bespoke card layout (overrides the generic label:value rows above) ---- */
+  .sc-fleet-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: 4px;
+    column-gap: 8px;
+  }
+  .sc-fleet-table td {
+    display: block;
+    text-align: left;
+  }
+  .sc-fleet-table td::before { content: none; }
+  .sc-fleet-table td[data-label="Plate"]       { order: 1; flex: 1 1 60%; font-size: 13px; }
+  .sc-fleet-table td[data-label="Status"]      { order: 2; flex: 0 0 auto; margin-left: auto; }
+  .sc-fleet-table td[data-label="Type"]        { order: 3; flex: 1 1 100%; font-size: 11.5px; color: var(--text-muted); }
+  .sc-fleet-table td[data-label="Location"],
+  .sc-fleet-table td[data-label="Payment"],
+  .sc-fleet-table td[data-label="Staff"]       { display: none; }
+  .sc-fleet-table td[data-label="Client"]      { order: 4; flex: 1 1 60%; font-size: 12px; }
+  .sc-fleet-table td[data-label="Return Date"] { order: 5; flex: 0 0 auto; margin-left: auto; font-size: 11.5px; }
+  .sc-fleet-table td[data-label="Action"]      { order: 6; flex: 1 1 100%; margin-top: 4px; }
+  .sc-fleet-table td[data-label="Action"] > div { flex-wrap: wrap !important; }
+
+  /* ---- Filter row: stack vertically on mobile ---- */
+  .sc-filter-row { flex-direction: column; align-items: stretch; }
+  .sc-filter-row > * { width: 100%; box-sizing: border-box; }
+  .sc-filter-row .result-count { margin-left: 0; text-align: left; }
+
+  /* ---- History: specific mobile filter grouping ---- */
+  .sc-hf-row2, .sc-hf-row3, .sc-hf-row4 { display: flex; gap: 8px; width: 100%; }
+  .sc-hf-row2 > *, .sc-hf-row3 > * { flex: 1 1 50%; min-width: 0; }
+  .sc-hf-row4 > select, .sc-hf-row4 input[type="date"] { flex: 1 1 auto; min-width: 0; }
+  .sc-hf-row4 > button { flex: 0 0 auto; }
+}
+
+@media (min-width: 769px) {
+  .sc-hf-row2, .sc-hf-row3, .sc-hf-row4 { display: contents; }
 }
 
