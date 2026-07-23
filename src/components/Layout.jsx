@@ -263,14 +263,14 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
               )}
             </button>
             {/* Clickable avatar + name — opens Activity Panel */}
-            <button type="button" onClick={() => setPanelOpen(true)}
+            <button type="button" onClick={() => setPanelOpen(true)} className="sc-topbar-userbtn"
               style={{ display:"flex", alignItems:"center", gap:8, background:"none", border:"none", cursor:"pointer", padding:"4px 8px", borderRadius:8, transition:"background .15s" }}
               onMouseEnter={e => e.currentTarget.style.background="var(--bg)"}
               onMouseLeave={e => e.currentTarget.style.background="none"}>
               <div style={{ width:30, height:30, borderRadius:"50%", background:"var(--sc-blue)", color:"#fff", fontSize:13, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                 {staffName.charAt(0).toUpperCase()}
               </div>
-              <div style={{ textAlign:"left" }}>
+              <div className="sc-topbar-userbtn-text" style={{ textAlign:"left" }}>
                 <div className="sc-user-name">{staffName}</div>
                 {role !== "Admin" && (
                   <div style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:".4px", background:roleBadge.bg, color:roleBadge.color, padding:"1px 6px", borderRadius:4, display:"inline-block", marginTop:2 }}>{role}</div>
@@ -279,7 +279,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
             </button>
             {/* Role badge — for Admins, this is a separate button that opens the Admin Panel */}
             {role === "Admin" && (
-              <button type="button" onClick={() => setAdminPanelOpen(true)}
+              <button type="button" onClick={() => setAdminPanelOpen(true)} className="sc-topbar-role-btn"
                 style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:".4px", background:roleBadge.bg, color:roleBadge.color, padding:"3px 9px", borderRadius:4, border:"none", cursor:"pointer" }}
                 title="Open Admin Panel">
                 {role}
@@ -339,9 +339,9 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
           </span>
           <span>Reservations</span>
         </NavLink>
-        <NavLink to="/history" className={({ isActive }) => `sc-tab${isActive ? " active" : ""}`}>
-          <Icon.history width="19" height="19" />
-          <span>History</span>
+        <NavLink to="/fuel" className={({ isActive }) => `sc-tab${isActive ? " active" : ""}`}>
+          <Icon.fuel width="19" height="19" />
+          <span>Fuel</span>
         </NavLink>
         <button type="button" className={`sc-tab${mobileDrawerOpen ? " active" : ""}`} onClick={() => setMobileDrawerOpen(v => !v)}>
           <Icon.menu width="19" height="19" />
