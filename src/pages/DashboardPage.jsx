@@ -135,7 +135,7 @@ export default function DashboardPage({ staffName, role }) {
 
       {/* Stat cards */}
       <div className="sc-stat-grid">
-        <div className="sc-stat-card">
+        <div className="sc-stat-card tint-blue">
           <div className="sc-stat-top">
             <span className="sc-stat-label">Active Rentals</span>
             <span className="sc-stat-icon blue"><Icon.car width="17" height="17" /></span>
@@ -144,7 +144,7 @@ export default function DashboardPage({ staffName, role }) {
           <div className="sc-stat-sub">Currently checked out</div>
         </div>
 
-        <div className="sc-stat-card">
+        <div className="sc-stat-card tint-green">
           <div className="sc-stat-top">
             <span className="sc-stat-label">Available Cars</span>
             <span className="sc-stat-icon green" style={{ background: "var(--green-bg)", color: "var(--green)" }}><Icon.check width="17" height="17" /></span>
@@ -153,7 +153,7 @@ export default function DashboardPage({ staffName, role }) {
           <div className="sc-stat-sub">Ready to rent</div>
         </div>
 
-        <div className="sc-stat-card">
+        <div className="sc-stat-card tint-yellow">
           <div className="sc-stat-top">
             <span className="sc-stat-label">Upcoming Reservations</span>
             <span className="sc-stat-icon yellow"><Icon.calendar width="17" height="17" /></span>
@@ -169,7 +169,7 @@ export default function DashboardPage({ staffName, role }) {
           </div>
         </div>
 
-        <div className="sc-stat-card">
+        <div className="sc-stat-card tint-grey">
           <div className="sc-stat-top">
             <span className="sc-stat-label">Cars Returning</span>
             <span className="sc-stat-icon grey"><Icon.return width="17" height="17" /></span>

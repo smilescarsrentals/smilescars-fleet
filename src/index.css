@@ -56,6 +56,14 @@
   --yellow-bg:     #fff8e1;
   --yellow-border: #f5dd8a;
 
+  --orange:        #c2410c;
+  --orange-bg:     #fff7ed;
+  --orange-border: #fdba8c;
+
+  --purple:        #7c3aed;
+  --purple-bg:     #f5f3ff;
+  --purple-border: #ddd6fe;
+
   --radius-sm:    4px;
   --radius:       8px;
   --radius-lg:    12px;
@@ -249,11 +257,11 @@ table {
   width: 100%;
   min-width: 920px;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 13.5px;
 }
 
 thead th {
-  padding: 10px 12px;
+  padding: 13px 16px;
   text-align: left;
   font-size: 11px;
   font-weight: 600;
@@ -266,7 +274,7 @@ thead th {
 }
 
 tbody td {
-  padding: 10px 12px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--border-light);
   vertical-align: middle;
   max-width: 160px;
@@ -276,7 +284,8 @@ tbody td {
 }
 
 tbody tr:last-child td { border-bottom: none; }
-td[data-label="Action"] { white-space: nowrap; max-width: none; }
+td[data-label="Action"] { white-space: nowrap; max-width: none; width: 1%; }
+th:last-child { width: 1%; }
 tbody tr:hover td { background: #fafaf8; }
 
 /* ---- Badges ---- */
@@ -775,6 +784,19 @@ tbody tr:hover td { background: #fafaf8; }
   gap: 10px;
 }
 .sc-stat-card.overdue { border-color: var(--sc-overdue-border); background: linear-gradient(180deg, var(--sc-overdue-bg), var(--surface) 55%); }
+.sc-stat-card.tint-green  { background: var(--green-bg);  border-color: var(--green-border); }
+.sc-stat-card.tint-blue   { background: var(--blue-bg);   border-color: var(--blue-border); }
+.sc-stat-card.tint-yellow { background: var(--yellow-bg); border-color: var(--yellow-border); }
+.sc-stat-card.tint-amber  { background: var(--amber-bg);  border-color: var(--amber-border); }
+.sc-stat-card.tint-grey   { background: var(--sc-grey-light); border-color: var(--border); }
+.sc-stat-card.tint-red    { background: var(--red-bg);    border-color: var(--red-border); }
+.sc-stat-card.tint-green .sc-stat-icon,
+.sc-stat-card.tint-blue .sc-stat-icon,
+.sc-stat-card.tint-yellow .sc-stat-icon,
+.sc-stat-card.tint-amber .sc-stat-icon,
+.sc-stat-card.tint-grey .sc-stat-icon,
+.sc-stat-card.tint-red .sc-stat-icon { background: rgba(255,255,255,0.6); }
+.sc-stat-icon.amber  { background: var(--amber-bg); color: var(--amber); }
 
 .sc-stat-top { display: flex; align-items: flex-start; justify-content: space-between; }
 .sc-stat-label { font-size: 12.5px; font-weight: 500; color: var(--text-muted); }
@@ -906,5 +928,55 @@ tbody tr:hover td { background: #fafaf8; }
   .sc-content { padding-bottom: 84px; }
 
   .sc-topbar-search span { display: none; }
+
+  .sc-fleet-stats {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 6px;
+  }
+  .sc-fleet-stats .sc-stat-card {
+    padding: 8px 4px;
+    text-align: center;
+    align-items: center;
+    gap: 2px;
+  }
+  .sc-fleet-stats .sc-stat-top { justify-content: center; }
+  .sc-fleet-stats .sc-stat-icon { display: none; }
+  .sc-fleet-stats .sc-stat-label { font-size: 9.5px; }
+  .sc-fleet-stats .sc-stat-value { font-size: 15px; }
+
+  .sc-export-label { display: none; }
+
+  /* ---- Fleet table -> cards ---- */
+  .table-wrap { overflow: visible; border: none; box-shadow: none; background: none; }
+  .table-wrap table { min-width: 0; }
+  .table-wrap thead { display: none; }
+  .table-wrap table, .table-wrap tbody { display: block; width: 100%; }
+  .table-wrap tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "plate status" "sub sub" "client date" "action action";
+    gap: 4px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 11px;
+    margin-bottom: 8px;
+  }
+  .table-wrap td {
+    border: none;
+    padding: 0;
+    max-width: none;
+    white-space: normal;
+  }
+  .table-wrap td[data-label="Plate"]    { grid-area: plate; font-size: 13px; }
+  .table-wrap td[data-label="Status"]   { grid-area: status; justify-self: end; }
+  .table-wrap td[data-label="Type"]     { grid-area: sub; font-size: 11.5px; color: var(--text-muted); }
+  .table-wrap td[data-label="Location"],
+  .table-wrap td[data-label="Payment"],
+  .table-wrap td[data-label="Staff"]    { display: none; }
+  .table-wrap td[data-label="Client"]   { grid-area: client; font-size: 12px; }
+  .table-wrap td[data-label="Return Date"] { grid-area: date; justify-self: end; font-size: 11.5px; }
+  .table-wrap td[data-label="Action"]   { grid-area: action; white-space: normal; margin-top: 4px; }
+  .table-wrap td[data-label="Action"] > div { flex-wrap: wrap !important; }
 }
 

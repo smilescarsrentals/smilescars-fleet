@@ -308,18 +308,18 @@ export default function FleetPage({ staffName, role }) {
         <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{fleet.length} vehicles across all locations.</div>
       </div>
 
-      <div className="sc-stat-grid" style={{ gridTemplateColumns:"repeat(6,1fr)" }}>
+      <div className="sc-stat-grid sc-fleet-stats">
         {[
           { label:"Available",        value:stats.available,                      icon:"✓",  chip:"green",  view:"all"      },
           { label:"Rented",           value:stats.rented,                         icon:"🚗", chip:"blue",   view:"all"      },
           { label:"Staff Use",        value:stats.staffUse,                       icon:"👤", chip:"yellow", view:"staffuse" },
-          { label:"Maintenance",      value:stats.maintenance,                    icon:"🔧", chip:"grey",   view:"all"      },
+          { label:"Maintenance",      value:stats.maintenance,                    icon:"🔧", chip:"amber",  view:"all"      },
           { label:"Expiring/Expired", value:expired.length+expiringSoon.length,   icon:"⚠",  chip:"red",    view:"expiring" },
           { label:"Unpaid",           value:unpaid.length,                        icon:"💰", chip:"red",    view:"unpaid"   },
         ].map(s => {
           const active = view===s.view && s.view!=="all" || (s.view==="all" && fStatus.length===1 && fStatus[0]===s.label);
           return (
-            <div key={s.label} className="sc-stat-card" style={{ cursor:"pointer", outline: active?"2px solid var(--sc-blue)":"none" }}
+            <div key={s.label} className={`sc-stat-card tint-${s.chip}`} style={{ cursor:"pointer", outline: active?"2px solid var(--sc-blue)":"none" }}
               onClick={() => {
                 if (s.view !== "all") {
                   setView(s.view);
@@ -376,7 +376,7 @@ export default function FleetPage({ staffName, role }) {
             ? `${filtered.length} ${[...fStatus,...fLocation,...fType,view==="expiring"?"Expiring/Expired":view==="unpaid"?"Unpaid":view==="staffuse"?"Staff Use":""].filter(Boolean).join(" · ")}`
             : `${fleet.length} cars total`}
         </span>
-        {canExportOrSell && <button type="button" className="btn btn-success btn-sm" onClick={handleExport}>⬇ Export</button>}
+        {canExportOrSell && <button type="button" className="btn btn-success btn-sm sc-export-btn" onClick={handleExport} title="Export" aria-label="Export"><span aria-hidden="true">⬇</span><span className="sc-export-label"> Export</span></button>}
         {canExportOrSell && <button type="button" className="btn btn-primary btn-sm" onClick={()=>setShowAddCar(true)}>+ Add Car</button>}
         <button type="button" className="btn btn-ghost btn-sm" onClick={()=>{cache.clear();load(true);}}>↻</button>
       </div>
@@ -526,9 +526,11 @@ export default function FleetPage({ staffName, role }) {
 
 function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOverdueCount, setOverdueBlock }) {
   const row = { display:"flex",alignItems:"center",flexWrap:"nowrap",gap:3 };
-  const btn = (label, action, color, bg, onClick) => (
+  const btn = (label, action, color, bg, onClick, filled) => (
     <button type="button" key={action}
-      style={{ fontSize:10,padding:"3px 7px",borderRadius:5,border:`1px solid ${color}`,background:bg,color,cursor:"pointer",marginRight:3,fontWeight:500,whiteSpace:"nowrap" }}
+      style={filled
+        ? { fontSize:11,padding:"5px 10px",borderRadius:6,border:`1px solid ${color}`,background:color,color:"#fff",cursor:"pointer",marginRight:4,fontWeight:600,whiteSpace:"nowrap" }
+        : { fontSize:11,padding:"4px 9px",borderRadius:6,border:`1px solid ${color}`,background:bg,color,cursor:"pointer",marginRight:4,fontWeight:500,whiteSpace:"nowrap" }}
       onClick={onClick||(() => onAction(car, action))}>
       {label}
     </button>
@@ -539,30 +541,30 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
       {btn("Check Out","checkOut","var(--green)","var(--green-bg)", () => {
         if (isStaff && myOverdueCount >= 2) { setOverdueBlock(true); return; }
         onAction(car, "checkOut");
-      })}
-      {btn("Staff Use","setStaffUse","var(--sc-blue)","var(--blue-bg)")}
+      }, true)}
+      {btn("Staff Use","setStaffUse","var(--yellow)","var(--yellow-bg)")}
       {btn("Maintenance","setMaintenance","var(--amber)","var(--amber-bg)")}
-      {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
+      {btn("Move","move","var(--orange)","var(--orange-bg)",()=>onMove(car))}
       {canSell&&btn("Sold","markSold","var(--red)","var(--red-bg)")}
     </div>
   );
   if (car.status==="Staff Use") return (
     <div style={row}>
       {btn("Mark Available","setAvailable","var(--green)","var(--green-bg)")}
-      {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
+      {btn("Move","move","var(--orange)","var(--orange-bg)",()=>onMove(car))}
     </div>
   );
   if (car.status==="Rented") return (
     <div style={row}>
-      {btn("Returned","markReturned","var(--sc-blue)","var(--blue-bg)")}
-      {btn("Extend Booking","extendBooking","var(--sc-blue)","var(--blue-bg)")}
-      {btn("Replace","replace","var(--sc-blue-dark)","var(--yellow-bg)",()=>onReplace(car))}
+      {btn("Returned","markReturned","var(--orange)","var(--orange-bg)", undefined, true)}
+      {btn("Extend Booking","extendBooking","var(--sc-blue-dark)","var(--blue-bg)")}
+      {btn("Replace","replace","var(--purple)","var(--purple-bg)",()=>onReplace(car))}
     </div>
   );
   if (car.status==="Maintenance") return (
     <div style={row}>
       {btn("Mark Available","setAvailable","var(--green)","var(--green-bg)")}
-      {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
+      {btn("Move","move","var(--orange)","var(--orange-bg)",()=>onMove(car))}
     </div>
   );
   return null;
