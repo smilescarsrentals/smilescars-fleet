@@ -40,7 +40,42 @@ const ACTION_COLORS = {
   "Note Added":          { bg:"#f0fdf4", color:"#15803d" },
 };
 
+// Small inline icon set — avoids adding an icon-library dependency to the project.
+const Icon = {
+  dashboard: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>,
+  fleet: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M3 13l1.5-5A2 2 0 016.4 6.5h11.2A2 2 0 0119.5 8l1.5 5"/><rect x="2.5" y="13" width="19" height="6" rx="1.5"/><circle cx="7" cy="19.5" r="1.5"/><circle cx="17" cy="19.5" r="1.5"/></svg>,
+  reservations: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>,
+  history: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>,
+  clients: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17.5" cy="8.5" r="2.4"/><path d="M16 14.2c2.8.4 4.7 2.4 4.7 5.3"/></svg>,
+  subhire: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>,
+  fuel: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M6 21V8.5A2.5 2.5 0 018.5 6H12a2.5 2.5 0 012.5 2.5V21"/><path d="M4.5 21h10"/><path d="M14.5 10h1.7L19 12.7V17a1.5 1.5 0 01-3 0"/><circle cx="9" cy="4" r="1.4"/></svg>,
+  sold: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M20.6 12.8l-7.8 7.8a2 2 0 01-2.8 0l-6.8-6.8a2 2 0 010-2.8l7.8-7.8H18a2.6 2.6 0 012.6 2.6v6z"/><circle cx="15.5" cy="8.5" r="1.4"/></svg>,
+  blacklist: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/></svg>,
+  search: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>,
+  bell: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M18 8a6 6 0 10-12 0c0 6-2.5 7.5-2.5 7.5h17S18 14 18 8z"/><path d="M10.3 20a1.8 1.8 0 003.4 0"/></svg>,
+  menu: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M3 6h18M3 12h18M3 18h18"/></svg>,
+};
+
+const NAV_GROUPS = [
+  { label: "Main", items: [
+    { to: "/dashboard", key: "dashboard", label: "Dashboard", icon: Icon.dashboard },
+    { to: "/",          key: "fleet",     label: "Fleet",     icon: Icon.fleet, end: true },
+    { to: "/reservations", key: "reservations", label: "Reservations", icon: Icon.reservations, badgeKey: "urgent" },
+    { to: "/clients",   key: "clients",   label: "Clients",   icon: Icon.clients },
+  ]},
+  { label: "Operations", items: [
+    { to: "/history",  key: "history",  label: "History",  icon: Icon.history },
+    { to: "/sub-hire", key: "subhire",  label: "Sub-Hire",  icon: Icon.subhire },
+    { to: "/fuel",     key: "fuel",     label: "Fuel",      icon: Icon.fuel },
+    { to: "/sold",     key: "sold",     label: "Sold",      icon: Icon.sold },
+  ]},
+  { label: "Safety", items: [
+    { to: "/blacklist", key: "blacklist", label: "Blacklist", icon: Icon.blacklist },
+  ]},
+];
+
 export default function Layout({ children, staffName, role, onSignOut, logo }) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelOpen,    setPanelOpen]    = useState(false);
   const [history,      setHistory]      = useState([]);
   const [loading,      setLoading]      = useState(false);
@@ -170,44 +205,63 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   }).length;
 
   return (
-    <div style={{ minHeight:"100vh", background:"#f9fafb" }}>
-      <div style={{ position:"sticky", top:0, zIndex:10 }}>
-      <header style={{ background:"#fff", borderBottom:"1px solid #e5e7eb" }}>
-        <div className="sc-header-inner">
-          <div style={{ display:"flex", alignItems:"center", gap:10, flex:1 }}>
-            {logo
-              ? <img src={logo} alt="SmilesCars" style={{ height:38, width:"auto", objectFit:"contain", borderRadius:8 }} />
-              : <div style={{ width:38, height:38, borderRadius:10, background:"#16a34a", color:"#fff", fontWeight:700, fontSize:18, display:"flex", alignItems:"center", justifyContent:"center" }}>S</div>
-            }
-            <div>
-              <div className="sc-brand-name">SmilesCars Fleet Manager</div>
-              <div className="sc-brand-sub">Fleet Operations</div>
-            </div>
+    <div className={`sc-shell${sidebarCollapsed ? " collapsed" : ""}`}>
+      {/* ---- Sidebar ---- */}
+      <aside className="sc-sidebar">
+        <div className="sc-sidebar-brand">
+          {logo
+            ? <img src={logo} alt="SmilesCars" />
+            : <div style={{ width:30, height:30, borderRadius:8, background:"var(--sc-yellow)", color:"var(--sc-blue)", fontWeight:800, fontSize:15, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>S</div>
+          }
+          <div className="sc-sidebar-brand-text">
+            <div className="sc-sidebar-brand-name">SmilesCars</div>
+            <div className="sc-sidebar-brand-sub">Fleet Manager</div>
           </div>
-          <nav className="sc-nav">
-            <NavLink to="/"             style={navStyle} end>Fleet</NavLink>
-            <NavLink to="/reservations" style={navStyle}>
-              Reservations
+        </div>
+
+        <nav className="sc-sidebar-nav">
+          {NAV_GROUPS.map(group => (
+            <div className="sc-nav-section" key={group.label}>
+              <div className="sc-nav-section-label">{group.label}</div>
+              {group.items.map(item => (
+                <NavLink key={item.key} to={item.to} end={item.end}
+                  className={({ isActive }) => `sc-nav-link${isActive ? " active" : ""}`}
+                  title={item.label}>
+                  <span className="sc-nav-icon"><item.icon width="17" height="17" /></span>
+                  <span className="sc-nav-link-text">{item.label}</span>
+                  {item.badgeKey === "urgent" && urgentCount > 0 && (
+                    <span className="sc-nav-badge">{urgentCount}</span>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          ))}
+        </nav>
+      </aside>
+
+      {/* ---- Main column ---- */}
+      <div className="sc-main">
+        <header className="sc-topbar">
+          <button type="button" className="sc-sidebar-toggle" onClick={() => setSidebarCollapsed(v => !v)} title="Toggle sidebar">
+            <Icon.menu width="17" height="17" />
+          </button>
+          <div className="sc-topbar-search">
+            <Icon.search width="15" height="15" />
+            <span>Search vehicles, clients, reservations…</span>
+          </div>
+          <div className="sc-topbar-actions">
+            <button type="button" className="sc-icon-btn" title="Notifications">
+              <Icon.bell width="18" height="18" />
               {urgentCount > 0 && (
-                <span style={{ marginLeft:6,background:"#dc2626",color:"#fff",fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,verticalAlign:"middle" }}>
-                  {urgentCount}
-                </span>
+                <span style={{ position:"absolute", top:5, right:5, width:8, height:8, borderRadius:"50%", background:"var(--sc-overdue)", border:"1.5px solid #fff" }} />
               )}
-            </NavLink>
-            <NavLink to="/history"      style={navStyle}>History</NavLink>
-            <NavLink to="/clients"      style={navStyle}>Clients</NavLink>
-            <NavLink to="/sub-hire"     style={navStyle}>Sub-Hire</NavLink>
-            <NavLink to="/fuel"         style={navStyle}>Fuel</NavLink>
-            <NavLink to="/sold"         style={navStyle}>Sold</NavLink>
-            <NavLink to="/blacklist"    style={navStyle}>⛔ Blacklist</NavLink>
-          </nav>
-          <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+            </button>
             {/* Clickable avatar + name — opens Activity Panel */}
             <button type="button" onClick={() => setPanelOpen(true)}
               style={{ display:"flex", alignItems:"center", gap:8, background:"none", border:"none", cursor:"pointer", padding:"4px 8px", borderRadius:8, transition:"background .15s" }}
-              onMouseEnter={e => e.currentTarget.style.background="#f3f4f6"}
+              onMouseEnter={e => e.currentTarget.style.background="var(--bg)"}
               onMouseLeave={e => e.currentTarget.style.background="none"}>
-              <div style={{ width:30, height:30, borderRadius:"50%", background:"#1d4ed8", color:"#fff", fontSize:13, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <div style={{ width:30, height:30, borderRadius:"50%", background:"var(--sc-blue)", color:"#fff", fontSize:13, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                 {staffName.charAt(0).toUpperCase()}
               </div>
               <div style={{ textAlign:"left" }}>
@@ -220,48 +274,47 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
             {/* Role badge — for Admins, this is a separate button that opens the Admin Panel */}
             {role === "Admin" && (
               <button type="button" onClick={() => setAdminPanelOpen(true)}
-                style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:".4px", background:roleBadge.bg, color:roleBadge.color, padding:"3px 9px", borderRadius:4, border:"none", cursor:"pointer", marginLeft:-4 }}
+                style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:".4px", background:roleBadge.bg, color:roleBadge.color, padding:"3px 9px", borderRadius:4, border:"none", cursor:"pointer" }}
                 title="Open Admin Panel">
                 {role}
               </button>
             )}
-            <button type="button" className="sc-sign-out" onClick={onSignOut}>↩</button>
+            <button type="button" className="sc-icon-btn" onClick={onSignOut} title="Log out">↩</button>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Personal reservation reminder — pickup within 24h, not yet checked out.
-          Own reservations show full detail; Admin/Manager additionally see a
-          count-only line for other staff's upcoming reservations. */}
-      {(myUpcoming.length > 0 || othersUpcomingCount > 0) && (
-        <div style={{ background:"#fef2f2", borderBottom:"1.5px solid #fca5a5", padding:"8px 16px" }}>
-          <div style={{ maxWidth:1200, margin:"0 auto" }}>
-            {myUpcoming.map(r => {
-              const now    = new Date(); now.setHours(0,0,0,0);
-              const diff   = Math.ceil((parseLocalDate(r.pickupDate) - now) / (1000*60*60*24));
-              return (
-                <div key={r.id} style={{ fontSize:15, fontWeight:700, color:"#dc2626", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"3px 0", textAlign:"center" }}>
-                  <span>⏰</span>
-                  <span>{diff===0?"Today":"Tomorrow"}:</span>
-                  <span>{r.client}</span>
-                  <span>·</span>
-                  <span>{r.plate || r.carType || "Any"}</span>
-                  <span>·</span>
-                  <span>pickup not yet checked out</span>
+        {/* Personal reservation reminder — pickup within 24h, not yet checked out.
+            Own reservations show full detail; Admin/Manager additionally see a
+            count-only line for other staff's upcoming reservations. */}
+        {(myUpcoming.length > 0 || othersUpcomingCount > 0) && (
+          <div style={{ background:"var(--sc-overdue-bg)", borderBottom:`1.5px solid var(--sc-overdue-border)`, padding:"8px 16px" }}>
+            <div style={{ maxWidth:1280, margin:"0 auto" }}>
+              {myUpcoming.map(r => {
+                const now    = new Date(); now.setHours(0,0,0,0);
+                const diff   = Math.ceil((parseLocalDate(r.pickupDate) - now) / (1000*60*60*24));
+                return (
+                  <div key={r.id} style={{ fontSize:15, fontWeight:700, color:"var(--sc-overdue)", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"3px 0", textAlign:"center" }}>
+                    <span>⏰</span>
+                    <span>{diff===0?"Today":"Tomorrow"}:</span>
+                    <span>{r.client}</span>
+                    <span>·</span>
+                    <span>{r.plate || r.carType || "Any"}</span>
+                    <span>·</span>
+                    <span>pickup not yet checked out</span>
+                  </div>
+                );
+              })}
+              {canViewAll && othersUpcomingCount > 0 && (
+                <div style={{ fontSize:14, fontWeight:700, color:"var(--sc-overdue)", padding:"3px 0", textAlign:"center" }}>
+                  + {othersUpcomingCount} other upcoming reservation{othersUpcomingCount>1?"s":""} from other staff
                 </div>
-              );
-            })}
-            {canViewAll && othersUpcomingCount > 0 && (
-              <div style={{ fontSize:14, fontWeight:700, color:"#dc2626", padding:"3px 0", textAlign:"center" }}>
-                + {othersUpcomingCount} other upcoming reservation{othersUpcomingCount>1?"s":""} from other staff
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      )}
-      </div>
+        )}
 
-      <main style={{ maxWidth:1200, margin:"0 auto", padding:"1.25rem 1rem" }}>{children}</main>
+        <main className="sc-content">{children}</main>
+      </div>
 
       {/* Overlay */}
       {panelOpen && (
@@ -380,13 +433,4 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
       {adminPanelOpen && <AdminPanel onClose={() => setAdminPanelOpen(false)} />}
     </div>
   );
-}
-
-function navStyle({ isActive }) {
-  return {
-    fontSize:14, fontWeight:500, textDecoration:"none",
-    color: isActive ? "#16a34a" : "#555",
-    borderBottom: isActive ? "2px solid #16a34a" : "2px solid transparent",
-    paddingBottom:4,
-  };
 }
