@@ -52,6 +52,10 @@
   --blue-bg:      #e8f0fa;
   --blue-border:  #aac4e8;
 
+  --yellow:        #8a6d00;
+  --yellow-bg:     #fff8e1;
+  --yellow-border: #f5dd8a;
+
   --radius-sm:    4px;
   --radius:       8px;
   --radius-lg:    12px;
@@ -235,12 +239,15 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   box-shadow: var(--shadow-sm);
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
   width: 100%;
+  min-width: 920px;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -269,6 +276,7 @@ tbody td {
 }
 
 tbody tr:last-child td { border-bottom: none; }
+td[data-label="Action"] { white-space: nowrap; max-width: none; }
 tbody tr:hover td { background: #fafaf8; }
 
 /* ---- Badges ---- */
@@ -288,6 +296,7 @@ tbody tr:hover td { background: #fafaf8; }
 .badge-rented      { color: var(--red);    background: var(--red-bg);    border-color: var(--red-border); }
 .badge-maintenance { color: var(--amber);  background: var(--amber-bg);  border-color: var(--amber-border); }
 .badge-garage      { color: var(--blue);   background: var(--blue-bg);   border-color: var(--blue-border); }
+.badge-staffuse    { color: var(--yellow); background: var(--yellow-bg); border-color: var(--yellow-border); }
 
 /* ---- Buttons ---- */
 .btn {
@@ -669,6 +678,7 @@ tbody tr:hover td { background: #fafaf8; }
 .sc-nav-link-text { flex: 1; }
 .sc-shell.collapsed .sc-nav-link-text { display: none; }
 .sc-shell.collapsed .sc-nav-link { justify-content: center; }
+.sc-shell.collapsed .sc-nav-badge { display: none; }
 
 .sc-nav-badge {
   background: var(--sc-overdue);
@@ -777,6 +787,7 @@ tbody tr:hover td { background: #fafaf8; }
 .sc-stat-icon.yellow { background: #fff8e1; color: var(--sc-yellow-dark); }
 .sc-stat-icon.grey   { background: var(--sc-grey-light); color: var(--sc-grey); }
 .sc-stat-icon.red    { background: var(--sc-overdue-bg); color: var(--sc-overdue); }
+.sc-stat-icon.green  { background: var(--green-bg); color: var(--green); }
 
 .sc-stat-value { font-size: 28px; font-weight: 700; line-height: 1; color: var(--text); }
 .sc-stat-sub { font-size: 11.5px; color: var(--text-faint); }
@@ -819,3 +830,81 @@ tbody tr:hover td { background: #fafaf8; }
   .metric-value { font-size: 22px; }
   .topbar { padding: 0 1rem; }
 }
+
+/* ---- Mobile nav: bottom tab bar + off-canvas drawer ---- */
+.sc-mobile-backdrop {
+  display: none;
+}
+.sc-bottom-tabs {
+  display: none;
+}
+.sc-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 2px 6px;
+  color: rgba(255,255,255,0.55);
+  text-decoration: none;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+.sc-tab.active { color: var(--sc-yellow); }
+.sc-tab-icon-wrap { position: relative; display: inline-flex; }
+.sc-tab-badge {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  background: var(--sc-overdue);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 99px;
+  line-height: 1.3;
+}
+
+@media (max-width: 768px) {
+  .sc-sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 240px !important;
+    z-index: 60;
+    transform: translateX(-100%);
+    transition: transform .22s ease;
+  }
+  .sc-sidebar.mobile-open { transform: translateX(0); }
+  .sc-shell.collapsed .sc-sidebar { width: 240px; }
+  .sc-shell.collapsed .sc-sidebar-brand-text,
+  .sc-shell.collapsed .sc-nav-section-label,
+  .sc-shell.collapsed .sc-nav-link-text {
+    display: block;
+  }
+  .sc-shell.collapsed .sc-nav-link { justify-content: flex-start; }
+
+  .sc-mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 55;
+  }
+
+  .sc-bottom-tabs {
+    display: flex;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: var(--sidebar-bg);
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    z-index: 45;
+  }
+
+  .sc-content { padding-bottom: 84px; }
+
+  .sc-topbar-search span { display: none; }
+}
+

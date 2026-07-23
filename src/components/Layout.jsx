@@ -76,6 +76,7 @@ const NAV_GROUPS = [
 
 export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [panelOpen,    setPanelOpen]    = useState(false);
   const [history,      setHistory]      = useState([]);
   const [loading,      setLoading]      = useState(false);
@@ -206,8 +207,13 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
 
   return (
     <div className={`sc-shell${sidebarCollapsed ? " collapsed" : ""}`}>
+      {/* Mobile drawer backdrop */}
+      {mobileDrawerOpen && (
+        <div className="sc-mobile-backdrop" onClick={() => setMobileDrawerOpen(false)} />
+      )}
+
       {/* ---- Sidebar ---- */}
-      <aside className="sc-sidebar">
+      <aside className={`sc-sidebar${mobileDrawerOpen ? " mobile-open" : ""}`}>
         <div className="sc-sidebar-brand">
           {logo
             ? <img src={logo} alt="SmilesCars" />
@@ -226,7 +232,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
               {group.items.map(item => (
                 <NavLink key={item.key} to={item.to} end={item.end}
                   className={({ isActive }) => `sc-nav-link${isActive ? " active" : ""}`}
-                  title={item.label}>
+                  title={item.label} onClick={() => setMobileDrawerOpen(false)}>
                   <span className="sc-nav-icon"><item.icon width="17" height="17" /></span>
                   <span className="sc-nav-link-text">{item.label}</span>
                   {item.badgeKey === "urgent" && urgentCount > 0 && (
@@ -242,7 +248,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
       {/* ---- Main column ---- */}
       <div className="sc-main">
         <header className="sc-topbar">
-          <button type="button" className="sc-sidebar-toggle" onClick={() => setSidebarCollapsed(v => !v)} title="Toggle sidebar">
+          <button type="button" className="sc-sidebar-toggle" onClick={() => { setSidebarCollapsed(v => !v); setMobileDrawerOpen(v => !v); }} title="Toggle menu">
             <Icon.menu width="17" height="17" />
           </button>
           <div className="sc-topbar-search">
@@ -315,6 +321,33 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
 
         <main className="sc-content">{children}</main>
       </div>
+
+      {/* ---- Mobile bottom tab bar ---- */}
+      <nav className="sc-bottom-tabs">
+        <NavLink to="/" end className={({ isActive }) => `sc-tab${isActive ? " active" : ""}`}>
+          <Icon.dashboard width="19" height="19" />
+          <span>Dashboard</span>
+        </NavLink>
+        <NavLink to="/fleet" className={({ isActive }) => `sc-tab${isActive ? " active" : ""}`}>
+          <Icon.fleet width="19" height="19" />
+          <span>Fleet</span>
+        </NavLink>
+        <NavLink to="/reservations" className={({ isActive }) => `sc-tab${isActive ? " active" : ""}`}>
+          <span className="sc-tab-icon-wrap">
+            <Icon.reservations width="19" height="19" />
+            {urgentCount > 0 && <span className="sc-tab-badge">{urgentCount}</span>}
+          </span>
+          <span>Reservations</span>
+        </NavLink>
+        <NavLink to="/history" className={({ isActive }) => `sc-tab${isActive ? " active" : ""}`}>
+          <Icon.history width="19" height="19" />
+          <span>History</span>
+        </NavLink>
+        <button type="button" className={`sc-tab${mobileDrawerOpen ? " active" : ""}`} onClick={() => setMobileDrawerOpen(v => !v)}>
+          <Icon.menu width="19" height="19" />
+          <span>More</span>
+        </button>
+      </nav>
 
       {/* Overlay */}
       {panelOpen && (

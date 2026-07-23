@@ -28,17 +28,11 @@ function fmtMoney(amount, currency) {
 }
 function pad(n) { return String(n).padStart(2,"0"); }
 
-const STATUS_STYLES = {
-  Available:  { bg: "#dcfce7", color: "#15803d" },
-  Rented:     { bg: "#fef9c3", color: "#854d0e" },
-  Maintenance:{ bg: "#ffedd5", color: "#c2410c" },
-  "Staff Use":{ bg: "#eff6ff", color: "#2563eb" },
-};
 const PAYMENT_STYLES = {
-  Paid:           { bg: "#dcfce7", color: "#15803d" },
-  "Partial Paid": { bg: "#fef3c7", color: "#92400e" },
-  Unpaid:         { bg: "#fee2e2", color: "#b91c1c" },
-  "Long Term":    { bg: "#ede9fe", color: "#6d28d9" },
+  Paid:           { bg: "var(--green-bg)",  color: "var(--green)" },
+  "Partial Paid": { bg: "var(--amber-bg)",  color: "var(--amber)" },
+  Unpaid:         { bg: "var(--red-bg)",    color: "var(--red)" },
+  "Long Term":    { bg: "var(--yellow-bg)", color: "var(--yellow)" },
 };
 
 export default function FleetPage({ staffName, role }) {
@@ -295,58 +289,74 @@ export default function FleetPage({ staffName, role }) {
     exportToExcel(`SmilesCars_Fleet_${new Date().toISOString().split("T")[0]}.xlsx`, [{ name:"Fleet", rows }]);
   };
 
-  const sel = { padding:"8px 10px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",color:"#111" };
+  const sel = { padding:"8px 10px",fontSize:13,border:"1.5px solid var(--border)",borderRadius:7,background:"var(--surface)",color:"var(--text)" };
 
-  if (loading) return <div style={{ textAlign:"center",padding:"3rem",color:"#666" }}>Loading fleet…</div>;
-  if (error)   return <div style={{ textAlign:"center",padding:"3rem" }}><p style={{ color:"#dc2626" }}>{error}</p><button type="button" onClick={()=>{cache.clear();load(true);}}>Retry</button></div>;
+  if (loading) return <div className="loading-screen"><div className="spinner" />Loading fleet…</div>;
+  if (error)   return (
+    <div style={{ textAlign:"center",padding:"3rem" }}>
+      <p style={{ color:"var(--red)" }}>{error}</p>
+      <button type="button" className="btn btn-ghost" onClick={()=>{cache.clear();load(true);}}>Retry</button>
+    </div>
+  );
 
   return (
     <div>
-      {toast && <div style={{ position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#111",color:"#fff",padding:"10px 20px",borderRadius:8,fontSize:14,zIndex:200,boxShadow:"0 4px 16px rgba(0,0,0,0.2)" }}>{toast}</div>}
+      {toast && <div style={{ position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"var(--sidebar-bg)",color:"#fff",padding:"10px 20px",borderRadius:8,fontSize:14,zIndex:200,boxShadow:"var(--shadow-lg)" }}>{toast}</div>}
 
-      <div className="sc-stats" style={{ gridTemplateColumns:"repeat(6,1fr)" }}>
+      <div style={{ marginBottom:"1.25rem" }}>
+        <div style={{ fontSize:22,fontWeight:700,color:"var(--text)" }}>Fleet</div>
+        <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{fleet.length} vehicles across all locations.</div>
+      </div>
+
+      <div className="sc-stat-grid" style={{ gridTemplateColumns:"repeat(6,1fr)" }}>
         {[
-          { label:"Available",        value:stats.available,                      color:"#15803d",bg:"#dcfce7",view:"all"      },
-          { label:"Rented",           value:stats.rented,                         color:"#854d0e",bg:"#fef9c3",view:"all"      },
-          { label:"Staff Use",        value:stats.staffUse,                       color:"#1d4ed8",bg:"#eff6ff",view:"staffuse" },
-          { label:"Maintenance",      value:stats.maintenance,                    color:"#c2410c",bg:"#ffedd5",view:"all"      },
-          { label:"Expiring/Expired", value:expired.length+expiringSoon.length,   color:"#b91c1c",bg:"#fee2e2",view:"expiring" },
-          { label:"Unpaid",           value:unpaid.length,                        color:"#b91c1c",bg:"#fee2e2",view:"unpaid"   },
-        ].map(s => (
-          <div key={s.label} style={{ borderRadius:10,padding:"18px 10px",textAlign:"center",cursor:"pointer",background:s.bg,width:"100%",outline:view===s.view&&s.view!=="all"?`2px solid ${s.color}`:"none" }}
-            onClick={() => {
-              if (s.view !== "all") {
-                setView(s.view);
-                setFStatus([]);
-                setExpiringFilter("all");
-              } else {
-                setFStatus(fStatus.length===1 && fStatus[0]===s.label ? [] : [s.label]);
-                setView("all");
-              }
-              setPage(1);
-            }}>
-            <div style={{ fontSize:26,fontWeight:700,color:s.color }}>{s.value}</div>
-            <div style={{ fontSize:11,color:s.color,fontWeight:500 }}>{s.label}</div>
-          </div>
-        ))}
+          { label:"Available",        value:stats.available,                      icon:"✓",  chip:"green",  view:"all"      },
+          { label:"Rented",           value:stats.rented,                         icon:"🚗", chip:"blue",   view:"all"      },
+          { label:"Staff Use",        value:stats.staffUse,                       icon:"👤", chip:"yellow", view:"staffuse" },
+          { label:"Maintenance",      value:stats.maintenance,                    icon:"🔧", chip:"grey",   view:"all"      },
+          { label:"Expiring/Expired", value:expired.length+expiringSoon.length,   icon:"⚠",  chip:"red",    view:"expiring" },
+          { label:"Unpaid",           value:unpaid.length,                        icon:"💰", chip:"red",    view:"unpaid"   },
+        ].map(s => {
+          const active = view===s.view && s.view!=="all" || (s.view==="all" && fStatus.length===1 && fStatus[0]===s.label);
+          return (
+            <div key={s.label} className="sc-stat-card" style={{ cursor:"pointer", outline: active?"2px solid var(--sc-blue)":"none" }}
+              onClick={() => {
+                if (s.view !== "all") {
+                  setView(s.view);
+                  setFStatus([]);
+                  setExpiringFilter("all");
+                } else {
+                  setFStatus(fStatus.length===1 && fStatus[0]===s.label ? [] : [s.label]);
+                  setView("all");
+                }
+                setPage(1);
+              }}>
+              <div className="sc-stat-top">
+                <span className="sc-stat-label">{s.label}</span>
+                <span className={`sc-stat-icon ${s.chip}`}>{s.icon}</span>
+              </div>
+              <div className="sc-stat-value">{s.value}</div>
+            </div>
+          );
+        })}
       </div>
 
       {view!=="all" && (
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",background:view==="expiring"?"#fef2f2":view==="unpaid"?"#fefce8":"#eff6ff",border:`1.5px solid ${view==="expiring"?"#fca5a5":view==="unpaid"?"#fde68a":"#bfdbfe"}`,borderRadius:10,padding:"10px 16px",fontSize:13,color:view==="expiring"?"#b91c1c":view==="unpaid"?"#92400e":"#1d4ed8",marginBottom:"1rem",flexWrap:"wrap",gap:8 }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",background:view==="expiring"?"var(--red-bg)":view==="unpaid"?"var(--yellow-bg)":"var(--blue-bg)",border:`1.5px solid ${view==="expiring"?"var(--red-border)":view==="unpaid"?"var(--yellow-border)":"var(--blue-border)"}`,borderRadius:10,padding:"10px 16px",fontSize:13,color:view==="expiring"?"var(--red)":view==="unpaid"?"var(--yellow)":"var(--blue)",marginBottom:"1rem",flexWrap:"wrap",gap:8 }}>
           <span style={{ fontWeight:500 }}>{view==="expiring"?"⚠️ Expiring / Overdue Rentals":view==="unpaid"?"💰 Unpaid / Partially Paid Rentals":"👤 Staff Assigned Cars"}</span>
           <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
             {view==="expiring" && (<>
               {[
-                ["all",     `All (${expired.length + expiringSoon.length})`, "#7f1d1d", "#fee2e2"],
-                ["overdue", `Overdue (${expired.length})`,                  "#b91c1c", "#fecaca"],
-                ["soon",    `Due Soon (${expiringSoon.length})`,             "#b45309", "#fef3c7"],
+                ["all",     `All (${expired.length + expiringSoon.length})`, "var(--red)", "var(--red-bg)"],
+                ["overdue", `Overdue (${expired.length})`,                  "#ffffff", "var(--red)"],
+                ["soon",    `Due Soon (${expiringSoon.length})`,             "var(--amber)", "var(--amber-bg)"],
               ].map(([val, label, color, bg]) => (
                 <button type="button" key={val} onClick={() => { setExpiringFilter(val); setPage(1); }}
                   style={{ fontSize:12, fontWeight:600, padding:"5px 14px", borderRadius:20, border:"none", background:expiringFilter===val ? color : bg, color:expiringFilter===val ? "#fff" : color, cursor:"pointer" }}>
                   {label}
                 </button>
               ))}
-              <span style={{ width:1, background:"#fca5a5", height:18, display:"inline-block", margin:"0 2px" }} />
+              <span style={{ width:1, background:"var(--red-border)", height:18, display:"inline-block", margin:"0 2px" }} />
             </>)}
             <button type="button" style={{ fontSize:12, fontWeight:500, border:"1.5px solid currentColor", background:"transparent", color:"inherit", padding:"4px 12px", borderRadius:20, cursor:"pointer" }}
               onClick={() => { setView("all"); setExpiringFilter("all"); setPage(1); }}>✕ Clear</button>
@@ -360,61 +370,61 @@ export default function FleetPage({ staffName, role }) {
         <MultiSelect style={sel} label="All statuses" options={["Available","Rented","Staff Use","Maintenance"]} selected={fStatus} onChange={v=>{setFStatus(v);setPage(1);}} />
         <MultiSelect style={sel} label="All locations" options={locations} selected={fLocation} onChange={v=>{setFLocation(v);setPage(1);}} />
         <MultiSelect style={sel} label="All types" options={types} selected={fType} onChange={v=>{setFType(v);setPage(1);}} />
-        {(search||fStatus.length||fLocation.length||fType.length) && <button type="button" style={{ ...sel,cursor:"pointer" }} onClick={()=>{setSearch("");setFStatus([]);setFLocation([]);setFType([]);setPage(1);}}>Clear</button>}
-        <span style={{ fontSize:12,color:"#888",marginLeft:"auto" }}>
+        {(search||fStatus.length||fLocation.length||fType.length) && <button type="button" className="btn btn-ghost btn-sm" onClick={()=>{setSearch("");setFStatus([]);setFLocation([]);setFType([]);setPage(1);}}>Clear</button>}
+        <span style={{ fontSize:12,color:"var(--text-muted)",marginLeft:"auto" }}>
           {(search||fStatus.length||fLocation.length||fType.length||view!=="all")
             ? `${filtered.length} ${[...fStatus,...fLocation,...fType,view==="expiring"?"Expiring/Expired":view==="unpaid"?"Unpaid":view==="staffuse"?"Staff Use":""].filter(Boolean).join(" · ")}`
             : `${fleet.length} cars total`}
         </span>
-        {canExportOrSell && <button type="button" style={{ padding:"8px 12px",fontSize:13,border:"1.5px solid #16a34a",borderRadius:7,background:"#f0fdf4",cursor:"pointer",color:"#15803d",fontWeight:500 }} onClick={handleExport}>⬇ Export</button>}
-        {canExportOrSell && <button type="button" style={{ padding:"8px 12px",fontSize:13,border:"none",borderRadius:7,background:"#1d4ed8",cursor:"pointer",color:"#fff",fontWeight:600 }} onClick={()=>setShowAddCar(true)}>+ Add Car</button>}
-        <button type="button" style={{ padding:"8px 12px",fontSize:16,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer",color:"#555" }} onClick={()=>{cache.clear();load(true);}}>↻</button>
+        {canExportOrSell && <button type="button" className="btn btn-success btn-sm" onClick={handleExport}>⬇ Export</button>}
+        {canExportOrSell && <button type="button" className="btn btn-primary btn-sm" onClick={()=>setShowAddCar(true)}>+ Add Car</button>}
+        <button type="button" className="btn btn-ghost btn-sm" onClick={()=>{cache.clear();load(true);}}>↻</button>
       </div>
 
-      <div className="sc-table-wrap">
-        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+      <div className="table-wrap">
+        <table>
           <thead>
             <tr>{["Plate","Type","Location","Status","Client","Return Date","Payment", ...(view==="unpaid"||view==="expiring"?["Staff"]:[]), "Action"].map(h =>
-              <th key={h} style={{ padding:"10px 12px",textAlign:"left",fontSize:11,fontWeight:600,color:"#888",borderBottom:"1px solid #e5e7eb",background:"#fafafa",textTransform:"uppercase",letterSpacing:".4px",whiteSpace:"nowrap" }}>{h}</th>)}
+              <th key={h}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
-            {paginated.length===0 && <tr><td colSpan={8} style={{ textAlign:"center",padding:"2.5rem",color:"#aaa",fontSize:14 }}>No vehicles match your filters.</td></tr>}
+            {paginated.length===0 && <tr><td colSpan={8} style={{ textAlign:"center",padding:"2.5rem",color:"var(--text-faint)",fontSize:14 }}>No vehicles match your filters.</td></tr>}
             {paginated.map(car => {
-              const ss = STATUS_STYLES[car.status] || STATUS_STYLES.Available;
+              const badgeClass = car.status==="Available" ? "badge-available" : car.status==="Rented" ? "badge-rented" : car.status==="Maintenance" ? "badge-maintenance" : "badge-staffuse";
               const du = car.status==="Rented" ? daysUntil(car.returnDate) : null;
               const isExpired = du!==null && du<0;
               const isExpiringSoon = du!==null && du>=0 && du<=1;
               const ps = PAYMENT_STYLES[car.paymentStatus] || null;
               return (
-                <tr key={car.plate} style={isExpired?{background:"#fef2f2"}:isExpiringSoon?{background:"#fffbeb"}:{}}>
-                  <td data-label="Plate" style={{ padding:"11px 12px",fontWeight:600,fontSize:13 }}>
-                    <span style={{ cursor:"pointer",color:"#1d4ed8",textDecoration:"underline" }} onClick={()=>navigate(`/car/${encodeURIComponent(car.plate)}`)}>
+                <tr key={car.plate} style={isExpired?{background:"var(--red-bg)"}:isExpiringSoon?{background:"var(--yellow-bg)"}:{}}>
+                  <td data-label="Plate" style={{ fontWeight:600 }}>
+                    <span style={{ cursor:"pointer",color:"var(--sc-blue)",textDecoration:"underline" }} onClick={()=>navigate(`/car/${encodeURIComponent(car.plate)}`)}>
                       {car.plate}
                     </span>
                   </td>
-                  <td data-label="Type" style={{ padding:"11px 12px" }}>{car.type}</td>
-                  <td data-label="Location" style={{ padding:"11px 12px" }}>
-                    {car.location?<span style={{ fontSize:12,color:"#374151",background:"#f3f4f6",borderRadius:5,padding:"2px 8px" }}>{car.location}</span>:<span style={{ color:"#ccc" }}>—</span>}
+                  <td data-label="Type">{car.type}</td>
+                  <td data-label="Location">
+                    {car.location?<span style={{ fontSize:12,color:"var(--text)",background:"var(--bg)",borderRadius:5,padding:"2px 8px" }}>{car.location}</span>:<span style={{ color:"var(--text-faint)" }}>—</span>}
                   </td>
-                  <td data-label="Status" style={{ padding:"11px 12px" }}>
+                  <td data-label="Status">
                     <div>
-                      <span style={{ display:"inline-block",fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:99,background:ss.bg,color:ss.color }}>{car.status}</span>
-                      {car.status==="Maintenance"&&car.garage&&<div style={{ fontSize:11,color:"#c2410c",marginTop:3,fontWeight:500 }}>🔧 {car.garage}</div>}
+                      <span className={`badge ${badgeClass}`}>{car.status}</span>
+                      {car.status==="Maintenance"&&car.garage&&<div style={{ fontSize:11,color:"var(--amber)",marginTop:3,fontWeight:500 }}>🔧 {car.garage}</div>}
                       {car.status==="Available" && (() => {
                         const res = reservationFor(car.plate);
                         if (!res) return null;
                         const isActive = res.pickupDate <= todayStr2 && res.returnDate >= todayStr2;
                         return (
                           <div title={`Reserved for ${res.client} · ${res.pickupDate} → ${res.returnDate}`}
-                            style={{ fontSize:10,fontWeight:600,padding:"2px 7px",marginTop:4,borderRadius:99,display:"inline-block",background:isActive?"#ede9fe":"#f5f3ff",color:"#7c3aed",border:"1px solid #ddd6fe",whiteSpace:"nowrap" }}>
+                            style={{ fontSize:10,fontWeight:600,padding:"2px 7px",marginTop:4,borderRadius:99,display:"inline-block",background:isActive?"var(--yellow-bg)":"var(--yellow-bg)",color:"var(--sc-blue)",border:"1px solid var(--blue-border)",whiteSpace:"nowrap" }}>
                             {isActive ? "🟣 Reserved" : `📅 Rsv ${res.pickupDate}`}
                           </div>
                         );
                       })()}
                     </div>
                   </td>
-                  <td data-label="Client" style={{ padding:"11px 12px" }}>
+                  <td data-label="Client">
                     {car.currentClient
                       ? <div>
                           <div style={{ fontWeight:500,fontSize:13 }}>
@@ -422,16 +432,16 @@ export default function FleetPage({ staffName, role }) {
                             {car.remarks && car.remarks.includes("Replacement for") && <span style={{ marginRight:4 }} title={car.remarks}>🔄</span>}
                             {car.currentClient}
                           </div>
-                          {car.clientPhone&&<div style={{ fontSize:12,color:"#888" }}>{car.clientPhone}</div>}
+                          {car.clientPhone&&<div style={{ fontSize:12,color:"var(--text-muted)" }}>{car.clientPhone}</div>}
                         </div>
-                      : <span style={{ color:"#ccc" }}>—</span>}
+                      : <span style={{ color:"var(--text-faint)" }}>—</span>}
                   </td>
-                  <td data-label="Return Date" style={{ padding:"11px 12px",fontSize:13,color:isExpired?"#b91c1c":isExpiringSoon?"#b45309":"#555" }}>
+                  <td data-label="Return Date" style={{ fontSize:13,color:isExpired?"var(--red)":isExpiringSoon?"var(--amber)":"var(--text-muted)" }}>
                     {fmtDate(car.returnDate)}
                     {isExpired&&<div style={{ fontSize:10,fontWeight:600 }}>OVERDUE</div>}
                     {isExpiringSoon&&<div style={{ fontSize:10,fontWeight:600 }}>DUE SOON</div>}
                   </td>
-                  <td data-label="Payment" style={{ padding:"11px 12px" }}>
+                  <td data-label="Payment">
                     {car.status==="Rented"&&car.paymentStatus?(
                       <select value={car.paymentStatus} onChange={e=>handlePaymentUpdate(car,e.target.value)}
                         style={{ fontSize:11,fontWeight:600,padding:"3px 6px",borderRadius:6,border:"none",cursor:"pointer",background:ps?.bg,color:ps?.color }}>
@@ -440,17 +450,17 @@ export default function FleetPage({ staffName, role }) {
                         <option value="Unpaid">Unpaid</option>
                         <option value="Long Term">Long Term</option>
                       </select>
-                    ):<span style={{ color:"#ccc" }}>—</span>}
-                    {car.paymentStatus==="Partial Paid"&&car.amountPaid&&<div style={{ fontSize:11,color:"#888",marginTop:2 }}>{fmtMoney(car.amountPaid,car.currency)}</div>}
+                    ):<span style={{ color:"var(--text-faint)" }}>—</span>}
+                    {car.paymentStatus==="Partial Paid"&&car.amountPaid&&<div style={{ fontSize:11,color:"var(--text-muted)",marginTop:2 }}>{fmtMoney(car.amountPaid,car.currency)}</div>}
                   </td>
                   {(view==="unpaid"||view==="expiring") && (
-                    <td data-label="Staff" style={{ padding:"11px 12px",fontSize:13 }}>
+                    <td data-label="Staff" style={{ fontSize:13 }}>
                       {car.checkedOutBy
-                        ? <span style={{ fontWeight:500,color:"#374151" }}>{car.checkedOutBy}</span>
-                        : <span style={{ color:"#ccc" }}>—</span>}
+                        ? <span style={{ fontWeight:500,color:"var(--text)" }}>{car.checkedOutBy}</span>
+                        : <span style={{ color:"var(--text-faint)" }}>—</span>}
                     </td>
                   )}
-                  <td data-label="Action" style={{ padding:"11px 12px" }}>
+                  <td data-label="Action">
                     <ActionButtons car={car} onAction={(c,a)=>setModal({car:c,action:a})} onMove={c=>setMoveCar(c)} onReplace={c=>setReplaceCar(c)} canSell={canExportOrSell} role={role} myOverdueCount={myOverdueCount} setOverdueBlock={setOverdueBlock} />
                   </td>
                 </tr>
@@ -461,10 +471,10 @@ export default function FleetPage({ staffName, role }) {
       </div>
 
       {totalPages>1 && (
-        <div style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:16,padding:"1rem 0" }}>
-          <button type="button" style={{ padding:"7px 16px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer" }} onClick={()=>setPage(p=>p-1)} disabled={page===1}>‹ Prev</button>
-          <span style={{ fontSize:13,color:"#555" }}>Page {page} of {totalPages}</span>
-          <button type="button" style={{ padding:"7px 16px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer" }} onClick={()=>setPage(p=>p+1)} disabled={page===totalPages}>Next ›</button>
+        <div className="pager" style={{ justifyContent:"center", border:"none" }}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setPage(p=>p-1)} disabled={page===1}>‹ Prev</button>
+          <span style={{ fontSize:13,color:"var(--text-muted)" }}>Page {page} of {totalPages}</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setPage(p=>p+1)} disabled={page===totalPages}>Next ›</button>
         </div>
       )}
 
@@ -481,7 +491,7 @@ export default function FleetPage({ staffName, role }) {
             <p style={{ fontSize:13,color:"#888",margin:"0 0 20px" }}>
               Please contact your Manager or Admin to authorize a new check out.
             </p>
-            <button type="button" style={{ padding:"10px 24px",fontSize:14,fontWeight:600,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer" }}
+            <button type="button" style={{ padding:"10px 24px",fontSize:14,fontWeight:600,background:"var(--sc-blue)",color:"#fff",border:"none",borderRadius:8,cursor:"pointer" }}
               onClick={() => setOverdueBlock(false)}>OK</button>
           </div>
         </div>
@@ -526,33 +536,33 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
   const isStaff = role !== "Admin" && role !== "Manager";
   if (car.status==="Available") return (
     <div style={row}>
-      {btn("Check Out","checkOut","#15803d","#dcfce7", () => {
+      {btn("Check Out","checkOut","var(--green)","var(--green-bg)", () => {
         if (isStaff && myOverdueCount >= 2) { setOverdueBlock(true); return; }
         onAction(car, "checkOut");
       })}
-      {btn("Staff Use","setStaffUse","#1d4ed8","#eff6ff")}
-      {btn("Maintenance","setMaintenance","#c2410c","#fff7ed")}
-      {btn("Move","move","#1d4ed8","#eff6ff",()=>onMove(car))}
-      {canSell&&btn("Sold","markSold","#dc2626","#fef2f2")}
+      {btn("Staff Use","setStaffUse","var(--sc-blue)","var(--blue-bg)")}
+      {btn("Maintenance","setMaintenance","var(--amber)","var(--amber-bg)")}
+      {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
+      {canSell&&btn("Sold","markSold","var(--red)","var(--red-bg)")}
     </div>
   );
   if (car.status==="Staff Use") return (
     <div style={row}>
-      {btn("Mark Available","setAvailable","#15803d","#dcfce7")}
-      {btn("Move","move","#1d4ed8","#eff6ff",()=>onMove(car))}
+      {btn("Mark Available","setAvailable","var(--green)","var(--green-bg)")}
+      {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
     </div>
   );
   if (car.status==="Rented") return (
     <div style={row}>
-      {btn("Returned","markReturned","#2563eb","#eff6ff")}
-      {btn("Extend Booking","extendBooking","#0284c7","#e0f2fe")}
-      {btn("Replace","replace","#7c3aed","#f5f3ff",()=>onReplace(car))}
+      {btn("Returned","markReturned","var(--sc-blue)","var(--blue-bg)")}
+      {btn("Extend Booking","extendBooking","var(--sc-blue)","var(--blue-bg)")}
+      {btn("Replace","replace","var(--sc-blue-dark)","var(--yellow-bg)",()=>onReplace(car))}
     </div>
   );
   if (car.status==="Maintenance") return (
     <div style={row}>
-      {btn("Mark Available","setAvailable","#15803d","#dcfce7")}
-      {btn("Move","move","#1d4ed8","#eff6ff",()=>onMove(car))}
+      {btn("Mark Available","setAvailable","var(--green)","var(--green-bg)")}
+      {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
     </div>
   );
   return null;
@@ -594,7 +604,7 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16 }} onClick={onClose}>
       <div style={{ background:"#fff",borderRadius:14,width:460,maxWidth:"100%",maxHeight:"92vh",overflow:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }} onClick={e=>e.stopPropagation()}>
-        <div style={{ padding:"1rem 1.25rem",borderRadius:"14px 14px 0 0",background:"#7c3aed",display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
+        <div style={{ padding:"1rem 1.25rem",borderRadius:"14px 14px 0 0",background:"var(--sc-blue)",display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
           <div>
             <p style={{ fontSize:16,fontWeight:700,color:"#fff",margin:0 }}>Replace Vehicle</p>
             <p style={{ fontSize:12,color:"rgba(255,255,255,0.8)",margin:"2px 0 0" }}>{car.plate} · {car.type}</p>
@@ -605,8 +615,8 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
           <p style={{ fontSize:14,fontWeight:600,color:"#111",margin:"0 0 12px" }}>Replace Vehicle</p>
 
           {/* Current rental summary */}
-          <div style={{ background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:8,padding:"10px 14px",marginBottom:"1rem",fontSize:13 }}>
-            <div style={{ fontWeight:600,color:"#7c3aed",marginBottom:4 }}>Current Rental — transferring to replacement</div>
+          <div style={{ background:"var(--blue-bg)",border:"1px solid var(--blue-border)",borderRadius:8,padding:"10px 14px",marginBottom:"1rem",fontSize:13 }}>
+            <div style={{ fontWeight:600,color:"var(--sc-blue)",marginBottom:4 }}>Current Rental — transferring to replacement</div>
             <div style={{ color:"#555" }}>Client: <strong>{car.currentClient}</strong></div>
             {car.clientPhone && <div style={{ color:"#555" }}>Phone: {car.clientPhone}</div>}
             <div style={{ color:"#555" }}>Return Date: {car.returnDate}</div>
@@ -617,11 +627,11 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
           <div style={{ marginBottom:"0.85rem" }}>
             <label style={{ fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:4 }}>Replacement Car *</label>
             <div style={{ position:"relative" }}>
-              <input style={{ width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,boxSizing:"border-box",fontFamily:"inherit",background:replacePlate?"#f5f3ff":"#fff" }}
+              <input style={{ width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,boxSizing:"border-box",fontFamily:"inherit",background:replacePlate?"var(--blue-bg)":"#fff" }}
                 placeholder="Type plate to search available cars…" value={query} autoComplete="off"
                 onChange={e => { setQuery(e.target.value); setReplacePlate(""); setOpen(true); }}
                 onFocus={() => setOpen(true)} onBlur={() => setTimeout(()=>setOpen(false),150)} />
-              {replacePlate && <span style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#7c3aed",fontWeight:700 }}>✓</span>}
+              {replacePlate && <span style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"var(--sc-blue)",fontWeight:700 }}>✓</span>}
               {open && filtered.length > 0 && (
                 <div style={{ position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:8,boxShadow:"0 4px 12px rgba(0,0,0,0.1)",zIndex:50,maxHeight:200,overflowY:"auto" }}>
                   {filtered.slice(0,20).map(c => (
@@ -643,7 +653,7 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
             <div style={{ display:"flex",gap:8,marginBottom:10 }}>
               {[["garage","🔧 Send to Garage"],["available","✅ Mark Available"]].map(([val,label])=>(
                 <button type="button" key={val} onClick={()=>setOriginalAction(val)}
-                  style={{ flex:1,padding:"9px",fontSize:13,fontWeight:600,borderRadius:8,border:`1.5px solid ${originalAction===val?"#7c3aed":"#e5e7eb"}`,background:originalAction===val?"#f5f3ff":"#fff",color:originalAction===val?"#7c3aed":"#555",cursor:"pointer" }}>
+                  style={{ flex:1,padding:"9px",fontSize:13,fontWeight:600,borderRadius:8,border:`1.5px solid ${originalAction===val?"var(--sc-blue)":"#e5e7eb"}`,background:originalAction===val?"var(--blue-bg)":"#fff",color:originalAction===val?"var(--sc-blue)":"#555",cursor:"pointer" }}>
                   {label}
                 </button>
               ))}
@@ -674,7 +684,7 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
           </div>
 
           {err && <p style={{ color:"#dc2626",fontSize:13,margin:"6px 0" }}>{err}</p>}
-          <button type="button" style={{ width:"100%",padding:"11px",fontSize:14,fontWeight:600,color:"#fff",background:"#7c3aed",border:"none",borderRadius:8,cursor:"pointer",opacity:loading?0.65:1,fontFamily:"inherit" }}
+          <button type="button" style={{ width:"100%",padding:"11px",fontSize:14,fontWeight:600,color:"#fff",background:"var(--sc-blue)",border:"none",borderRadius:8,cursor:"pointer",opacity:loading?0.65:1,fontFamily:"inherit" }}
             onClick={handleSubmit} disabled={loading}>
             {loading ? "Processing…" : `Confirm Replacement`}
           </button>

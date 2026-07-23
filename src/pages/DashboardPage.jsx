@@ -102,8 +102,6 @@ export default function DashboardPage({ staffName, role }) {
       .slice(0, 12);
   }, [history, now]);
 
-  const barMax = Math.max(stats.available, stats.rented, stats.maintenance, stats.staffUse, 1);
-
   const canViewAll = role === "Admin" || role === "Manager";
 
   if (loading) {
@@ -161,7 +159,14 @@ export default function DashboardPage({ staffName, role }) {
             <span className="sc-stat-icon yellow"><Icon.calendar width="17" height="17" /></span>
           </div>
           <div className="sc-stat-value">{stats.upcomingCount}</div>
-          <div className="sc-stat-sub">Next 7 days</div>
+          <div className="sc-stat-sub" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span>Next 7 days</span>
+            {stats.overdue > 0 && (
+              <span style={{ background: "var(--sc-overdue-bg)", color: "var(--sc-overdue)", fontWeight: 700, fontSize: 11, padding: "1px 7px", borderRadius: 99 }}>
+                {stats.overdue} overdue
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="sc-stat-card">
@@ -172,35 +177,25 @@ export default function DashboardPage({ staffName, role }) {
           <div className="sc-stat-value">{stats.returningThisWeek}</div>
           <div className="sc-stat-sub">Next 7 days</div>
         </div>
-
-        <div className="sc-stat-card overdue" style={{ gridColumn: "1 / -1", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span className="sc-stat-icon red"><Icon.alert width="18" height="18" /></span>
-            <div>
-              <div className="sc-stat-label">Overdue Rentals</div>
-              <div className="sc-stat-sub">Past their return date and not yet returned</div>
-            </div>
-          </div>
-          <div className="sc-stat-value" style={{ color: stats.overdue > 0 ? "var(--sc-overdue)" : "var(--text)" }}>{stats.overdue}</div>
-        </div>
       </div>
 
       {/* Widgets */}
       <div className="sc-widget-grid">
         <div className="sc-widget">
           <div className="sc-widget-header">
-            <div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
               <div className="sc-widget-title">Upcoming Reservations</div>
-              <div className="sc-widget-sub">Next 7 days, with assigned staff</div>
+              <span style={{ fontSize: 20, fontWeight: 800, color: "var(--sc-blue)", lineHeight: 1 }}>{stats.upcomingCount}</span>
             </div>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate("/reservations")}>View all</button>
           </div>
+          <div className="sc-widget-sub" style={{ marginTop: -8, marginBottom: 10 }}>Next 7 days, with assigned staff</div>
           {upcomingSorted.length === 0 ? (
             <div className="empty-state" style={{ padding: "1.5rem" }}>
               <p>No reservations in the next 7 days.</p>
             </div>
           ) : (
-            <div>
+            <div style={{ maxHeight: upcomingSorted.length > 6 ? 420 : "none", overflowY: upcomingSorted.length > 6 ? "auto" : "visible" }}>
               {upcomingSorted.map(r => {
                 const diff = daysDiff(r.pickupDate, now);
                 const isUrgent = !r.plate && diff <= 5;
@@ -225,58 +220,34 @@ export default function DashboardPage({ staffName, role }) {
 
         <div className="sc-widget">
           <div className="sc-widget-header">
-            <div>
-              <div className="sc-widget-title">Fleet by Status</div>
-              <div className="sc-widget-sub">Current distribution</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <div className="sc-widget-title">Recent Activity</div>
+              <span style={{ fontSize: 20, fontWeight: 800, color: "var(--sc-blue)", lineHeight: 1 }}>{recentActivity.length}</span>
             </div>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate("/history")}>View all</button>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {[
-              { label: "Available",  value: stats.available,  color: "var(--green)" },
-              { label: "Rented",     value: stats.rented,     color: "var(--sc-blue)" },
-              { label: "Maintenance",value: stats.maintenance,color: "var(--amber)" },
-              { label: "Staff Use",  value: stats.staffUse,   color: "var(--sc-yellow-dark)" },
-            ].map(row => (
-              <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 84, fontSize: 12.5, color: "var(--text-muted)", flexShrink: 0 }}>{row.label}</div>
-                <div style={{ flex: 1, height: 10, background: "var(--border-light)", borderRadius: 99, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${(row.value / barMax) * 100}%`, background: row.color, borderRadius: 99, transition: "width .4s ease" }} />
+          <div className="sc-widget-sub" style={{ marginTop: -8, marginBottom: 10 }}>Yesterday and today{canViewAll ? " · all staff" : ""}</div>
+          {recentActivity.length === 0 ? (
+            <div className="empty-state" style={{ padding: "1.5rem" }}>
+              <p>No activity yet today or yesterday.</p>
+            </div>
+          ) : (
+            <div style={{ maxHeight: recentActivity.length > 6 ? 420 : "none", overflowY: recentActivity.length > 6 ? "auto" : "visible" }}>
+              {recentActivity.map((h, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border-light)", fontSize: 13 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: ACTION_DOT[h.action] || "var(--sc-grey)", flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 700 }}>{h.plate}</span>
+                    <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{h.action}</span>
+                    {h.client && <span style={{ color: "var(--text-faint)", fontSize: 12 }}>· {h.client}</span>}
+                    {h.staffName && <span style={{ color: "var(--text-faint)", fontSize: 12 }}>· by {h.staffName}</span>}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-faint)", flexShrink: 0 }}>{fmtTime(h.timestamp)}</div>
                 </div>
-                <div style={{ width: 24, textAlign: "right", fontSize: 12.5, fontWeight: 700, color: "var(--text)", flexShrink: 0 }}>{row.value}</div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
-
-      <div className="sc-widget">
-        <div className="sc-widget-header">
-          <div>
-            <div className="sc-widget-title">Recent Activity</div>
-            <div className="sc-widget-sub">Yesterday and today{canViewAll ? " · all staff" : ""}</div>
-          </div>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate("/history")}>View all</button>
-        </div>
-        {recentActivity.length === 0 ? (
-          <div className="empty-state" style={{ padding: "1.5rem" }}>
-            <p>No activity yet today or yesterday.</p>
-          </div>
-        ) : (
-          <div>
-            {recentActivity.map((h, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border-light)", fontSize: 13 }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: ACTION_DOT[h.action] || "var(--sc-grey)", flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 700 }}>{h.plate}</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{h.action}</span>
-                  {h.client && <span style={{ color: "var(--text-faint)", fontSize: 12 }}>· {h.client}</span>}
-                  {h.staffName && <span style={{ color: "var(--text-faint)", fontSize: 12 }}>· by {h.staffName}</span>}
-                </div>
-                <div style={{ fontSize: 11.5, color: "var(--text-faint)", flexShrink: 0 }}>{fmtTime(h.timestamp)}</div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
