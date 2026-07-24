@@ -541,7 +541,7 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
         onAction(car, "checkOut");
       })}
       {btn("Maintenance","setMaintenance","var(--amber)","var(--amber-bg)")}
-      {btn("Staff Use","setStaffUse","var(--charcoal)","var(--charcoal-bg)")}
+      {btn("Staff Use","setStaffUse","var(--yellow)","var(--yellow-bg)")}
       {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
       {canSell&&btn("Sold","markSold","var(--red)","var(--red-bg)")}
     </div>
@@ -555,7 +555,7 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
   if (car.status==="Rented") return (
     <div style={row}>
       {btn("Returned","markReturned","var(--orange)","var(--orange-bg)")}
-      {btn("Extend Booking","extendBooking","var(--navy)","var(--navy-bg)")}
+      {btn("Extend Booking","extendBooking","var(--darkblue)","var(--darkblue-bg)")}
       {btn("Replace","replace","var(--purple)","var(--purple-bg)",()=>onReplace(car))}
     </div>
   );
