@@ -1,6 +1,6 @@
 // src/components/Layout.jsx
 import { useState, useEffect } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import AdminPanel from "./AdminPanel";
 
@@ -79,6 +79,14 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Global topbar search — searches the fleet/reservations data already
+  // fetched below (for the urgency badge), so no extra network calls.
+  const [fleetData, setFleetData] = useState([]);
+  const [reservationsData, setReservationsData] = useState([]);
+  const [globalQuery, setGlobalQuery] = useState("");
+  const [globalOpen, setGlobalOpen] = useState(false);
 
   // The bottom nav's middle slot defaults to Reservations, but swaps in
   // whichever "More" page is currently active (Sub-Hire/History/Sold/
@@ -119,6 +127,8 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
       Promise.all([api.getAllReservations(), api.getFleet()]).then(([resRes, fleetRes]) => {
         const reservations = resRes.data || [];
         const fleet = fleetRes.data || [];
+        setFleetData(fleet);
+        setReservationsData(reservations);
         const now = new Date(); now.setHours(0,0,0,0);
 
         // Nav badge (assign-car urgency, unchanged trigger): no plate + pickup within 5 days.
@@ -223,6 +233,28 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }).length;
 
+  // Global topbar search results — vehicles by plate/type/client, reservations by client/plate.
+  const globalResults = (() => {
+    const q = globalQuery.trim().toLowerCase();
+    if (!q) return { vehicles: [], reservations: [] };
+    const vehicles = fleetData.filter(c =>
+      (c.plate||"").toLowerCase().includes(q) ||
+      (c.type||"").toLowerCase().includes(q) ||
+      (c.currentClient||"").toLowerCase().includes(q)
+    ).slice(0, 6);
+    const seenClients = new Set();
+    const reservations = reservationsData.filter(r => {
+      const match = (r.client||"").toLowerCase().includes(q) || (r.plate||"").toLowerCase().includes(q);
+      if (!match) return false;
+      const key = (r.client||"") + (r.pickupDate||"");
+      if (seenClients.has(key)) return false;
+      seenClients.add(key);
+      return true;
+    }).slice(0, 5);
+    return { vehicles, reservations };
+  })();
+  const hasGlobalResults = globalResults.vehicles.length > 0 || globalResults.reservations.length > 0;
+
   return (
     <div className={`sc-shell${sidebarCollapsed ? " collapsed" : ""}`}>
       {/* Mobile drawer backdrop */}
@@ -279,9 +311,58 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
           <button type="button" className="sc-sidebar-toggle" onClick={() => { setSidebarCollapsed(v => !v); setMobileDrawerOpen(v => !v); }} title="Toggle menu">
             <Icon.menu width="17" height="17" />
           </button>
-          <div className="sc-topbar-search">
-            <Icon.search width="15" height="15" />
-            <span>Search vehicles, clients, reservations…</span>
+          <div className="sc-topbar-search-wrap">
+            <div className="sc-topbar-search">
+              <Icon.search width="15" height="15" />
+              <input
+                type="text"
+                value={globalQuery}
+                placeholder="Search vehicles, clients, reservations…"
+                onChange={e => { setGlobalQuery(e.target.value); setGlobalOpen(true); }}
+                onFocus={() => setGlobalOpen(true)}
+                onBlur={() => setTimeout(() => setGlobalOpen(false), 150)}
+                onKeyDown={e => { if (e.key === "Escape") { setGlobalQuery(""); setGlobalOpen(false); e.currentTarget.blur(); } }}
+              />
+              {globalQuery && (
+                <button type="button" className="sc-topbar-search-clear" onMouseDown={e => e.preventDefault()} onClick={() => { setGlobalQuery(""); setGlobalOpen(false); }}>✕</button>
+              )}
+            </div>
+            {globalOpen && globalQuery.trim() && (
+              <div className="sc-global-results">
+                {!hasGlobalResults ? (
+                  <div className="sc-global-results-empty">No matches for "{globalQuery}"</div>
+                ) : (
+                  <>
+                    {globalResults.vehicles.length > 0 && (
+                      <div className="sc-global-results-section">
+                        <div className="sc-global-results-label">Vehicles</div>
+                        {globalResults.vehicles.map(c => (
+                          <button type="button" key={c.plate} className="sc-global-result-row"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => { navigate(`/car/${encodeURIComponent(c.plate)}`); setGlobalQuery(""); setGlobalOpen(false); }}>
+                            <span className="sc-global-result-main">{c.plate} <span className="sc-global-result-sub">· {c.type}</span></span>
+                            <span className="sc-global-result-extra">{c.currentClient || c.status}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {globalResults.reservations.length > 0 && (
+                      <div className="sc-global-results-section">
+                        <div className="sc-global-results-label">Reservations</div>
+                        {globalResults.reservations.map((r, i) => (
+                          <button type="button" key={i} className="sc-global-result-row"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => { navigate("/reservations"); setGlobalQuery(""); setGlobalOpen(false); }}>
+                            <span className="sc-global-result-main">{r.client}</span>
+                            <span className="sc-global-result-extra">{r.plate || r.carType || "Any"} · {r.pickupDate}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
           <div className="sc-topbar-actions">
             {/* Clickable avatar + name — opens Activity Panel */}
