@@ -326,22 +326,22 @@ tbody tr:last-child td { border-bottom: none; }
 .sc-fleet-table th[data-label="Staff"],  .sc-fleet-table td[data-label="Staff"]        { width: 8%; }
 .sc-fleet-table th[data-label="Action"], .sc-fleet-table td[data-label="Action"]       { width: 21%; white-space: normal; max-width: none; }
 
-/* History: 14 columns — needs its own explicit widths, sized by how much
-   each realistically needs. Scoped to .sc-history-table only. */
-.sc-history-table th[data-label="Time"],          .sc-history-table td[data-label="Time"]          { width: 8%; }
-.sc-history-table th[data-label="Plate"],         .sc-history-table td[data-label="Plate"]         { width: 7%; }
-.sc-history-table th[data-label="Type"],          .sc-history-table td[data-label="Type"]          { width: 6%; }
-.sc-history-table th[data-label="Action"],        .sc-history-table td[data-label="Action"]        { width: 9%; white-space: normal; }
-.sc-history-table th[data-label="Client"],        .sc-history-table td[data-label="Client"]        { width: 10%; }
-.sc-history-table th[data-label="Return Date"],   .sc-history-table td[data-label="Return Date"]   { width: 7%; }
-.sc-history-table th[data-label="Garage"],        .sc-history-table td[data-label="Garage"]        { width: 6%; }
-.sc-history-table th[data-label="Fuel Out"],      .sc-history-table td[data-label="Fuel Out"]      { width: 6%; }
-.sc-history-table th[data-label="Fuel In"],       .sc-history-table td[data-label="Fuel In"]       { width: 6%; }
-.sc-history-table th[data-label="Amount"],        .sc-history-table td[data-label="Amount"]        { width: 9%; }
-.sc-history-table th[data-label="Payment"],       .sc-history-table td[data-label="Payment"]       { width: 8%; }
-.sc-history-table th[data-label="Location"],      .sc-history-table td[data-label="Location"]      { width: 7%; }
-.sc-history-table th[data-label="Remarks"],       .sc-history-table td[data-label="Remarks"]       { width: 8%; }
-.sc-history-table th[data-label="Staff"],         .sc-history-table td[data-label="Staff"]         { width: 8%; }
+/* History & Sub-Hire: too many columns to compress into view — scroll
+   horizontally instead, with each column sized to its natural content
+   width rather than squeezed into a percentage. */
+.sc-history-table table, .sc-subhire-table table {
+  table-layout: auto;
+  width: auto;
+  min-width: 100%;
+}
+.sc-history-table th, .sc-history-table td,
+.sc-subhire-table th, .sc-subhire-table td {
+  white-space: nowrap;
+  overflow: visible;
+  max-width: none;
+}
+.sc-history-table td[data-label="Remarks"] { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.sc-history-table td[data-label="Action"], .sc-subhire-table td[data-label="Action"] { white-space: normal; }
 
 tbody tr:hover td { background: #fafaf8; }
 

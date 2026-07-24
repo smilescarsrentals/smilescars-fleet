@@ -39,6 +39,7 @@ export default function ReservationsPage({ staffName, role }) {
   const [fleet,        setFleet]        = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [showAdd,      setShowAdd]      = useState(null); // day number
+  const [urgentExpanded, setUrgentExpanded] = useState(false);
   const [showDetail,   setShowDetail]   = useState(null);
   const [showEdit,     setShowEdit]     = useState(null);
 
@@ -110,10 +111,15 @@ export default function ReservationsPage({ staffName, role }) {
 
       {urgentReservations.length > 0 && (
         <div style={{ background:"var(--red-bg)",border:"1.5px solid var(--red-border)",borderRadius:10,padding:"12px 16px",marginBottom:"1rem" }}>
-          <div style={{ fontWeight:700,color:"var(--red)",fontSize:14,marginBottom:8 }}>
-            🚨 {urgentReservations.length} reservation{urgentReservations.length>1?"s":""} need{urgentReservations.length===1?"s":""} a car assigned
-          </div>
-          <div>
+          <button type="button" onClick={() => setUrgentExpanded(v => !v)}
+            style={{ display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit" }}>
+            <span style={{ fontWeight:700,color:"var(--red)",fontSize:14 }}>
+              🚨 {urgentReservations.length} reservation{urgentReservations.length>1?"s":""} need{urgentReservations.length===1?"s":""} a car assigned
+            </span>
+            <span style={{ fontSize:12,fontWeight:600,color:"var(--red)" }}>{urgentExpanded ? "Hide ▲" : "Show ▼"}</span>
+          </button>
+          {urgentExpanded && (
+          <div style={{ marginTop:8 }}>
             {urgentReservations.map(r => {
               const now    = new Date(); now.setHours(0,0,0,0);
               const pickup = parseLocalDate(r.pickupDate);
@@ -133,6 +139,7 @@ export default function ReservationsPage({ staffName, role }) {
               );
             })}
           </div>
+          )}
         </div>
       )}
 

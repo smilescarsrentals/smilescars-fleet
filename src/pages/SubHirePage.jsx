@@ -87,7 +87,7 @@ export default function SubHirePage({ staffName }) {
       </div>
 
       {loading ? <div className="loading-screen"><div className="spinner" />Loading…</div> : (
-        <div className="table-wrap">
+        <div className="table-wrap sc-subhire-table">
           <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
             <thead>
               <tr>{["Supplier","Vehicle","Plate","Client","From","To","Client Amount","Supplier Amount","Status","Action"].map(h =>
