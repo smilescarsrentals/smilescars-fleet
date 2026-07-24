@@ -57,7 +57,7 @@ export default function SubHirePage({ staffName }) {
           <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{entries.length} total bookings</div>
         </div>
         <div style={{ display:"flex",gap:8 }}>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Add Booking</button>
+          <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ Add Booking</button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={load}>↻</button>
         </div>
       </div>
@@ -76,7 +76,7 @@ export default function SubHirePage({ staffName }) {
       </div>
 
       <div className="sc-filter-row">
-        <input style={{ ...sel,width:260 }} placeholder="Search supplier, client or vehicle…"
+        <input style={sel} className="sc-search" placeholder="Search supplier, client or vehicle…"
           value={search} onChange={e => setSearch(e.target.value)} />
         <select style={sel} value={fStatus} onChange={e => setFStatus(e.target.value)}>
           <option value="">All statuses</option>

@@ -100,7 +100,7 @@ export default function SoldPage() {
 
 const styles = {
   center:       { textAlign: "center", padding: "3rem", color: "var(--text-muted)" },
-  search:       { padding: "8px 11px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 7, background: "var(--surface)", width: 240 },
+  search:       { padding: "8px 11px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 7, background: "var(--surface)" },
   table:        { width: "100%", borderCollapse: "collapse", fontSize: 13 },
   th:           { padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "var(--text-muted)", borderBottom: "1px solid var(--border)", background: "var(--bg)", textTransform: "uppercase", letterSpacing: ".4px", whiteSpace: "nowrap" },
   td:           { padding: "10px 12px", verticalAlign: "middle" },

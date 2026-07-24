@@ -1,6 +1,7 @@
 // src/pages/FuelPage.jsx
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { post, get } from "../lib/api";
+import { get, post } from "../lib/api";
+import DateField from "../components/DateField";
 
 // ── Helpers ──────────────────────────────────────────────────
 function fmtNum(n) {
@@ -680,18 +681,18 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
       </div>
 
       {/* Stats */}
-      <div className="sc-stat-grid" style={{ gridTemplateColumns:"repeat(3,1fr)" }}>
+      <div className="sc-stat-grid sc-fuel-stats" style={{ gridTemplateColumns:"repeat(3,1fr)" }}>
         <div className="sc-stat-card tint-blue">
           <div className="sc-stat-label">Total Entries</div>
           <div className="sc-stat-value">{entries.length}</div>
         </div>
         <div className="sc-stat-card tint-green">
           <div className="sc-stat-label">Total Amount</div>
-          <div className="sc-stat-value" style={{ fontSize:20 }}>TSH {fmtNum(totalAmount)}</div>
+          <div className="sc-stat-value">TSH {fmtNum(totalAmount)}</div>
         </div>
         <div className="sc-stat-card tint-yellow">
           <div className="sc-stat-label">Total Litres</div>
-          <div className="sc-stat-value" style={{ fontSize:20 }}>{totalLitres > 0 ? `${fmtNum(totalLitres)} Ltrs` : "—"}</div>
+          <div className="sc-stat-value">{totalLitres > 0 ? `${fmtNum(totalLitres)} Ltrs` : "—"}</div>
         </div>
       </div>
 
@@ -704,12 +705,10 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
           <option value="Diesel">Diesel</option>
           <option value="Super">Super</option>
         </select>
-        <input type="date" value={filterFrom}
-          onChange={e => setFilterFrom(e.target.value)} style={S.filterInput} />
-        <input type="date" value={filterTo}
-          onChange={e => setFilterTo(e.target.value)} style={S.filterInput} />
+        <DateField label="From" style={S.filterInput} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
+        <DateField label="To" style={S.filterInput} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
         <span className="result-count">{filtered.length} {filtered.length === 1 ? "entry" : "entries"}</span>
-        <button type="button" className="btn btn-primary btn-sm" onClick={() => hasAccess ? setShowAdd(true) : setAccessDenied(true)}>＋ Add New</button>
+        <button type="button" className="btn btn-add" onClick={() => hasAccess ? setShowAdd(true) : setAccessDenied(true)}>＋ Add New</button>
       </div>
 
       {/* Table */}
@@ -718,7 +717,7 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: 48, color: "var(--text-faint)" }}>No fuel entries found.</div>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap sc-fuel-table">
           <table style={S.table}>
             <thead>
               <tr>

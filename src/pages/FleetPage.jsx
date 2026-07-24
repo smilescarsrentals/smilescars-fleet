@@ -365,7 +365,7 @@ export default function FleetPage({ staffName, role }) {
       )}
 
       <div className="sc-filter-row">
-        <input style={{ ...sel,width:220 }} className="sc-search" placeholder="Search plate, type or client…"
+        <input style={sel} className="sc-search" placeholder="Search plate, type or client…"
           value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} />
         <MultiSelect style={sel} label="All statuses" options={["Available","Rented","Staff Use","Maintenance"]} selected={fStatus} onChange={v=>{setFStatus(v);setPage(1);}} />
         <MultiSelect style={sel} label="All locations" options={locations} selected={fLocation} onChange={v=>{setFLocation(v);setPage(1);}} />
@@ -381,11 +381,11 @@ export default function FleetPage({ staffName, role }) {
         <button type="button" className="btn btn-ghost btn-sm" onClick={()=>{cache.clear();load(true);}}>↻</button>
       </div>
 
-      <div className="table-wrap">
+      <div className="table-wrap sc-fleet-table">
         <table>
           <thead>
             <tr>{["Plate","Type","Location","Status","Client","Return Date","Payment", ...(view==="unpaid"||view==="expiring"?["Staff"]:[]), "Action"].map(h =>
-              <th key={h}>{h}</th>)}
+              <th key={h} data-label={h}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -525,7 +525,7 @@ export default function FleetPage({ staffName, role }) {
 }
 
 function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOverdueCount, setOverdueBlock }) {
-  const row = { display:"flex",alignItems:"center",flexWrap:"nowrap",gap:3 };
+  const row = { display:"flex",alignItems:"center",flexWrap:"wrap",gap:4 };
   const btn = (label, action, color, bg, onClick, filled) => (
     <button type="button" key={action}
       style={filled

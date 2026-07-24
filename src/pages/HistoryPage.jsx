@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { cache } from "../lib/cache";
 import { exportToExcel } from "../lib/exportExcel";
+import DateField from "../components/DateField";
 
 const ACTION_COLORS = {
   "Checked Out":         { bg: "var(--yellow-bg)", color: "var(--yellow)" },
@@ -149,11 +150,11 @@ export default function HistoryPage({ role }) {
             {[["Car (plate)",<input style={exportSel} placeholder="Search plate…" value={exPlate} onChange={e=>setExPlate(e.target.value)} />],
               ["Type",<select style={exportSel} value={exType} onChange={e=>setExType(e.target.value)}><option value="">All types</option>{types.map(t=><option key={t}>{t}</option>)}</select>],
               ["Location",<select style={exportSel} value={exLocation} onChange={e=>setExLocation(e.target.value)}><option value="">All locations</option>{locations.map(l=><option key={l}>{l}</option>)}</select>],
-              ["From date",<input type="date" style={exportSel} value={exFrom} onChange={e=>setExFrom(e.target.value)} />],
-              ["To date",<input type="date" style={exportSel} value={exTo} onChange={e=>setExTo(e.target.value)} />],
             ].map(([label, input]) => (
               <div key={label}><label style={{ fontSize:11,fontWeight:500,color:"var(--text-muted)",display:"block",marginBottom:4 }}>{label}</label>{input}</div>
             ))}
+            <DateField label="From date" style={exportSel} value={exFrom} onChange={e=>setExFrom(e.target.value)} />
+            <DateField label="To date" style={exportSel} value={exTo} onChange={e=>setExTo(e.target.value)} />
           </div>
           <p style={{ fontSize:12,color:"var(--text-muted)",margin:"10px 0" }}>Exports {exportRows.length} entries matching the filters above.</p>
           <button type="button" className="btn btn-success" onClick={handleExport}>
@@ -163,7 +164,7 @@ export default function HistoryPage({ role }) {
       )}
 
       <div className="sc-filter-row">
-        <input style={{ ...sel, width:220 }} className="sc-search" placeholder="Search plate, type or client…"
+        <input style={sel} className="sc-search" placeholder="Search plate, type or client…"
           value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
 
         <div className="sc-hf-row2">
@@ -185,7 +186,7 @@ export default function HistoryPage({ role }) {
         </div>
 
         <div className="sc-hf-row4">
-          <input type="date" style={sel} value={fDate} onChange={e => { setFDate(e.target.value); setPage(1); }} title="Filter by date" />
+          <DateField label="Date" style={sel} value={fDate} onChange={e => { setFDate(e.target.value); setPage(1); }} />
           {canExport && <button type="button" className="btn btn-success btn-sm" onClick={() => setShowExport(v => !v)}>⬇ Export</button>}
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => { cache.clear("history"); load(true); }}>↻</button>
         </div>

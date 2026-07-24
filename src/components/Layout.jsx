@@ -1,6 +1,6 @@
 // src/components/Layout.jsx
 import { useState, useEffect } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import AdminPanel from "./AdminPanel";
 
@@ -54,6 +54,7 @@ const Icon = {
   search: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>,
   bell: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M18 8a6 6 0 10-12 0c0 6-2.5 7.5-2.5 7.5h17S18 14 18 8z"/><path d="M10.3 20a1.8 1.8 0 003.4 0"/></svg>,
   menu: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M3 6h18M3 12h18M3 18h18"/></svg>,
+  logout: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>,
 };
 
 const NAV_GROUPS = [
@@ -77,6 +78,23 @@ const NAV_GROUPS = [
 export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const location = useLocation();
+
+  // The bottom nav's middle slot defaults to Reservations, but swaps in
+  // whichever "More" page is currently active (Sub-Hire/History/Sold/
+  // Clients/Blacklist), then reverts once you leave it.
+  const SWAP_ROUTES = [
+    { path: "/sub-hire",  icon: Icon.subhire,   label: "Sub-Hire" },
+    { path: "/history",   icon: Icon.history,   label: "History" },
+    { path: "/sold",      icon: Icon.sold,      label: "Sold" },
+    { path: "/clients",   icon: Icon.clients,   label: "Clients" },
+    { path: "/blacklist", icon: Icon.blacklist, label: "Blacklist" },
+  ];
+  const activeSwap    = SWAP_ROUTES.find(r => location.pathname.startsWith(r.path));
+  const middleIcon    = activeSwap ? activeSwap.icon  : Icon.reservations;
+  const middleLabel   = activeSwap ? activeSwap.label : "Reservations";
+  const middleTo      = activeSwap ? activeSwap.path  : "/reservations";
+  const MiddleIcon    = middleIcon;
   const [panelOpen,    setPanelOpen]    = useState(false);
   const [history,      setHistory]      = useState([]);
   const [loading,      setLoading]      = useState(false);
@@ -222,6 +240,10 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
           <div className="sc-sidebar-brand-text">
             <div className="sc-sidebar-brand-name">SmilesCars</div>
             <div className="sc-sidebar-brand-sub">Fleet Manager</div>
+            <div className="sc-sidebar-user-row">
+              <span className="sc-sidebar-user-name">{staffName}</span>
+              <span className="sc-sidebar-role-pill" style={{ background:roleBadge.bg, color:roleBadge.color }}>{role}</span>
+            </div>
           </div>
         </div>
 
@@ -242,6 +264,12 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
               ))}
             </div>
           ))}
+          <div className="sc-nav-section">
+            <button type="button" className="sc-nav-link sc-nav-logout" onClick={onSignOut} title="Log out">
+              <span className="sc-nav-icon"><Icon.logout width="17" height="17" /></span>
+              <span className="sc-nav-link-text">Log out</span>
+            </button>
+          </div>
         </nav>
       </aside>
 
@@ -256,12 +284,6 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
             <span>Search vehicles, clients, reservations…</span>
           </div>
           <div className="sc-topbar-actions">
-            <button type="button" className="sc-icon-btn" title="Notifications">
-              <Icon.bell width="18" height="18" />
-              {urgentCount > 0 && (
-                <span style={{ position:"absolute", top:5, right:5, width:8, height:8, borderRadius:"50%", background:"var(--sc-overdue)", border:"1.5px solid #fff" }} />
-              )}
-            </button>
             {/* Clickable avatar + name — opens Activity Panel */}
             <button type="button" onClick={() => setPanelOpen(true)} className="sc-topbar-userbtn"
               style={{ display:"flex", alignItems:"center", gap:8, background:"none", border:"none", cursor:"pointer", padding:"4px 8px", borderRadius:8, transition:"background .15s" }}
@@ -285,7 +307,6 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
                 {role}
               </button>
             )}
-            <button type="button" className="sc-icon-btn" onClick={onSignOut} title="Log out">↩</button>
           </div>
         </header>
 
@@ -332,13 +353,16 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
           <Icon.fleet width="19" height="19" />
           <span>Fleet</span>
         </NavLink>
-        <NavLink to="/reservations" className={({ isActive }) => `sc-tab${isActive ? " active" : ""}`}>
-          <span className="sc-tab-icon-wrap">
-            <Icon.reservations width="19" height="19" />
-            {urgentCount > 0 && <span className="sc-tab-badge">{urgentCount}</span>}
-          </span>
-          <span>Reservations</span>
+
+        <NavLink to={middleTo} className="sc-tab-middle-wrap" title={middleLabel}>
+          {({ isActive }) => (
+            <span className={`sc-tab-middle${isActive ? " active" : ""}`}>
+              <MiddleIcon width="21" height="21" />
+              {!activeSwap && urgentCount > 0 && <span className="sc-tab-badge sc-tab-middle-badge">{urgentCount}</span>}
+            </span>
+          )}
         </NavLink>
+
         <NavLink to="/fuel" className={({ isActive }) => `sc-tab${isActive ? " active" : ""}`}>
           <Icon.fuel width="19" height="19" />
           <span>Fuel</span>

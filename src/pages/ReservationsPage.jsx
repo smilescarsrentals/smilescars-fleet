@@ -98,6 +98,9 @@ export default function ReservationsPage({ staffName, role }) {
           <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{reservations.length} reservations this month</div>
         </div>
         <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+          <button type="button" className="btn btn-add" onClick={() => setShowAdd(today.getMonth()+1===month && today.getFullYear()===year ? today.getDate() : 1)}>
+            + New Reservation
+          </button>
           <button type="button" onClick={prevMonth} className="btn btn-ghost btn-sm">‹</button>
           <span style={{ fontSize:15,fontWeight:700,color:"var(--text)",minWidth:150,textAlign:"center" }}>{MONTHS[month-1]} {year}</span>
           <button type="button" onClick={nextMonth} className="btn btn-ghost btn-sm">›</button>
@@ -117,11 +120,15 @@ export default function ReservationsPage({ staffName, role }) {
               const diff   = Math.ceil((pickup - now) / (1000*60*60*24));
               return (
                 <div key={r.id} className="sc-urgent-row">
-                  <span className="sc-urgent-client">{r.client}</span>
-                  <span className="sc-urgent-type">{r.carType||"Any"}</span>
-                  <span className="sc-urgent-diff">{diff===0?"Today":diff===1?"Tomorrow":`In ${diff} days`}</span>
-                  <span className="sc-urgent-date">{fmtDate(r.pickupDate)}</span>
-                  <span className="sc-urgent-staff">{r.staffName||"—"}</span>
+                  <span className="sc-urgent-line1">
+                    <span className="sc-urgent-client">{r.client}</span>
+                    <span className="sc-urgent-type">({r.carType||"Any"})</span>
+                    <span className="sc-urgent-diff">{diff===0?"Today":diff===1?"Tomorrow":`In ${diff} days`}</span>
+                  </span>
+                  <span className="sc-urgent-line2">
+                    <span className="sc-urgent-staff">{r.staffName||"Unassigned"}</span>
+                    <span className="sc-urgent-date">{fmtDate(r.pickupDate)}</span>
+                  </span>
                 </div>
               );
             })}
