@@ -555,7 +555,7 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
   if (car.status==="Rented") return (
     <div style={row}>
       {btn("Returned","markReturned","var(--orange)","var(--orange-bg)")}
-      {btn("Extend Booking","extendBooking","var(-grey)","var(--grey-bg)")}
+      {btn("Extend Booking","extendBooking","var(--#191970)","var(--#191970-bg)")}
       {btn("Replace","replace","var(--purple)","var(--purple-bg)",()=>onReplace(car))}
     </div>
   );
