@@ -444,7 +444,7 @@ export default function FleetPage({ staffName, role }) {
                   <td data-label="Payment">
                     {car.status==="Rented"&&car.paymentStatus?(
                       <select value={car.paymentStatus} onChange={e=>handlePaymentUpdate(car,e.target.value)}
-                        style={{ fontSize:11,fontWeight:600,padding:"3px 6px",borderRadius:6,border:"none",cursor:"pointer",background:ps?.bg,color:ps?.color }}>
+                        style={{ fontSize:10,fontWeight:600,padding:"2.5px 5px",borderRadius:6,border:"none",cursor:"pointer",background:ps?.bg,color:ps?.color }}>
                         <option value="Paid">Paid</option>
                         <option value="Partial Paid">Partial Paid</option>
                         <option value="Unpaid">Unpaid</option>
@@ -528,7 +528,7 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
   const row = { display:"flex",alignItems:"center",flexWrap:"nowrap",gap:2 };
   const btn = (label, action, color, bg, onClick) => (
     <button type="button" key={action}
-      style={{ fontSize:9.5,padding:"3px 6px",borderRadius:5,border:`1px solid ${color}`,background:bg,color,cursor:"pointer",marginRight:2,fontWeight:500,whiteSpace:"nowrap" }}
+      style={{ fontSize:9,padding:"2.5px 5px",borderRadius:5,border:`1px solid ${color}`,background:bg,color,cursor:"pointer",marginRight:2,fontWeight:500,whiteSpace:"nowrap" }}
       onClick={onClick||(() => onAction(car, action))}>
       {label}
     </button>
@@ -540,8 +540,8 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
         if (isStaff && myOverdueCount >= 2) { setOverdueBlock(true); return; }
         onAction(car, "checkOut");
       })}
-      {btn("Maintenance","setMaintenance","var(--amber)","var(--amber-bg)")}
       {btn("Staff Use","setStaffUse","var(--yellow)","var(--yellow-bg)")}
+      {btn("Maintenance","setMaintenance","var(--amber)","var(--amber-bg)")}
       {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
       {canSell&&btn("Sold","markSold","var(--red)","var(--red-bg)")}
     </div>
@@ -555,7 +555,7 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
   if (car.status==="Rented") return (
     <div style={row}>
       {btn("Returned","markReturned","var(--orange)","var(--orange-bg)")}
-      {btn("Extend Booking","extendBooking","var(--white)","var(--grey-bg)")}
+      {btn("Extend Booking","extendBooking","var(--blue-bg)","var(--sidebar-bg)")}
       {btn("Replace","replace","var(--purple)","var(--purple-bg)",()=>onReplace(car))}
     </div>
   );

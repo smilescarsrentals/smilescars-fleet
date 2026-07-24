@@ -197,7 +197,7 @@ export default function HistoryPage({ role }) {
         <span className="result-count">{filtered.length} of {history.length}</span>
       </div>
 
-      <div className="table-wrap">
+      <div className="table-wrap sc-history-table">
         <table>
           <thead>
             <tr>{["Time","Plate","Type","Action","Client","Return Date","Garage","Fuel Out","Fuel In","Amount","Payment","Location","Remarks","Staff"].map(h =>
