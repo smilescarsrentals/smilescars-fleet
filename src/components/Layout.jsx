@@ -354,13 +354,9 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
           <span>Fleet</span>
         </NavLink>
 
-        <NavLink to={middleTo} className="sc-tab-middle-wrap" title={middleLabel}>
-          {({ isActive }) => (
-            <span className={`sc-tab-middle${isActive ? " active" : ""}`}>
-              <MiddleIcon width="21" height="21" />
-              {!activeSwap && urgentCount > 0 && <span className="sc-tab-badge sc-tab-middle-badge">{urgentCount}</span>}
-            </span>
-          )}
+        <NavLink to={middleTo} className={({ isActive }) => `sc-tab${isActive ? " active" : ""}`} title={middleLabel}>
+          <MiddleIcon width="19" height="19" />
+          <span>{middleLabel}</span>
         </NavLink>
 
         <NavLink to="/fuel" className={({ isActive }) => `sc-tab${isActive ? " active" : ""}`}>

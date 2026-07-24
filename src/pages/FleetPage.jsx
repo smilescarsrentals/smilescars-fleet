@@ -525,12 +525,10 @@ export default function FleetPage({ staffName, role }) {
 }
 
 function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOverdueCount, setOverdueBlock }) {
-  const row = { display:"flex",alignItems:"center",flexWrap:"wrap",gap:4 };
-  const btn = (label, action, color, bg, onClick, filled) => (
+  const row = { display:"flex",alignItems:"center",flexWrap:"nowrap",gap:2 };
+  const btn = (label, action, color, bg, onClick) => (
     <button type="button" key={action}
-      style={filled
-        ? { fontSize:11,padding:"5px 10px",borderRadius:6,border:`1px solid ${color}`,background:color,color:"#fff",cursor:"pointer",marginRight:4,fontWeight:600,whiteSpace:"nowrap" }
-        : { fontSize:11,padding:"4px 9px",borderRadius:6,border:`1px solid ${color}`,background:bg,color,cursor:"pointer",marginRight:4,fontWeight:500,whiteSpace:"nowrap" }}
+      style={{ fontSize:9.5,padding:"3px 6px",borderRadius:5,border:`1px solid ${color}`,background:bg,color,cursor:"pointer",marginRight:2,fontWeight:500,whiteSpace:"nowrap" }}
       onClick={onClick||(() => onAction(car, action))}>
       {label}
     </button>
@@ -541,30 +539,30 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
       {btn("Check Out","checkOut","var(--green)","var(--green-bg)", () => {
         if (isStaff && myOverdueCount >= 2) { setOverdueBlock(true); return; }
         onAction(car, "checkOut");
-      }, true)}
+      })}
       {btn("Staff Use","setStaffUse","var(--yellow)","var(--yellow-bg)")}
       {btn("Maintenance","setMaintenance","var(--amber)","var(--amber-bg)")}
-      {btn("Move","move","var(--orange)","var(--orange-bg)",()=>onMove(car))}
+      {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
       {canSell&&btn("Sold","markSold","var(--red)","var(--red-bg)")}
     </div>
   );
   if (car.status==="Staff Use") return (
     <div style={row}>
       {btn("Mark Available","setAvailable","var(--green)","var(--green-bg)")}
-      {btn("Move","move","var(--orange)","var(--orange-bg)",()=>onMove(car))}
+      {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
     </div>
   );
   if (car.status==="Rented") return (
     <div style={row}>
-      {btn("Returned","markReturned","var(--orange)","var(--orange-bg)", undefined, true)}
-      {btn("Extend Booking","extendBooking","var(--sc-blue-dark)","var(--blue-bg)")}
+      {btn("Returned","markReturned","var(--orange)","var(--orange-bg)")}
+      {btn("Extend Booking","extendBooking","var(--blue-bg)","var(--sc-blue-dark)")}
       {btn("Replace","replace","var(--purple)","var(--purple-bg)",()=>onReplace(car))}
     </div>
   );
   if (car.status==="Maintenance") return (
     <div style={row}>
       {btn("Mark Available","setAvailable","var(--green)","var(--green-bg)")}
-      {btn("Move","move","var(--orange)","var(--orange-bg)",()=>onMove(car))}
+      {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
     </div>
   );
   return null;

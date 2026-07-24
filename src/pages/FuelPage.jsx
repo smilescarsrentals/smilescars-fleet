@@ -699,15 +699,20 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
       {/* Filter row */}
       <div className="sc-filter-row">
         <input placeholder="Search plate, client or type…" value={filterPlate}
-          onChange={e => setFilterPlate(e.target.value)} style={{ ...S.filterInput, minWidth: 220 }} />
-        <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)} style={S.filterInput}>
-          <option value="">All Products</option>
-          <option value="Diesel">Diesel</option>
-          <option value="Super">Super</option>
-        </select>
-        <DateField label="From" style={S.filterInput} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
-        <DateField label="To" style={S.filterInput} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
-        <span className="result-count">{filtered.length} {filtered.length === 1 ? "entry" : "entries"}</span>
+          onChange={e => setFilterPlate(e.target.value)} style={{ ...S.filterInput, minWidth: 220 }} className="sc-search" />
+
+        <div className="sc-hf-row2">
+          <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)} style={S.filterInput}>
+            <option value="">All Products</option>
+            <option value="Diesel">Diesel</option>
+            <option value="Super">Super</option>
+          </select>
+          <DateField label="From" style={S.filterInput} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
+        </div>
+        <div className="sc-hf-row3">
+          <DateField label="To" style={S.filterInput} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
+          <span className="result-count">{filtered.length} {filtered.length === 1 ? "entry" : "entries"}</span>
+        </div>
         <button type="button" className="btn btn-add" onClick={() => hasAccess ? setShowAdd(true) : setAccessDenied(true)}>＋ Add New</button>
       </div>
 

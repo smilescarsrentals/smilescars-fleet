@@ -229,7 +229,10 @@ body {
 
 /* ---- Date filter field: label + icon so an empty date input is identifiable ---- */
 .sc-date-field { position: relative; display: inline-flex; }
-.sc-date-field input[type="date"] { padding-left: 8px; }
+.sc-date-field input[type="date"] { padding-left: 8px; flex: 1; min-width: 0; }
+@media (max-width: 768px) {
+  .sc-date-field { display: flex; width: 100%; }
+}
 .sc-date-field-label {
   position: absolute;
   top: -8px;
@@ -305,15 +308,15 @@ tbody td {
 }
 
 tbody tr:last-child td { border-bottom: none; }
-th[data-label="Plate"],  td[data-label="Plate"]        { width: 9%; }
-th[data-label="Type"],   td[data-label="Type"]         { width: 9%; }
-th[data-label="Location"], td[data-label="Location"]   { width: 10%; }
-th[data-label="Status"], td[data-label="Status"]       { width: 11%; }
-th[data-label="Client"], td[data-label="Client"]       { width: 13%; }
-th[data-label="Return Date"], td[data-label="Return Date"] { width: 9%; }
-th[data-label="Payment"], td[data-label="Payment"]     { width: 10%; }
-th[data-label="Staff"],  td[data-label="Staff"]        { width: 9%; }
-th[data-label="Action"], td[data-label="Action"]       { width: 20%; white-space: normal; max-width: none; }
+th[data-label="Plate"],  td[data-label="Plate"]        { width: 8%; }
+th[data-label="Type"],   td[data-label="Type"]         { width: 7%; }
+th[data-label="Location"], td[data-label="Location"]   { width: 8%; }
+th[data-label="Status"], td[data-label="Status"]       { width: 9%; }
+th[data-label="Client"], td[data-label="Client"]       { width: 11%; }
+th[data-label="Return Date"], td[data-label="Return Date"] { width: 8%; }
+th[data-label="Payment"], td[data-label="Payment"]     { width: 9%; }
+th[data-label="Staff"],  td[data-label="Staff"]        { width: 8%; }
+th[data-label="Action"], td[data-label="Action"]       { width: 28%; white-space: normal; max-width: none; }
 tbody tr:hover td { background: #fafaf8; }
 
 /* ---- Badges ---- */
@@ -687,13 +690,12 @@ tbody tr:hover td { background: #fafaf8; }
 
 .sc-nav-logout {
   width: 100%;
-  background: none;
+  background: rgba(255,255,255,0.05);
   border: none;
   font-family: inherit;
   cursor: pointer;
-  color: var(--sc-overdue);
 }
-.sc-nav-logout:hover { background: rgba(220,80,80,.12); color: var(--sc-overdue); }
+.sc-nav-logout:hover { background: rgba(255,255,255,0.1); }
 .sc-shell.collapsed .sc-sidebar-brand-text { display: none; }
 
 .sc-sidebar-nav { flex: 1; padding: 10px 10px 16px; }
@@ -968,31 +970,6 @@ tbody tr:hover td { background: #fafaf8; }
   border-radius: 99px;
   line-height: 1.3;
 }
-
-/* ---- Middle raised nav button (dynamic icon) ---- */
-.sc-tab-middle-wrap {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  text-decoration: none;
-  position: relative;
-}
-.sc-tab-middle {
-  position: relative;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: var(--sc-yellow);
-  color: var(--sc-blue);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform: translateY(-16px);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.35), 0 0 0 4px var(--sidebar-bg);
-  transition: background .15s, color .15s;
-}
-.sc-tab-middle.active { background: #fff; color: var(--sc-blue); }
-.sc-tab-middle-badge { top: -18px; right: -2px; }
 
 @media (max-width: 768px) {
   .sc-sidebar {
