@@ -309,12 +309,12 @@ tbody td {
 
 tbody tr:last-child td { border-bottom: none; }
 th[data-label="Plate"],  td[data-label="Plate"]        { width: 8%; }
-th[data-label="Type"],   td[data-label="Type"]         { width: 8.5%; }
+th[data-label="Type"],   td[data-label="Type"]         { width: 8%; }
 th[data-label="Location"], td[data-label="Location"]   { width: 8.5%; }
 th[data-label="Status"], td[data-label="Status"]       { width: 12%; }
 th[data-label="Client"], td[data-label="Client"]       { width: 12%; }
 th[data-label="Return Date"], td[data-label="Return Date"] { width: 8%; }
-th[data-label="Payment"], td[data-label="Payment"]     { width: 9%; }
+th[data-label="Payment"], td[data-label="Payment"]     { width: 10%; }
 th[data-label="Staff"],  td[data-label="Staff"]        { width: 7%; }
 th[data-label="Action"], td[data-label="Action"]       { width: 25%; white-space: normal; max-width: none; }
 tbody tr:hover td { background: #fafaf8; }
