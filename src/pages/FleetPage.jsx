@@ -540,8 +540,8 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
         if (isStaff && myOverdueCount >= 2) { setOverdueBlock(true); return; }
         onAction(car, "checkOut");
       })}
-      {btn("Staff Use","setStaffUse","var(--yellow)","var(--yellow-bg)")}
       {btn("Maintenance","setMaintenance","var(--amber)","var(--amber-bg)")}
+      {btn("Staff Use","setStaffUse","var(--charcoal)","var(--charcoal-bg)")}
       {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
       {canSell&&btn("Sold","markSold","var(--red)","var(--red-bg)")}
     </div>
@@ -555,7 +555,7 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
   if (car.status==="Rented") return (
     <div style={row}>
       {btn("Returned","markReturned","var(--orange)","var(--orange-bg)")}
-      {btn("Extend Booking","extendBooking","var(--blue-bg)","var(--sc-blue-dark)")}
+      {btn("Extend Booking","extendBooking","var(--navy)","var(--navy-bg)")}
       {btn("Replace","replace","var(--purple)","var(--purple-bg)",()=>onReplace(car))}
     </div>
   );
