@@ -52,6 +52,20 @@ works if you prefer it; just swap the port.
 
 Copy [`.env.example`](./.env.example) to `.env.local` for local runs.
 
+#### No access to the Vercel dashboard yet?
+
+There is a temporary way in: `HARDCODED_DATABASE_URL` at the top of
+[`lib/db.js`](./lib/db.js). Replace `PUT_PASSWORD_HERE` with the real password
+and the API uses it whenever `DATABASE_URL` is unset. `lib/` is server-only and
+never reaches the browser bundle, so the password isn't exposed to users — but
+it *is* visible to anyone who can read this repo, and git keeps it in history
+even after the line is deleted. So when you get dashboard access:
+
+1. Set `DATABASE_URL` in Vercel — it already takes precedence, no code change
+2. Blank `HARDCODED_DATABASE_URL` back to `""`
+3. **Rotate the password** (Supabase → Settings → Database → Reset database
+   password), because the old one is in the history for good
+
 ### 3. Deploy
 
 Push this branch and let Vercel build, or `npx vercel --prod`. Nothing else to
@@ -60,7 +74,18 @@ else to the SPA.
 
 ### 4. Verify
 
-Open `https://<your-app>.vercel.app/api?action=health`. You want:
+Before deploying, you can check the database straight from a terminal:
+
+```bash
+npm run db:check
+```
+
+It prints a row count per table, names any missing table or column, and tells
+you which connection it used (`DATABASE_URL` or the `lib/db.js` fallback) —
+never the password.
+
+Once deployed, the same report is at
+`https://<your-app>.vercel.app/api?action=health`. You want:
 
 ```json
 { "success": true, "connected": true, "problems": [], "tables": { … } }
