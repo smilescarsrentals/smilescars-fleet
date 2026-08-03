@@ -1,7 +1,9 @@
-const SCRIPT_URL = import.meta.env.VITE_SCRIPT_URL;
+// NOTE: nothing imports this file — src/lib/api.js is the one the app uses.
+// Kept in sync so an accidental import can't reach the retired Sheets backend.
+const SCRIPT_URL = import.meta.env.VITE_SCRIPT_URL || "/api";
 
 export async function get(action, params = {}) {
-  const url = new URL(SCRIPT_URL);
+  const url = new URL(SCRIPT_URL, window.location.origin);
   url.searchParams.set("action", action);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   const res  = await fetch(url.toString(), { method: "GET", redirect: "follow" });

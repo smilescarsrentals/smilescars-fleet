@@ -235,11 +235,16 @@ function AddStaffModal({ onClose, onSaved }) {
 function FeaturesTab() {
   const [settings, setSettings]   = useState(null);
   const [syncOn,   setSyncOn]     = useState(null);
+  const [syncAvailable, setSyncAvailable] = useState(false);
   const [busy,     setBusy]       = useState(false);
 
   const load = () => {
     api.getSettings().then(res => setSettings(res.settings)).catch(() => {});
-    api.getDropboxSyncStatus().then(res => setSyncOn(res.triggerActive)).catch(() => {});
+    // Dropbox auto-sync only exists on the retired Apps Script backend; the
+    // Supabase API answers available:false and the row is hidden.
+    api.getDropboxSyncStatus()
+      .then(res => { setSyncOn(res.triggerActive); setSyncAvailable(res.available !== false); })
+      .catch(() => setSyncOn(false));
   };
   useEffect(load, []);
 
@@ -268,7 +273,9 @@ function FeaturesTab() {
   return (
     <div>
       <ToggleRow label="Rental Agreement Form" sub="When off, checkout completes without offering the agreement step." on={agreementOn} busy={busy} onToggle={toggleAgreement} />
-      <ToggleRow label="Dropbox Auto-Sync" sub="Automatically fills in Reg Card / Photos links every 5 minutes until fully synced." on={syncOn} busy={busy} onToggle={toggleSync} />
+      {syncAvailable && (
+        <ToggleRow label="Dropbox Auto-Sync" sub="Automatically fills in Reg Card / Photos links every 5 minutes until fully synced." on={syncOn} busy={busy} onToggle={toggleSync} />
+      )}
     </div>
   );
 }
@@ -309,9 +316,10 @@ function SystemTab() {
 
   return (
     <div>
+      {status && status.available !== false && (
       <div style={S.section}>
         <p style={S.sectionTitle}>Dropbox Sync Status</p>
-        {!status ? <p style={{ fontSize: 13, color: "#888" }}>Loading…</p> : !status.status ? (
+        {!status.status ? (
           <p style={{ fontSize: 13, color: "#888" }}>No sync has run yet.</p>
         ) : (
           <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.7 }}>
@@ -322,16 +330,17 @@ function SystemTab() {
           </div>
         )}
       </div>
+      )}
 
       <div style={S.section}>
         <p style={S.sectionTitle}>Backup</p>
-        <p style={{ fontSize: 12, color: "#888", margin: "0 0 10px" }}>Creates a full, dated copy of every sheet in Drive (SmilesCars/Backups).</p>
+        <p style={{ fontSize: 12, color: "#888", margin: "0 0 10px" }}>Downloads a dated snapshot of every table (fleet, history, bookings, fuel, config…) as a single JSON file.</p>
         <button type="button" style={{ ...S.primaryBtn, opacity: backing ? 0.65 : 1 }} disabled={backing} onClick={runBackup}>
           {backing ? "Creating backup…" : "📦 Create Backup Snapshot Now"}
         </button>
         {backupUrl && (
           <p style={{ fontSize: 12, marginTop: 8 }}>
-            ✅ Saved — <a href={backupUrl} target="_blank" rel="noreferrer" style={{ color: "#1d4ed8" }}>Open backup</a>
+            ✅ Ready — <a href={backupUrl} target="_blank" rel="noreferrer" style={{ color: "#1d4ed8" }}>Download backup</a>
           </p>
         )}
       </div>
