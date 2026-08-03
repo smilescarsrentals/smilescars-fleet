@@ -13,6 +13,13 @@ if (!conn.configured) {
   console.error("  HARDCODED_DATABASE_URL in lib/db.js (replace PUT_PASSWORD_HERE).\n");
   process.exit(1);
 }
+if (!conn.valid) {
+  console.error(`\n✗ The connection string from ${conn.source} could not be read.\n`);
+  console.error("  Expected:  postgresql://USER:PASSWORD@HOST:PORT/DATABASE");
+  console.error("  The password may contain characters as-is (#, ?, /, %) — that's fine,");
+  console.error("  but the rest of the string has to keep that shape.\n");
+  process.exit(1);
+}
 
 console.log(`\nChecking ${conn.database} on ${conn.host}:${conn.port} as ${conn.user}`);
 console.log(`(from ${conn.source})\n`);
