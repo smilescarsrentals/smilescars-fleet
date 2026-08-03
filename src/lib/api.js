@@ -1,7 +1,21 @@
 // The backend lives at /api in this same deployment (Supabase-backed — see
-// /api/index.js). VITE_SCRIPT_URL still overrides it, which is how you point a
-// preview build at another deployment, or roll back to the old Apps Script URL.
-const SCRIPT_URL = import.meta.env.VITE_SCRIPT_URL || "/api";
+// /api/index.js).
+//
+// VITE_SCRIPT_URL is deliberately IGNORED. Vite inlines env variables at build
+// time, so a leftover VITE_SCRIPT_URL in the Vercel project silently sends the
+// whole app back to Google Apps Script — which is what it did after the
+// migration, until this constant took over. To point the app somewhere else
+// (another deployment, or back to Apps Script), edit this line; don't
+// reintroduce the env variable.
+const SCRIPT_URL = "/api";
+
+if (import.meta.env.VITE_SCRIPT_URL) {
+  console.warn(
+    `[SmilesCars] Ignoring VITE_SCRIPT_URL (${import.meta.env.VITE_SCRIPT_URL}) — ` +
+    `the app reads Supabase through ${SCRIPT_URL}. Delete that variable from the ` +
+    `Vercel project when you get the chance; it has no effect either way.`
+  );
+}
 
 export async function get(action, params = {}) {
   const url = new URL(SCRIPT_URL, window.location.origin); // second arg resolves the relative "/api"
