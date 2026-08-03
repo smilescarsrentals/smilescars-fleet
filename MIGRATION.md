@@ -25,10 +25,18 @@ In Supabase: **SQL Editor → New query** → paste
 
 It is safe to re-run and safe on tables that already hold data: every statement
 is `CREATE TABLE IF NOT EXISTS` or `ADD COLUMN IF NOT EXISTS`, and there is no
-`DROP`, `DELETE`, or `UPDATE` of business data. It fills the gaps the sheet
-export left behind (`config.active`, `blacklist.file_id`, a surrogate
-`history.id`) and adds the tables that replace Drive (`files`, `agreements`,
-`signature_tokens`, `staff_signatures`, `export_log`).
+`DROP`, `DELETE`, or `UPDATE` of business data. It creates any missing table,
+then reconciles *every* column the API touches on every table — so it fills the
+gaps the sheet export left behind (`config.active`, `blacklist.file_id`, a
+surrogate `history.id`) and adds the tables that replace Drive (`files`,
+`agreements`, `signature_tokens`, `staff_signatures`, `export_log`).
+
+One column is renamed rather than added: the Agreements sheet headed its staff
+column `Staff` (History used `Staff Name`), so the export produced `staff` where
+the API expects `staff_name`. Adding a fresh column would strand the staff names
+on existing agreement rows in a column nothing reads, so the script renames it
+in place when it finds that situation. Existing agreement rows keep their Google
+Drive links and still open; new ones are stored in Supabase.
 
 Then run [`db/harden_rls.sql`](./db/harden_rls.sql) — **recommended**. Supabase
 publishes every `public` table through its own REST API using the *anon* key,
