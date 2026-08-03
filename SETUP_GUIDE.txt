@@ -1,4 +1,15 @@
-# Smiles Fleet Manager — Setup Guide
+╔═══════════════════════════════════════════════════════════════╗
+║  ⚠  SUPERSEDED — this describes the old Google Sheets setup.  ║
+║                                                               ║
+║  The app now reads and writes Supabase Postgres. For setup,   ║
+║  deployment and cutover, see MIGRATION.md instead.            ║
+║                                                               ║
+║  Kept for reference only: Steps 1 and 2 below (the Sheet and  ║
+║  the Apps Script) no longer apply, and VITE_SCRIPT_URL should ║
+║  now be left unset so the app calls its own /api.             ║
+╚═══════════════════════════════════════════════════════════════╝
+
+# Smiles Fleet Manager — Setup Guide (Google Sheets era)
 # Follow these steps in order. Should take about 30–45 minutes.
 
 ═══════════════════════════════════════════════

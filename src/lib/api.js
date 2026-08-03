@@ -1,7 +1,10 @@
-const SCRIPT_URL = import.meta.env.VITE_SCRIPT_URL;
+// The backend lives at /api in this same deployment (Supabase-backed — see
+// /api/index.js). VITE_SCRIPT_URL still overrides it, which is how you point a
+// preview build at another deployment, or roll back to the old Apps Script URL.
+const SCRIPT_URL = import.meta.env.VITE_SCRIPT_URL || "/api";
 
 export async function get(action, params = {}) {
-  const url = new URL(SCRIPT_URL);
+  const url = new URL(SCRIPT_URL, window.location.origin); // second arg resolves the relative "/api"
   url.searchParams.set("action", action);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   const res  = await fetch(url.toString(), { method: "GET", redirect: "follow" });

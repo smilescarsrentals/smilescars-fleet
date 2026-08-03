@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../lib/api";
+import { compressImage } from "../lib/imageCompress";
 
 export default function BlacklistPage({ staffName, role }) {
   const canDelete = role === "Admin" || role === "Manager";
@@ -181,17 +182,14 @@ function AddModal({ staffName, onClose, onSaved }) {
       let imageUrl = ""; let fileId = "";
 
       if (imageFile) {
+        setProgress("Preparing image…");
+        const { base64, mimeType, filename } = await compressImage(imageFile);
         setProgress("Uploading image…");
-        const base64 = await new Promise((res, rej) => {
-          const r = new FileReader();
-          r.onload  = () => res(r.result.split(",")[1]);
-          r.onerror = () => rej(new Error("Read failed"));
-          r.readAsDataURL(imageFile);
-        });
         const upRes = await api.uploadBlacklistImage({
           imageBase64: base64,
-          mimeType:    imageFile.type,
-          filename:    licenseNo ? `${licenseNo}.${imageFile.name.split(".").pop()}` : imageFile.name,
+          mimeType,
+          filename:    licenseNo ? `${licenseNo}.${filename.split(".").pop()}` : filename,
+          addedBy:     staffName,
         });
         if (upRes.success) { imageUrl = upRes.url; fileId = upRes.fileId; }
       }

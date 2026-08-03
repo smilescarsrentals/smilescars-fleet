@@ -9,10 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "pg":               "^8.13.1",
     "react":            "^18.2.0",
     "react-dom":        "^18.2.0",
     "react-router-dom": "^6.22.0",
     "xlsx":             "^0.18.5"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
