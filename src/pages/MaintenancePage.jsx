@@ -9,6 +9,17 @@ const STATUS_COLORS = {
   "Completed":      "var(--green)",
 };
 
+// Explicit allowed transitions, rather than "move to any other status" —
+// keeps the lifecycle meaningful (e.g. you can't skip Queued -> Completed
+// by accident). Completed isn't a transition target here; it's handled by
+// the separate "Mark Available" closing action.
+const TRANSITIONS = {
+  "Queued":         ["In Progress"],
+  "In Progress":    ["Awaiting Parts", "Completed"],
+  "Awaiting Parts": ["In Progress", "Completed"],
+  "Completed":      [],
+};
+
 function fmtDateTime(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -17,6 +28,13 @@ function fmtDateTime(iso) {
 }
 function fmtMoney(n) {
   return Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+// Odometer is entered as free text but always displayed/stored consistently
+// as "0,000 Km" — strips anything non-numeric, then reformats with commas.
+function fmtOdometer(val) {
+  const digits = String(val || "").replace(/[^\d]/g, "");
+  if (!digits) return "";
+  return Number(digits).toLocaleString() + " Km";
 }
 
 export default function MaintenancePage({ staffName, role }) {
@@ -152,6 +170,7 @@ function WorkOrderCard({ log, onClick }) {
 // ── Detail / Edit Modal ──────────────────────────────────────
 function DetailModal({ log, onClose, onUpdated }) {
   const [editing, setEditing] = useState(false);
+  const [showMarkAvailable, setShowMarkAvailable] = useState(false);
   const [form, setForm] = useState({
     assignedMechanic: log.assignedMechanic, issueDescription: log.issueDescription,
     odometer: log.odometer, notes: log.notes,
@@ -179,14 +198,12 @@ function DetailModal({ log, onClose, onUpdated }) {
     finally { setSaving(false); }
   };
 
-  const otherStatuses = STATUSES.filter(s => s !== log.status);
   const rows = [
     ["Ref No.", log.refNo || "—"],
     ["Plate", log.plate],
     ["Assigned Mechanic", log.assignedMechanic || "—"],
-    ["Odometer", log.odometer || "—"],
+    ["Odometer", log.odometer ? fmtOdometer(log.odometer) : "—"],
     ["Issue Description", log.issueDescription || "—"],
-    ["Notes", log.notes || "—"],
     ["Opened By", log.openedBy || "—"],
     ["Date Opened", fmtDateTime(log.dateOpened)],
     ...(log.status === "Completed" ? [["Date Closed", fmtDateTime(log.dateClosed)]] : []),
@@ -197,7 +214,16 @@ function DetailModal({ log, onClose, onUpdated }) {
       <div style={S.modal} onClick={e => e.stopPropagation()}>
         <div style={{ ...S.mHead, background: STATUS_COLORS[log.status] }}>
           <div>
-            <p style={S.mTitle}>{log.plate}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <p style={S.mTitle}>{log.plate}</p>
+              {!editing && (
+                <button type="button" onClick={() => setEditing(true)}
+                  style={{ fontSize: 10.5, fontWeight: 600, color: "#fff", background: "rgba(255,255,255,0.22)",
+                    border: "1px solid rgba(255,255,255,0.4)", borderRadius: 20, padding: "3px 10px", cursor: "pointer" }}>
+                  Edit Details
+                </button>
+              )}
+            </div>
             <p style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", margin: "2px 0 0" }}>{log.status} · {log.refNo || log.id}</p>
           </div>
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
@@ -215,29 +241,44 @@ function DetailModal({ log, onClose, onUpdated }) {
 
               <JobCardItems workOrderId={log.id} totalCost={log.totalCost} onChanged={onUpdated} />
 
+              <div style={{ marginTop: 16 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3, display: "block", marginBottom: 6 }}>
+                  Notes / Updates
+                </span>
+                <p style={{ fontSize: 13, color: log.notes ? "var(--text)" : "var(--text-faint)", fontStyle: log.notes ? "normal" : "italic", margin: 0, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                  {log.notes || "No notes yet"}
+                </p>
+              </div>
+
               {err && <p style={S.err}>{err}</p>}
 
               <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-                {otherStatuses.map(s => (
-                  <button key={s} type="button" disabled={saving}
-                    onClick={() => moveStatus(s)}
+                {log.status === "Completed" ? (
+                  <button type="button" disabled={saving} onClick={() => setShowMarkAvailable(true)}
                     style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer", opacity: saving ? 0.6 : 1,
-                      border: `1.5px solid ${STATUS_COLORS[s]}`, background: "var(--surface)", color: STATUS_COLORS[s] }}>
-                    Move to {s}
+                      border: "1.5px solid var(--green)", background: "var(--surface)", color: "var(--green)" }}>
+                    Mark Available
                   </button>
-                ))}
+                ) : (
+                  TRANSITIONS[log.status].map(s => (
+                    <button key={s} type="button" disabled={saving}
+                      onClick={() => moveStatus(s)}
+                      style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer", opacity: saving ? 0.6 : 1,
+                        border: `1.5px solid ${STATUS_COLORS[s]}`, background: "var(--surface)", color: STATUS_COLORS[s] }}>
+                      Move to {s}
+                    </button>
+                  ))
+                )}
               </div>
-
-              <button type="button" className="btn btn-ghost" style={{ width: "100%", marginTop: 14 }} onClick={() => setEditing(true)}>
-                Edit Details
-              </button>
             </>
           ) : (
             <>
               <div style={S.field}><label style={S.label}>Assigned Mechanic</label>
                 <input style={S.input} value={form.assignedMechanic} onChange={e => set("assignedMechanic", e.target.value)} /></div>
               <div style={S.field}><label style={S.label}>Odometer</label>
-                <input style={S.input} value={form.odometer} onChange={e => set("odometer", e.target.value)} /></div>
+                <input style={S.input} value={form.odometer} placeholder="e.g. 84,200"
+                  onChange={e => set("odometer", e.target.value)}
+                  onBlur={e => set("odometer", fmtOdometer(e.target.value))} /></div>
               <div style={S.field}><label style={S.label}>Issue Description</label>
                 <textarea style={S.textarea} rows={3} value={form.issueDescription} onChange={e => set("issueDescription", e.target.value)} /></div>
               <div style={S.field}><label style={S.label}>Notes</label>
@@ -252,6 +293,57 @@ function DetailModal({ log, onClose, onUpdated }) {
               </div>
             </>
           )}
+        </div>
+      </div>
+
+      {showMarkAvailable && (
+        <MarkAvailableModal
+          log={log}
+          onClose={() => setShowMarkAvailable(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Stub for now — asks which location the car is being marked Available at,
+// but does NOT yet write to Fleet. The real car-status/location update is
+// Phase 2c, built once the Fleet-sync edge cases (active reservations,
+// concurrent work orders) have been thought through properly.
+function MarkAvailableModal({ log, onClose }) {
+  const [locations, setLocations] = useState([]);
+  const [location, setLocation] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getConfig().then(res => setLocations(res?.locations || [])).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div style={{ ...S.overlay, zIndex: 110 }} onClick={onClose}>
+      <div style={{ ...S.modal, width: 360 }} onClick={e => e.stopPropagation()}>
+        <div style={{ ...S.mHead, background: "var(--green)" }}>
+          <p style={S.mTitle}>Mark {log.plate} Available</p>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={S.mBody}>
+          <div style={S.field}>
+            <label style={S.label}>To which location?</label>
+            {loading ? (
+              <p style={{ fontSize: 12, color: "var(--text-faint)" }}>Loading locations…</p>
+            ) : (
+              <select style={S.input} value={location} onChange={e => setLocation(e.target.value)}>
+                <option value="">Select a location…</option>
+                {locations.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            )}
+          </div>
+          <p style={{ fontSize: 11.5, color: "var(--text-faint)", margin: "4px 0 10px" }}>
+            This will be wired up to update the car's Fleet status and location shortly.
+          </p>
+          <button type="button" className="btn btn-ghost" style={{ width: "100%" }} onClick={onClose}>
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -391,7 +483,9 @@ function AddWorkOrderModal({ staffName, fleet, onClose, onSaved }) {
           <div style={S.field}><label style={S.label}>Assigned Mechanic *</label>
             <input style={S.input} value={form.assignedMechanic} onChange={e => set("assignedMechanic", e.target.value)} placeholder="Mechanic's name" /></div>
           <div style={S.field}><label style={S.label}>Odometer</label>
-            <input style={S.input} value={form.odometer} onChange={e => set("odometer", e.target.value)} placeholder="e.g. 84,200 km" /></div>
+            <input style={S.input} value={form.odometer} placeholder="e.g. 84,200"
+              onChange={e => set("odometer", e.target.value)}
+              onBlur={e => set("odometer", fmtOdometer(e.target.value))} /></div>
           <div style={S.field}><label style={S.label}>Issue Description</label>
             <textarea style={S.textarea} rows={3} value={form.issueDescription} onChange={e => set("issueDescription", e.target.value)} placeholder="What's wrong / what's being serviced…" /></div>
           <div style={S.field}><label style={S.label}>Notes</label>
