@@ -93,4 +93,8 @@ export const api = {
   addSubHire:            (body)  => post({ action: "addSubHire",             ...body }),
   returnSubHire:         (body)  => post({ action: "returnSubHire",          ...body }),
   updateSubHirePayment:  (body)  => post({ action: "updateSubHirePayment",   ...body }),
+  getLeads:               ()     => get("getLeads"),
+  addLead:                (body) => post({ action: "addLead",                ...body }),
+  editLead:               (body) => post({ action: "editLead",               ...body }),
+  deleteLead:             (body) => post({ action: "deleteLead",             ...body }),
 };
