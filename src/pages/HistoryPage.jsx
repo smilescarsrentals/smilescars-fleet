@@ -52,7 +52,8 @@ export default function HistoryPage({ role }) {
   const [fLocation,  setFLocation]  = useState("");
   const [fType,      setFType]      = useState("");
   const [fStaff,     setFStaff]     = useState("");
-  const [fDate,      setFDate]      = useState("");
+  const [fFrom,      setFFrom]      = useState("");
+  const [fTo,        setFTo]        = useState("");
   const [showExport, setShowExport] = useState(false);
   const [exPlate,    setExPlate]    = useState("");
   const [exType,     setExType]     = useState("");
@@ -93,10 +94,11 @@ export default function HistoryPage({ role }) {
         (!fLocation || h.location  === fLocation) &&
         (!fType     || h.type      === fType) &&
         (!fStaff    || h.staffName === fStaff) &&
-        (!fDate     || ts === fDate)
+        (!fFrom     || ts >= fFrom) &&
+        (!fTo       || ts <= fTo)
       );
     });
-  }, [history, search, fAction, fLocation, fType, fStaff, fDate]);
+  }, [history, search, fAction, fLocation, fType, fStaff, fFrom, fTo]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const paginated  = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -186,13 +188,14 @@ export default function HistoryPage({ role }) {
         </div>
 
         <div className="sc-hf-row4">
-          <DateField label="Date" style={sel} value={fDate} onChange={e => { setFDate(e.target.value); setPage(1); }} />
+          <DateField label="From date" style={sel} value={fFrom} onChange={e => { setFFrom(e.target.value); setPage(1); }} />
+          <DateField label="To date" style={sel} value={fTo} onChange={e => { setFTo(e.target.value); setPage(1); }} />
           {canExport && <button type="button" className="btn btn-success btn-sm" onClick={() => setShowExport(v => !v)}>⬇ Export</button>}
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => { cache.clear("history"); load(true); }}>↻</button>
         </div>
 
-        {(search || fAction || fLocation || fType || fStaff || fDate) && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSearch(""); setFAction(""); setFLocation(""); setFType(""); setFStaff(""); setFDate(""); setPage(1); }}>Clear</button>
+        {(search || fAction || fLocation || fType || fStaff || fFrom || fTo) && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSearch(""); setFAction(""); setFLocation(""); setFType(""); setFStaff(""); setFFrom(""); setFTo(""); setPage(1); }}>Clear</button>
         )}
         <span className="result-count">{filtered.length} of {history.length}</span>
       </div>

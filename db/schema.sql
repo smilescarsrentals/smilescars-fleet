@@ -383,6 +383,10 @@ ALTER TABLE reservations ADD COLUMN IF NOT EXISTS pick_up_from text;
 ALTER TABLE reservations ADD COLUMN IF NOT EXISTS remarks      text;
 ALTER TABLE reservations ADD COLUMN IF NOT EXISTS staff_name   text;
 ALTER TABLE reservations ADD COLUMN IF NOT EXISTS timestamp    timestamp;
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS booking_type  text;
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS drop_off_to   text;
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS transfer_date timestamp;
+UPDATE reservations SET booking_type = 'Rental' WHERE booking_type IS NULL;
 
 -- ── Blacklist ───────────────────────────────────────────────────────────────
 ALTER TABLE blacklist ADD COLUMN IF NOT EXISTS id                text;

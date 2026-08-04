@@ -65,6 +65,7 @@ export default function ReservationsPage({ staffName, role }) {
   const urgentReservations = useMemo(() => {
     const now = new Date(); now.setHours(0,0,0,0);
     return reservations.filter(r => {
+      if (r.bookingType === "Transfer") return false; // Transfers don't need a plate assigned
       if (r.plate) return false; // already has a car assigned
       if (!r.pickupDate) return false;
       const pickup = parseLocalDate(r.pickupDate);
@@ -73,12 +74,13 @@ export default function ReservationsPage({ staffName, role }) {
     });
   }, [reservations]);
 
-  // Group by pickup day (show card on pickup date row)
+  // Group by pickup day for Rentals, transfer day for Transfers
   const byDay = useMemo(() => {
     const map = {};
     reservations.forEach(r => {
-      if (!r.pickupDate) return;
-      const [y, m, d] = r.pickupDate.split("-").map(Number);
+      const dateStr = r.bookingType === "Transfer" ? r.transferDate : r.pickupDate;
+      if (!dateStr) return;
+      const [y, m, d] = dateStr.split("-").map(Number);
       if (y === year && m === month) {
         if (!map[d]) map[d] = [];
         map[d].push(r);
@@ -158,17 +160,28 @@ export default function ReservationsPage({ staffName, role }) {
                 </div>
                 <div style={S.slots}>
                   {slots.map(r => {
+                    const isTransfer = r.bookingType === "Transfer";
                     const isUrgent = urgentReservations.some(u => u.id === r.id);
                     return (
                       <div key={r.id} style={{ ...S.card,
-                        borderLeft:`3px solid ${isUrgent ? "var(--red)" : colorFor(r.plate||r.client)}`,
+                        borderLeft:`3px solid ${isUrgent ? "var(--red)" : isTransfer ? "var(--purple, #8b5cf6)" : colorFor(r.plate||r.client)}`,
                         background: isUrgent ? "var(--red-bg)" : "var(--bg)" }}
                         onClick={() => setShowDetail(r)}>
                         {isUrgent && <span title="No car assigned — urgent!">🚨</span>}
+                        {isTransfer && <span title="Transfer">🔀</span>}
                         <span style={{ fontWeight:600,fontSize:12 }}>{r.client}</span>
-                        {r.plate && <span style={{ fontSize:11,color:"var(--text-muted)",marginLeft:5 }}>· {r.plate}</span>}
-                        {!r.plate && r.carType && <span style={{ fontSize:11,color:"var(--text-muted)",marginLeft:5 }}>· {r.carType}</span>}
-                        {r.returnDate && <span style={{ fontSize:11,color:"var(--text-faint)",marginLeft:5 }}>→ {fmtDate(r.returnDate)}</span>}
+                        {isTransfer ? (
+                          <>
+                            {r.plate && <span style={{ fontSize:11,color:"var(--text-muted)",marginLeft:5 }}>· {r.plate}</span>}
+                            {r.dropOffTo && <span style={{ fontSize:11,color:"var(--text-faint)",marginLeft:5 }}>→ {r.dropOffTo}</span>}
+                          </>
+                        ) : (
+                          <>
+                            {r.plate && <span style={{ fontSize:11,color:"var(--text-muted)",marginLeft:5 }}>· {r.plate}</span>}
+                            {!r.plate && r.carType && <span style={{ fontSize:11,color:"var(--text-muted)",marginLeft:5 }}>· {r.carType}</span>}
+                            {r.returnDate && <span style={{ fontSize:11,color:"var(--text-faint)",marginLeft:5 }}>→ {fmtDate(r.returnDate)}</span>}
+                          </>
+                        )}
                       </div>
                     );
                   })}
@@ -256,8 +269,13 @@ function TypeSearch({ fleetTypes, value, onChange }) {
 
 // ── Add Modal ────────────────────────────────────────────────
 function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onSaved }) {
-  const pickupStr = `${year}-${pad(month)}-${pad(day)}`;
-  const [form, setForm] = useState({ client:"", phone:"", plate:"", carType:"", pickupDate:pickupStr, returnDate:"", pickUpFrom:"", remarks:"" });
+  const dateStr = `${year}-${pad(month)}-${pad(day)}`;
+  const [bookingType, setBookingType] = useState("Rental");
+  const [form, setForm] = useState({
+    client:"", phone:"", plate:"", carType:"",
+    pickupDate:dateStr, returnDate:"", pickUpFrom:"", remarks:"",
+    dropOffTo:"", transferDate:dateStr,
+  });
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState("");
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
@@ -267,13 +285,17 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
 
   const handleSave = async () => {
     if (!form.client.trim())   { setErr("Client name is required."); return; }
-    if (!form.carType.trim())  { setErr("Car type is required."); return; }
-    if (!form.pickupDate)      { setErr("Pickup date is required."); return; }
-    if (!form.returnDate)      { setErr("Return date is required."); return; }
-    if (form.returnDate <= form.pickupDate) { setErr("Return date must be after pickup date."); return; }
+    if (bookingType === "Transfer") {
+      if (!form.transferDate)  { setErr("Transfer date is required."); return; }
+    } else {
+      if (!form.carType.trim())  { setErr("Car type is required."); return; }
+      if (!form.pickupDate)      { setErr("Pickup date is required."); return; }
+      if (!form.returnDate)      { setErr("Return date is required."); return; }
+      if (form.returnDate <= form.pickupDate) { setErr("Return date must be after pickup date."); return; }
+    }
     setSaving(true); setErr("");
     try {
-      await api.addReservation({ ...form, staffName });
+      await api.addReservation({ ...form, bookingType, staffName });
       onSaved();
     } catch(e) { setErr(e.message); }
     finally { setSaving(false); }
@@ -287,6 +309,21 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={S.mBody}>
+          <div style={S.field}>
+            <label style={S.label}>Booking Type</label>
+            <div style={{ display:"flex",gap:8 }}>
+              {["Rental","Transfer"].map(t => (
+                <button key={t} type="button" onClick={()=>setBookingType(t)}
+                  style={{ flex:1,padding:"9px 0",fontSize:13,fontWeight:600,borderRadius:7,cursor:"pointer",fontFamily:"inherit",
+                    border:`1.5px solid ${bookingType===t?"var(--sc-blue)":"var(--border)"}`,
+                    background:bookingType===t?"var(--blue-bg)":"var(--surface)",
+                    color:bookingType===t?"var(--sc-blue)":"var(--text-muted)" }}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div style={S.field}><label style={S.label}>Staff</label><div style={S.readOnly}>{staffName}</div></div>
 
           <div style={S.field}><label style={S.label}>Client Name *</label>
@@ -296,24 +333,50 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
 
           <div style={{ height:1,background:"var(--border-light)",margin:"4px 0 12px" }} />
 
-          <div style={S.field}><label style={S.label}>Plate No. <span style={{ color:"var(--text-faint)",fontWeight:400 }}>(optional)</span></label>
-            <PlateSearch fleet={fleet} value={form.plate} carType={form.carType}
-              onChange={(plate,type) => { set("plate",plate); if(type) set("carType",type); }} />
-          </div>
-          <div style={S.field}><label style={S.label}>Car Type *</label>
-            <TypeSearch fleetTypes={fleetTypes||[]} value={form.carType}
-              onChange={type => set("carType", type)} />
-          </div>
+          {bookingType === "Rental" ? (
+            <>
+              <div style={S.field}><label style={S.label}>Plate No. <span style={{ color:"var(--text-faint)",fontWeight:400 }}>(optional)</span></label>
+                <PlateSearch fleet={fleet} value={form.plate} carType={form.carType}
+                  onChange={(plate,type) => { set("plate",plate); if(type) set("carType",type); }} />
+              </div>
+              <div style={S.field}><label style={S.label}>Car Type *</label>
+                <TypeSearch fleetTypes={fleetTypes||[]} value={form.carType}
+                  onChange={type => set("carType", type)} />
+              </div>
 
-          <div style={S.two}>
-            <div style={S.field}><label style={S.label}>Pickup Date *</label>
-              <input style={S.input} type="date" value={form.pickupDate} onChange={e=>set("pickupDate",e.target.value)} /></div>
-            <div style={S.field}><label style={S.label}>Return Date *</label>
-              <input style={S.input} type="date" value={form.returnDate} min={form.pickupDate} onChange={e=>set("returnDate",e.target.value)} /></div>
-          </div>
+              <div style={S.two}>
+                <div style={S.field}><label style={S.label}>Pickup Date *</label>
+                  <input style={S.input} type="date" value={form.pickupDate} onChange={e=>set("pickupDate",e.target.value)} /></div>
+                <div style={S.field}><label style={S.label}>Return Date *</label>
+                  <input style={S.input} type="date" value={form.returnDate} min={form.pickupDate} onChange={e=>set("returnDate",e.target.value)} /></div>
+              </div>
 
-          <div style={S.field}><label style={S.label}>Pick Up Location</label>
-            <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} onBlur={e=>set("pickUpFrom",toTitleCase(e.target.value))} placeholder="e.g. Airport, Hotel name" /></div>
+              <div style={S.field}><label style={S.label}>Pick Up Location</label>
+                <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} onBlur={e=>set("pickUpFrom",toTitleCase(e.target.value))} placeholder="e.g. Airport, Hotel name" /></div>
+            </>
+          ) : (
+            <>
+              <div style={S.field}><label style={S.label}>Plate No. <span style={{ color:"var(--text-faint)",fontWeight:400 }}>(optional)</span></label>
+                <PlateSearch fleet={fleet} value={form.plate} carType={form.carType}
+                  onChange={(plate,type) => { set("plate",plate); if(type) set("carType",type); }} />
+              </div>
+              <div style={S.field}><label style={S.label}>Car Type</label>
+                <TypeSearch fleetTypes={fleetTypes||[]} value={form.carType}
+                  onChange={type => set("carType", type)} />
+              </div>
+
+              <div style={S.two}>
+                <div style={S.field}><label style={S.label}>Pick Up From</label>
+                  <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} onBlur={e=>set("pickUpFrom",toTitleCase(e.target.value))} placeholder="e.g. Airport" /></div>
+                <div style={S.field}><label style={S.label}>Drop Off To</label>
+                  <input style={S.input} value={form.dropOffTo} onChange={e=>set("dropOffTo",e.target.value)} onBlur={e=>set("dropOffTo",toTitleCase(e.target.value))} placeholder="e.g. Hotel name" /></div>
+              </div>
+
+              <div style={S.field}><label style={S.label}>Transfer Date *</label>
+                <input style={S.input} type="date" value={form.transferDate} onChange={e=>set("transferDate",e.target.value)} /></div>
+            </>
+          )}
+
           <div style={S.field}><label style={S.label}>Remarks</label>
             <textarea style={S.textarea} rows={2} value={form.remarks} onChange={e=>set("remarks",e.target.value)} placeholder="Any special notes…" /></div>
 
@@ -330,10 +393,11 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
 // ── Detail Modal ─────────────────────────────────────────────
 function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onCheckOut, onAssignPlate }) {
   const [deleting, setDeleting] = useState(false);
+  const isTransfer = res.bookingType === "Transfer";
   const color = colorFor(res.plate||res.client);
   const isToday    = res.pickupDate === todayStr;
   const isActive   = res.pickupDate <= todayStr && res.returnDate >= todayStr;
-  const canCheckOut = (isToday || isActive) && res.plate;
+  const canCheckOut = !isTransfer && (isToday || isActive) && res.plate;
 
   const handleDelete = async () => {
     if (!window.confirm("Delete this reservation?")) return;
@@ -342,28 +406,45 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
     catch(e) { alert(e.message); setDeleting(false); }
   };
 
+  const rows = isTransfer ? [
+    ["Booking Type",  "Transfer"],
+    ["Client",        res.client],
+    ["Contact No.",   res.phone      ||"—"],
+    ["Plate No.",     res.plate      ||"—"],
+    ["Car Type",      res.carType    ||"—"],
+    ["Pick Up From",  res.pickUpFrom ||"—"],
+    ["Drop Off To",   res.dropOffTo  ||"—"],
+    ["Transfer Date", fmtDate(res.transferDate)],
+    ["Remarks",       res.remarks    ||"—"],
+    ["Added by",      res.staffName  ||"—"],
+  ] : [
+    ["Client",       res.client],
+    ["Contact No.",  res.phone      ||"—"],
+    ["Plate No.",    res.plate      ||"—"],
+    ["Car Type",     res.carType    ||"—"],
+    ["Pickup Date",  fmtDate(res.pickupDate)],
+    ["Return Date",  fmtDate(res.returnDate)],
+    ["Pick Up From", res.pickUpFrom ||"—"],
+    ["Remarks",      res.remarks    ||"—"],
+    ["Added by",     res.staffName  ||"—"],
+  ];
+
   return (
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={e=>e.stopPropagation()}>
         <div style={{ ...S.mHead,background:color }}>
           <div>
             <p style={S.mTitle}>{res.client}</p>
-            <p style={S.mSub}>{res.plate ? `${res.plate} · ` : ""}{fmtDate(res.pickupDate)} → {fmtDate(res.returnDate)}</p>
+            <p style={S.mSub}>
+              {isTransfer
+                ? `${res.plate ? res.plate+" · " : ""}Transfer · ${fmtDate(res.transferDate)}`
+                : `${res.plate ? res.plate+" · " : ""}${fmtDate(res.pickupDate)} → ${fmtDate(res.returnDate)}`}
+            </p>
           </div>
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={S.mBody}>
-          {[
-            ["Client",       res.client],
-            ["Contact No.",  res.phone      ||"—"],
-            ["Plate No.",    res.plate      ||"—"],
-            ["Car Type",     res.carType    ||"—"],
-            ["Pickup Date",  fmtDate(res.pickupDate)],
-            ["Return Date",  fmtDate(res.returnDate)],
-            ["Pick Up From", res.pickUpFrom ||"—"],
-            ["Remarks",      res.remarks    ||"—"],
-            ["Added by",     res.staffName  ||"—"],
-          ].map(([label,val])=>(
+          {rows.map(([label,val])=>(
             <div key={label} style={{ display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid var(--border-light)",fontSize:13 }}>
               <span style={{ fontWeight:600,color:"var(--text-muted)",fontSize:12,textTransform:"uppercase",letterSpacing:".3px",flexShrink:0 }}>{label}</span>
               <span style={{ color:"var(--text)",textAlign:"right",marginLeft:12 }}>{val}</span>
@@ -403,15 +484,18 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
 
 // ── Edit Modal ───────────────────────────────────────────────
 function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
+  const isTransfer = res.bookingType === "Transfer";
   const [form, setForm] = useState({
-    client:     res.client     ||"",
-    phone:      res.phone      ||"",
-    plate:      res.plate      ||"",
-    carType:    res.carType    ||"",
-    pickupDate: res.pickupDate ||"",
-    returnDate: res.returnDate ||"",
-    pickUpFrom: res.pickUpFrom ||"",
-    remarks:    res.remarks    ||"",
+    client:       res.client       ||"",
+    phone:        res.phone        ||"",
+    plate:        res.plate        ||"",
+    carType:      res.carType      ||"",
+    pickupDate:   res.pickupDate   ||"",
+    returnDate:   res.returnDate   ||"",
+    pickUpFrom:   res.pickUpFrom   ||"",
+    remarks:      res.remarks      ||"",
+    dropOffTo:    res.dropOffTo    ||"",
+    transferDate: res.transferDate ||"",
   });
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState("");
@@ -419,11 +503,15 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
 
   const handleSave = async () => {
     if (!form.client.trim()) { setErr("Client name is required."); return; }
-    if (!form.pickupDate)    { setErr("Pickup date is required."); return; }
-    if (!form.returnDate)    { setErr("Return date is required."); return; }
-    if (form.returnDate <= form.pickupDate) { setErr("Return date must be after pickup date."); return; }
+    if (isTransfer) {
+      if (!form.transferDate) { setErr("Transfer date is required."); return; }
+    } else {
+      if (!form.pickupDate)    { setErr("Pickup date is required."); return; }
+      if (!form.returnDate)    { setErr("Return date is required."); return; }
+      if (form.returnDate <= form.pickupDate) { setErr("Return date must be after pickup date."); return; }
+    }
     setSaving(true); setErr("");
-    try { await api.editReservation({ id:res.id, ...form }); onSaved(); }
+    try { await api.editReservation({ id:res.id, bookingType:res.bookingType, ...form }); onSaved(); }
     catch(e) { setErr(e.message); }
     finally { setSaving(false); }
   };
@@ -432,7 +520,7 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={e=>e.stopPropagation()}>
         <div style={{ ...S.mHead,background:"var(--sc-blue)" }}>
-          <div><p style={S.mTitle}>Edit Reservation</p></div>
+          <div><p style={S.mTitle}>Edit {isTransfer ? "Transfer" : "Reservation"}</p></div>
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={S.mBody}>
@@ -447,19 +535,35 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
             <PlateSearch fleet={fleet} value={form.plate} carType={form.carType}
               onChange={(plate,type) => { set("plate",plate); if(type) set("carType",type); }} />
           </div>
-          <div style={S.field}><label style={S.label}>Car Type *</label>
+          <div style={S.field}><label style={S.label}>Car Type{isTransfer?"":" *"}</label>
             <TypeSearch fleetTypes={fleetTypes||[]} value={form.carType}
               onChange={type => set("carType", type)} />
           </div>
 
-          <div style={S.two}>
-            <div style={S.field}><label style={S.label}>Pickup Date *</label>
-              <input style={S.input} type="date" value={form.pickupDate} onChange={e=>set("pickupDate",e.target.value)} /></div>
-            <div style={S.field}><label style={S.label}>Return Date *</label>
-              <input style={S.input} type="date" value={form.returnDate} min={form.pickupDate} onChange={e=>set("returnDate",e.target.value)} /></div>
-          </div>
-          <div style={S.field}><label style={S.label}>Pick Up Location</label>
-            <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} onBlur={e=>set("pickUpFrom",toTitleCase(e.target.value))} /></div>
+          {isTransfer ? (
+            <>
+              <div style={S.two}>
+                <div style={S.field}><label style={S.label}>Pick Up From</label>
+                  <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} onBlur={e=>set("pickUpFrom",toTitleCase(e.target.value))} /></div>
+                <div style={S.field}><label style={S.label}>Drop Off To</label>
+                  <input style={S.input} value={form.dropOffTo} onChange={e=>set("dropOffTo",e.target.value)} onBlur={e=>set("dropOffTo",toTitleCase(e.target.value))} /></div>
+              </div>
+              <div style={S.field}><label style={S.label}>Transfer Date *</label>
+                <input style={S.input} type="date" value={form.transferDate} onChange={e=>set("transferDate",e.target.value)} /></div>
+            </>
+          ) : (
+            <>
+              <div style={S.two}>
+                <div style={S.field}><label style={S.label}>Pickup Date *</label>
+                  <input style={S.input} type="date" value={form.pickupDate} onChange={e=>set("pickupDate",e.target.value)} /></div>
+                <div style={S.field}><label style={S.label}>Return Date *</label>
+                  <input style={S.input} type="date" value={form.returnDate} min={form.pickupDate} onChange={e=>set("returnDate",e.target.value)} /></div>
+              </div>
+              <div style={S.field}><label style={S.label}>Pick Up Location</label>
+                <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} onBlur={e=>set("pickUpFrom",toTitleCase(e.target.value))} /></div>
+            </>
+          )}
+
           <div style={S.field}><label style={S.label}>Remarks</label>
             <textarea style={S.textarea} rows={2} value={form.remarks} onChange={e=>set("remarks",e.target.value)} /></div>
 
