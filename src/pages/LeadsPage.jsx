@@ -3,13 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { toTitleCase } from "../lib/textFormat";
 
-const STAGES = ["New", "Contacted", "Negotiating", "Won", "Lost"];
+const STAGES = ["New", "Contacted", "Negotiating", "Outcome"];
 const STAGE_COLORS = {
   New:         "#3b82f6",
   Contacted:   "#d97706",
   Negotiating: "#8b5cf6",
-  Won:         "var(--green)",
-  Lost:        "var(--red)",
+  Outcome:     "var(--text-muted)",
+};
+const OUTCOME_TINT = {
+  Won:  { border: "var(--green)", bg: "var(--green-bg, #eafaf0)" },
+  Lost: { border: "var(--red)",   bg: "var(--red-bg)" },
 };
 const LOCATIONS = ["Dar es Salaam", "Arusha", "Zanzibar"];
 const VEHICLES  = ["IST/Aqua/Vitz", "Harrier/RAV4/Vanguard", "Alphard/Wish", "Prado/Land Cruiser", "Hilux/Navara/Ranger"];
@@ -36,11 +39,11 @@ function todayStr() {
 
 // ── Mock data (page built ahead of the Supabase table + WhatsApp integration) ──
 const MOCK_LEADS = [
-  { id: "LEAD-00001", clientName: "James Mushi", phone: "+255 754 111 222", bookingType: "Rental", pickUpLocation: "Dar es Salaam", vehicle: "Harrier/RAV4/Vanguard", pickupDate: "2026-08-10", returnDate: "2026-08-15", source: "WhatsApp", stage: "New", assignedStaff: "", notes: "", lostReason: "", lastContactDate: nowISO(), createdAt: nowISO(), updatedAt: nowISO(), convertedReservationId: "" },
-  { id: "LEAD-00002", clientName: "Grace Kimaro", phone: "+255 713 445 900", bookingType: "Transfer", pickUpLocation: "Zanzibar", vehicle: "Prado/Land Cruiser", pickupDate: "2026-08-06", returnDate: "2026-08-06", source: "Phone Call", stage: "Contacted", assignedStaff: "Amina", notes: "Called back, wants airport pickup at 4pm.", lostReason: "", lastContactDate: "2026-08-02T10:00:00Z", createdAt: "2026-08-01T09:00:00Z", updatedAt: "2026-08-02T10:00:00Z", convertedReservationId: "" },
-  { id: "LEAD-00003", clientName: "Peter Mnyamani", phone: "+255 655 900 111", bookingType: "Rental", pickUpLocation: "Arusha", vehicle: "Alphard/Wish", pickupDate: "2026-08-20", returnDate: "2026-08-28", source: "Referral", stage: "Negotiating", assignedStaff: "John", notes: "Asked for weekly discount, following up Friday.", lostReason: "", lastContactDate: "2026-08-03T14:00:00Z", createdAt: "2026-07-30T08:00:00Z", updatedAt: "2026-08-03T14:00:00Z", convertedReservationId: "" },
-  { id: "LEAD-00004", clientName: "Fatma Said", phone: "+255 777 222 333", bookingType: "Rental", pickUpLocation: "Dar es Salaam", vehicle: "IST/Aqua/Vitz", pickupDate: "2026-08-05", returnDate: "2026-08-09", source: "WhatsApp", stage: "Won", assignedStaff: "Amina", notes: "Confirmed, deposit received.", lostReason: "", lastContactDate: "2026-08-01T11:00:00Z", createdAt: "2026-07-28T12:00:00Z", updatedAt: "2026-08-01T11:00:00Z", convertedReservationId: "" },
-  { id: "LEAD-00005", clientName: "David Kessy", phone: "+255 622 888 001", bookingType: "Rental", pickUpLocation: "Arusha", vehicle: "Hilux/Navara/Ranger", pickupDate: "2026-08-14", returnDate: "2026-08-18", source: "Walk-in", stage: "Lost", assignedStaff: "John", notes: "", lostReason: "Went with another company", lastContactDate: "2026-07-29T09:00:00Z", createdAt: "2026-07-27T09:00:00Z", updatedAt: "2026-07-29T09:00:00Z", convertedReservationId: "" },
+  { id: "LEAD-00001", clientName: "James Mushi", phone: "+255 754 111 222", bookingType: "Rental", pickUpLocation: "Dar es Salaam", vehicle: "Harrier/RAV4/Vanguard", pickupDate: "2026-08-10", returnDate: "2026-08-15", source: "WhatsApp", stage: "New", outcome: "", assignedStaff: "", notes: "", lostReason: "", lastContactDate: nowISO(), createdAt: nowISO(), updatedAt: nowISO(), convertedReservationId: "" },
+  { id: "LEAD-00002", clientName: "Grace Kimaro", phone: "+255 713 445 900", bookingType: "Transfer", pickUpLocation: "Zanzibar", vehicle: "Prado/Land Cruiser", pickupDate: "2026-08-06", returnDate: "2026-08-06", source: "Phone Call", stage: "Contacted", outcome: "", assignedStaff: "Amina", notes: "Called back, wants airport pickup at 4pm.", lostReason: "", lastContactDate: "2026-08-02T10:00:00Z", createdAt: "2026-08-01T09:00:00Z", updatedAt: "2026-08-02T10:00:00Z", convertedReservationId: "" },
+  { id: "LEAD-00003", clientName: "Peter Mnyamani", phone: "+255 655 900 111", bookingType: "Rental", pickUpLocation: "Arusha", vehicle: "Alphard/Wish", pickupDate: "2026-08-20", returnDate: "2026-08-28", source: "Referral", stage: "Negotiating", outcome: "", assignedStaff: "John", notes: "Asked for weekly discount, following up Friday.", lostReason: "", lastContactDate: "2026-08-03T14:00:00Z", createdAt: "2026-07-30T08:00:00Z", updatedAt: "2026-08-03T14:00:00Z", convertedReservationId: "" },
+  { id: "LEAD-00004", clientName: "Fatma Said", phone: "+255 777 222 333", bookingType: "Rental", pickUpLocation: "Dar es Salaam", vehicle: "IST/Aqua/Vitz", pickupDate: "2026-08-05", returnDate: "2026-08-09", source: "WhatsApp", stage: "Outcome", outcome: "Won", assignedStaff: "Amina", notes: "Confirmed, deposit received.", lostReason: "", lastContactDate: "2026-08-01T11:00:00Z", createdAt: "2026-07-28T12:00:00Z", updatedAt: "2026-08-01T11:00:00Z", convertedReservationId: "" },
+  { id: "LEAD-00005", clientName: "David Kessy", phone: "+255 622 888 001", bookingType: "Rental", pickUpLocation: "Arusha", vehicle: "Hilux/Navara/Ranger", pickupDate: "2026-08-14", returnDate: "2026-08-18", source: "Walk-in", stage: "Outcome", outcome: "Lost", assignedStaff: "John", notes: "", lostReason: "Went with another company", lastContactDate: "2026-07-29T09:00:00Z", createdAt: "2026-07-27T09:00:00Z", updatedAt: "2026-07-29T09:00:00Z", convertedReservationId: "" },
 ];
 
 export default function LeadsPage({ staffName, role }) {
@@ -49,6 +52,7 @@ export default function LeadsPage({ staffName, role }) {
   const [loading, setLoading] = useState(true);
   const [showAdd,    setShowAdd]    = useState(false);
   const [showDetail, setShowDetail] = useState(null);
+  const [outcomePrompt, setOutcomePrompt] = useState(null);
   const [dragOverStage, setDragOverStage] = useState(null);
 
   useEffect(() => { load(); }, []);
@@ -72,9 +76,9 @@ export default function LeadsPage({ staffName, role }) {
     return map;
   }, [leads]);
 
-  async function moveStage(lead, newStage) {
-    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, stage: newStage, updatedAt: nowISO() } : l));
-    try { await api.editLead({ id: lead.id, stage: newStage }); } catch { /* mock mode — ignore */ }
+  async function moveStage(lead, newStage, outcome = "") {
+    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, stage: newStage, outcome, updatedAt: nowISO() } : l));
+    try { await api.editLead({ id: lead.id, stage: newStage, outcome }); } catch { /* mock mode — ignore */ }
   }
 
   function handleDrop(e, stage) {
@@ -82,7 +86,9 @@ export default function LeadsPage({ staffName, role }) {
     setDragOverStage(null);
     const id = e.dataTransfer.getData("text/lead-id");
     const lead = leads.find(l => l.id === id);
-    if (lead && lead.stage !== stage) moveStage(lead, stage);
+    if (!lead || lead.stage === stage) return;
+    if (stage === "Outcome") { setOutcomePrompt(lead); return; }
+    moveStage(lead, stage);
   }
 
   return (
@@ -165,26 +171,47 @@ export default function LeadsPage({ staffName, role }) {
           }}
         />
       )}
+
+      {outcomePrompt && (
+        <OutcomePromptModal
+          lead={outcomePrompt}
+          onClose={() => setOutcomePrompt(null)}
+          onChoose={(outcome, lostReason) => {
+            setLeads(prev => prev.map(l => l.id === outcomePrompt.id
+              ? { ...l, stage: "Outcome", outcome, lostReason: outcome === "Lost" ? lostReason : "", updatedAt: nowISO() }
+              : l));
+            api.editLead({ id: outcomePrompt.id, stage: "Outcome", outcome, lostReason: outcome === "Lost" ? lostReason : "" }).catch(() => {});
+            setOutcomePrompt(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
 // ── Lead card ────────────────────────────────────────────────
 function LeadCard({ lead, onClick }) {
-  const stale = lead.stage !== "Won" && lead.stage !== "Lost" && daysSince(lead.lastContactDate) >= STALE_DAYS;
+  const stale = lead.stage !== "Outcome" && daysSince(lead.lastContactDate) >= STALE_DAYS;
+  const tint = OUTCOME_TINT[lead.outcome];
   return (
     <div
       draggable
       onDragStart={e => e.dataTransfer.setData("text/lead-id", lead.id)}
       onClick={onClick}
       style={{
-        background: "var(--surface)", border: "1px solid var(--border)", borderLeft: `3px solid ${STAGE_COLORS[lead.stage]}`,
+        background: tint ? tint.bg : "var(--surface)",
+        border: `1.5px solid ${tint ? tint.border : "var(--border)"}`,
+        borderLeft: `3px solid ${tint ? tint.border : STAGE_COLORS[lead.stage]}`,
         borderRadius: 8, padding: "9px 10px", cursor: "pointer", boxShadow: "var(--shadow-sm)",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
         <span style={{ fontWeight: 700, fontSize: 13 }}>{lead.clientName}</span>
-        {stale && <span title={`No contact in ${daysSince(lead.lastContactDate)} days`} style={{ fontSize: 10, fontWeight: 700, color: "var(--red)", background: "var(--red-bg)", borderRadius: 10, padding: "1px 6px", whiteSpace: "nowrap" }}>Stale</span>}
+        {tint ? (
+          <span style={{ fontSize: 10, fontWeight: 700, color: tint.border, whiteSpace: "nowrap" }}>{lead.outcome}</span>
+        ) : stale ? (
+          <span title={`No contact in ${daysSince(lead.lastContactDate)} days`} style={{ fontSize: 10, fontWeight: 700, color: "var(--red)", background: "var(--red-bg)", borderRadius: 10, padding: "1px 6px", whiteSpace: "nowrap" }}>Stale</span>
+        ) : null}
       </div>
       <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "3px 0 0" }}>{lead.phone}</p>
       <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "3px 0 0" }}>{lead.vehicle}</p>
@@ -194,6 +221,64 @@ function LeadCard({ lead, onClick }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
         <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: 0.3 }}>{lead.source}</span>
         {lead.assignedStaff && <span style={{ fontSize: 10.5, color: "var(--sc-blue)", fontWeight: 600 }}>{lead.assignedStaff}</span>}
+      </div>
+    </div>
+  );
+}
+
+// ── Outcome prompt (shown when a card is dropped into the Outcome column) ──
+function OutcomePromptModal({ lead, onClose, onChoose }) {
+  const [picked, setPicked] = useState(null); // "Won" | "Lost"
+  const [lostReason, setLostReason] = useState("");
+
+  const confirm = () => {
+    if (picked === "Lost" && !lostReason) return;
+    onChoose(picked, lostReason);
+  };
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modal, width: 380 }} onClick={e => e.stopPropagation()}>
+        <div style={{ ...S.mHead, background: "var(--sc-blue)" }}>
+          <p style={S.mTitle}>{lead.clientName} — Outcome</p>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={S.mBody}>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0 }}>Did this lead convert?</p>
+          <div style={{ display: "flex", gap: 10, marginBottom: picked === "Lost" ? 14 : 4 }}>
+            <button type="button" onClick={() => setPicked("Won")}
+              style={{ flex: 1, padding: "14px 0", fontSize: 14, fontWeight: 700, borderRadius: 9, cursor: "pointer", fontFamily: "inherit",
+                border: `1.5px solid ${picked === "Won" ? "var(--green)" : "var(--border)"}`,
+                background: picked === "Won" ? "var(--green-bg, #eafaf0)" : "var(--surface)",
+                color: "var(--green)" }}>
+              ✓ Won
+            </button>
+            <button type="button" onClick={() => setPicked("Lost")}
+              style={{ flex: 1, padding: "14px 0", fontSize: 14, fontWeight: 700, borderRadius: 9, cursor: "pointer", fontFamily: "inherit",
+                border: `1.5px solid ${picked === "Lost" ? "var(--red)" : "var(--border)"}`,
+                background: picked === "Lost" ? "var(--red-bg)" : "var(--surface)",
+                color: "var(--red)" }}>
+              ✕ Lost
+            </button>
+          </div>
+
+          {picked === "Lost" && (
+            <div style={S.field}>
+              <label style={S.label}>Lost Reason *</label>
+              <select style={S.input} value={lostReason} onChange={e => setLostReason(e.target.value)}>
+                <option value="">Select a reason…</option>
+                {LOST_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
+
+          <button type="button"
+            style={{ ...S.btn, background: picked === "Won" ? "var(--green)" : picked === "Lost" ? "var(--red)" : "var(--border)", opacity: !picked || (picked === "Lost" && !lostReason) ? 0.5 : 1 }}
+            disabled={!picked || (picked === "Lost" && !lostReason)}
+            onClick={confirm}>
+            Confirm
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -216,7 +301,7 @@ function AddLeadModal({ staffName, onClose, onSaved }) {
     setSaving(true); setErr("");
     const now = nowISO();
     const newLead = {
-      id: `LEAD-${Date.now()}`, ...form, stage: "New", lostReason: "",
+      id: `LEAD-${Date.now()}`, ...form, stage: "New", outcome: "", lostReason: "",
       lastContactDate: now, createdAt: now, updatedAt: now, convertedReservationId: "",
     };
     try {
@@ -300,18 +385,19 @@ function DetailModal({ lead, canEdit, onClose, onUpdated, onDeleted, onConvert }
   const [form, setForm] = useState({
     clientName: lead.clientName, phone: lead.phone, bookingType: lead.bookingType,
     pickUpLocation: lead.pickUpLocation, vehicle: lead.vehicle, pickupDate: lead.pickupDate,
-    returnDate: lead.returnDate, source: lead.source, stage: lead.stage,
+    returnDate: lead.returnDate, source: lead.source, stage: lead.stage, outcome: lead.outcome,
     assignedStaff: lead.assignedStaff, notes: lead.notes, lostReason: lead.lostReason,
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [err, setErr] = useState("");
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const stale = lead.stage !== "Won" && lead.stage !== "Lost" && daysSince(lead.lastContactDate) >= STALE_DAYS;
+  const stale = lead.stage !== "Outcome" && daysSince(lead.lastContactDate) >= STALE_DAYS;
+  const tint = OUTCOME_TINT[lead.outcome];
 
   const handleSave = async () => {
     if (!form.clientName.trim()) { setErr("Client name is required."); return; }
-    if (form.stage === "Lost" && !form.lostReason) { setErr("Please select a lost reason."); return; }
+    if (form.stage === "Outcome" && form.outcome === "Lost" && !form.lostReason) { setErr("Please select a lost reason."); return; }
     setSaving(true); setErr("");
     const updated = { ...lead, ...form, updatedAt: nowISO(), lastContactDate: nowISO() };
     try {
@@ -339,17 +425,19 @@ function DetailModal({ lead, canEdit, onClose, onUpdated, onDeleted, onConvert }
     ["Source", lead.source],
     ["Assigned Staff", lead.assignedStaff || "—"],
     ["Notes", lead.notes || "—"],
-    ...(lead.stage === "Lost" ? [["Lost Reason", lead.lostReason || "—"]] : []),
+    ...(lead.outcome === "Lost" ? [["Lost Reason", lead.lostReason || "—"]] : []),
     ["Last Contact", lead.lastContactDate ? fmtDate(lead.lastContactDate.slice(0, 10)) : "—"],
   ];
+
+  const otherStages = STAGES.filter(s => s !== lead.stage && s !== "Outcome");
 
   return (
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={e => e.stopPropagation()}>
-        <div style={{ ...S.mHead, background: STAGE_COLORS[lead.stage] }}>
+        <div style={{ ...S.mHead, background: tint ? tint.border : STAGE_COLORS[lead.stage] }}>
           <div>
             <p style={S.mTitle}>{lead.clientName}</p>
-            <p style={S.mSub}>{lead.stage}{stale ? " · Stale" : ""}</p>
+            <p style={S.mSub}>{lead.stage === "Outcome" ? lead.outcome : lead.stage}{stale ? " · Stale" : ""}</p>
           </div>
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
@@ -365,23 +453,31 @@ function DetailModal({ lead, canEdit, onClose, onUpdated, onDeleted, onConvert }
               ))}
 
               <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-                {STAGES.filter(s => s !== lead.stage).map(s => (
+                {otherStages.map(s => (
                   <button key={s} type="button"
-                    onClick={() => { set("stage", s); setEditing(true); }}
+                    onClick={() => { set("stage", s); set("outcome", ""); setEditing(true); }}
                     style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer",
                       border: `1.5px solid ${STAGE_COLORS[s]}`, background: "var(--surface)", color: STAGE_COLORS[s] }}>
                     Move to {s}
                   </button>
                 ))}
-              </div>
-
-              <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                {lead.stage === "Won" && (
-                  <button type="button" style={{ ...S.btn, background: "var(--green)", marginTop: 0 }} onClick={() => onConvert(lead)}>
-                    Convert to Reservation
+                {lead.stage !== "Outcome" && (
+                  <button type="button"
+                    onClick={() => { set("stage", "Outcome"); setEditing(true); }}
+                    style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer",
+                      border: "1.5px solid var(--text-muted)", background: "var(--surface)", color: "var(--text-muted)" }}>
+                    Set Outcome
                   </button>
                 )}
               </div>
+
+              {lead.outcome === "Won" && (
+                <div style={{ marginTop: 14 }}>
+                  <button type="button" style={{ ...S.btn, background: "var(--green)", marginTop: 0 }} onClick={() => onConvert(lead)}>
+                    Convert to Reservation
+                  </button>
+                </div>
+              )}
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                 <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setEditing(true)}>Edit</button>
                 <button type="button" className="btn btn-ghost" style={{ flex: 1, color: "var(--red)" }} onClick={handleDelete} disabled={deleting}>
@@ -416,14 +512,31 @@ function DetailModal({ lead, canEdit, onClose, onUpdated, onDeleted, onConvert }
 
               <div style={S.two}>
                 <div style={S.field}><label style={S.label}>Stage</label>
-                  <select style={S.input} value={form.stage} onChange={e => set("stage", e.target.value)}>
+                  <select style={S.input} value={form.stage} onChange={e => { set("stage", e.target.value); if (e.target.value !== "Outcome") set("outcome", ""); }}>
                     {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select></div>
                 <div style={S.field}><label style={S.label}>Assigned Staff</label>
                   <input style={S.input} value={form.assignedStaff} onChange={e => set("assignedStaff", e.target.value)} /></div>
               </div>
 
-              {form.stage === "Lost" && (
+              {form.stage === "Outcome" && (
+                <div style={S.field}>
+                  <label style={S.label}>Outcome *</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {["Won", "Lost"].map(o => (
+                      <button key={o} type="button" onClick={() => set("outcome", o)}
+                        style={{ flex: 1, padding: "8px 0", fontSize: 13, fontWeight: 700, borderRadius: 7, cursor: "pointer", fontFamily: "inherit",
+                          border: `1.5px solid ${form.outcome === o ? OUTCOME_TINT[o].border : "var(--border)"}`,
+                          background: form.outcome === o ? OUTCOME_TINT[o].bg : "var(--surface)",
+                          color: OUTCOME_TINT[o].border }}>
+                        {o}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {form.stage === "Outcome" && form.outcome === "Lost" && (
                 <div style={S.field}><label style={S.label}>Lost Reason *</label>
                   <select style={S.input} value={form.lostReason} onChange={e => set("lostReason", e.target.value)}>
                     <option value="">Select a reason…</option>
