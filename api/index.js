@@ -37,6 +37,7 @@ const READS = {
   getAllReservations: () => reads.getReservations({}),
   getBlacklist: reads.getBlacklist,
   getMaintenanceLog: reads.getMaintenanceLog,
+  getMaintenanceItems: reads.getMaintenanceItems,
   getSettings: reads.getSettings,
   getStaffList: reads.getStaffList,
   // Files, signatures, agreements — formerly Google Drive
@@ -84,6 +85,9 @@ const WRITES = {
   deleteFromBlacklist: writes.deleteFromBlacklist,
   addMaintenanceLog: writes.addMaintenanceLog,
   editMaintenanceLog: writes.editMaintenanceLog,
+  addMaintenanceItem: writes.addMaintenanceItem,
+  editMaintenanceItem: writes.editMaintenanceItem,
+  deleteMaintenanceItem: writes.deleteMaintenanceItem,
   // Files, signatures, agreements — formerly Google Drive
   uploadBlacklistImage: files.uploadBlacklistImage,
   storeSignature: files.storeSignature,

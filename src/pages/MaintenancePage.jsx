@@ -15,6 +15,9 @@ function fmtDateTime(iso) {
   if (isNaN(d)) return "—";
   return d.toLocaleString(undefined, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
+function fmtMoney(n) {
+  return Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
 
 export default function MaintenancePage({ staffName, role }) {
   const [logs,    setLogs]    = useState([]);
@@ -38,6 +41,10 @@ export default function MaintenancePage({ staffName, role }) {
       setLoading(false);
     }
   }
+
+  // Keep the open detail modal's data fresh after edits (re-derive from the
+  // latest logs list rather than trusting a stale closure).
+  const openDetailLog = showDetail ? logs.find(l => l.id === showDetail.id) || showDetail : null;
 
   const byStatus = useMemo(() => {
     const map = {}; STATUSES.forEach(s => map[s] = []);
@@ -105,11 +112,11 @@ export default function MaintenancePage({ staffName, role }) {
         />
       )}
 
-      {showDetail && (
+      {openDetailLog && (
         <DetailModal
-          log={showDetail}
+          log={openDetailLog}
           onClose={() => setShowDetail(null)}
-          onUpdated={() => { setShowDetail(null); load(); }}
+          onUpdated={load}
         />
       )}
     </div>
@@ -126,15 +133,18 @@ function WorkOrderCard({ log, onClick }) {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <span style={{ fontWeight: 700, fontSize: 13 }}>{log.plate}</span>
-        <span style={{ fontSize: 10, color: "var(--text-faint)" }}>{log.id}</span>
+        <span style={{ fontSize: 10, color: "var(--text-faint)" }}>{log.refNo || log.id}</span>
       </div>
       {log.issueDescription && (
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0", lineHeight: 1.4 }}>{log.issueDescription}</p>
       )}
       <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "5px 0 0" }}>🔧 {log.assignedMechanic || "—"}</p>
-      <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "3px 0 0" }}>
-        {log.status === "Completed" ? `Closed ${fmtDateTime(log.dateClosed)}` : `Opened ${fmtDateTime(log.dateOpened)}`}
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+        <span style={{ fontSize: 11, color: "var(--text-faint)" }}>
+          {log.status === "Completed" ? `Closed ${fmtDateTime(log.dateClosed)}` : `Opened ${fmtDateTime(log.dateOpened)}`}
+        </span>
+        {log.totalCost > 0 && <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--sc-blue)" }}>TZS {fmtMoney(log.totalCost)}</span>}
+      </div>
     </div>
   );
 }
@@ -155,7 +165,8 @@ function DetailModal({ log, onClose, onUpdated }) {
     try {
       await api.editMaintenanceLog({ id: log.id, status: newStatus });
       onUpdated();
-    } catch (e) { setErr(e.message); setSaving(false); }
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
   };
 
   const handleSave = async () => {
@@ -163,11 +174,14 @@ function DetailModal({ log, onClose, onUpdated }) {
     try {
       await api.editMaintenanceLog({ id: log.id, ...form });
       onUpdated();
-    } catch (e) { setErr(e.message); setSaving(false); }
+      setEditing(false);
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
   };
 
   const otherStatuses = STATUSES.filter(s => s !== log.status);
   const rows = [
+    ["Ref No.", log.refNo || "—"],
     ["Plate", log.plate],
     ["Assigned Mechanic", log.assignedMechanic || "—"],
     ["Odometer", log.odometer || "—"],
@@ -184,7 +198,7 @@ function DetailModal({ log, onClose, onUpdated }) {
         <div style={{ ...S.mHead, background: STATUS_COLORS[log.status] }}>
           <div>
             <p style={S.mTitle}>{log.plate}</p>
-            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", margin: "2px 0 0" }}>{log.status} · {log.id}</p>
+            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", margin: "2px 0 0" }}>{log.status} · {log.refNo || log.id}</p>
           </div>
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
@@ -198,6 +212,8 @@ function DetailModal({ log, onClose, onUpdated }) {
                   <span style={{ fontWeight: 600, textAlign: "right" }}>{val}</span>
                 </div>
               ))}
+
+              <JobCardItems workOrderId={log.id} totalCost={log.totalCost} onChanged={onUpdated} />
 
               {err && <p style={S.err}>{err}</p>}
 
@@ -242,6 +258,105 @@ function DetailModal({ log, onClose, onUpdated }) {
   );
 }
 
+// ── Job card line items ──────────────────────────────────────
+// Item-level cost breakdown for a work order — this IS the cost of the job,
+// there's no separate labor lump sum. Each add/edit/delete recomputes the
+// parent work order's total_cost server-side.
+function JobCardItems({ workOrderId, totalCost, onChanged }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [newItem, setNewItem] = useState({ itemName: "", quantity: "1", unitCost: "" });
+  const [err, setErr] = useState("");
+
+  useEffect(() => { load(); }, [workOrderId]);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await api.getMaintenanceItems(workOrderId);
+      setItems(res?.data || []);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleAdd = async () => {
+    if (!newItem.itemName.trim()) { setErr("Item name is required."); return; }
+    setErr("");
+    try {
+      await api.addMaintenanceItem({
+        workOrderId, itemName: newItem.itemName,
+        quantity: Number(newItem.quantity) || 1, unitCost: Number(newItem.unitCost) || 0,
+      });
+      setNewItem({ itemName: "", quantity: "1", unitCost: "" });
+      setAdding(false);
+      await load();
+      onChanged();
+    } catch (e) { setErr(e.message); }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await api.deleteMaintenanceItem({ id });
+      await load();
+      onChanged();
+    } catch (e) { setErr(e.message); }
+  };
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3 }}>Job Card Items</span>
+        {!adding && <button type="button" onClick={() => setAdding(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>+ Add Item</button>}
+      </div>
+
+      {loading ? (
+        <p style={{ fontSize: 12, color: "var(--text-faint)" }}>Loading items…</p>
+      ) : items.length === 0 && !adding ? (
+        <p style={{ fontSize: 12, color: "var(--text-faint)", fontStyle: "italic" }}>No items yet</p>
+      ) : (
+        <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden" }}>
+          {items.map(item => (
+            <div key={item.id} style={{ display: "flex", alignItems: "center", padding: "7px 10px", borderBottom: "1px solid var(--border-light)", fontSize: 12.5, gap: 8 }}>
+              <span style={{ flex: 1 }}>{item.itemName}</span>
+              <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{item.quantity} × {fmtMoney(item.unitCost)}</span>
+              <span style={{ fontWeight: 700, flexShrink: 0, minWidth: 70, textAlign: "right" }}>{fmtMoney(item.lineTotal)}</span>
+              <button type="button" onClick={() => handleDelete(item.id)}
+                style={{ background: "none", border: "none", color: "var(--red)", cursor: "pointer", fontSize: 14, padding: "0 2px", flexShrink: 0 }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {adding && (
+        <div style={{ border: "1.5px solid var(--sc-blue)", borderRadius: 8, padding: 10, marginTop: items.length > 0 ? 0 : 8 }}>
+          <input style={{ ...S.input, marginBottom: 6 }} placeholder="Item name (e.g. Brake pads)" value={newItem.itemName}
+            onChange={e => setNewItem(n => ({ ...n, itemName: e.target.value }))} autoFocus />
+          <div style={{ display: "flex", gap: 6 }}>
+            <input style={{ ...S.input, width: 70 }} type="number" min="0" placeholder="Qty" value={newItem.quantity}
+              onChange={e => setNewItem(n => ({ ...n, quantity: e.target.value }))} />
+            <input style={{ ...S.input, flex: 1 }} type="number" min="0" placeholder="Unit cost (TZS)" value={newItem.unitCost}
+              onChange={e => setNewItem(n => ({ ...n, unitCost: e.target.value }))} />
+          </div>
+          {err && <p style={S.err}>{err}</p>}
+          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: "6px 0", fontSize: 12 }} onClick={() => { setAdding(false); setErr(""); }}>Cancel</button>
+            <button type="button" style={{ flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 600, color: "#fff", background: "var(--sc-blue)", border: "none", borderRadius: 6, cursor: "pointer" }} onClick={handleAdd}>Add</button>
+          </div>
+        </div>
+      )}
+
+      {(items.length > 0 || totalCost > 0) && (
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 2px 0", fontSize: 13, fontWeight: 700 }}>
+          <span>Total</span>
+          <span style={{ color: "var(--sc-blue)" }}>TZS {fmtMoney(totalCost)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Add Work Order Modal ─────────────────────────────────────
 function AddWorkOrderModal({ staffName, fleet, onClose, onSaved }) {
   const [form, setForm] = useState({
@@ -281,6 +396,10 @@ function AddWorkOrderModal({ staffName, fleet, onClose, onSaved }) {
             <textarea style={S.textarea} rows={3} value={form.issueDescription} onChange={e => set("issueDescription", e.target.value)} placeholder="What's wrong / what's being serviced…" /></div>
           <div style={S.field}><label style={S.label}>Notes</label>
             <textarea style={S.textarea} rows={2} value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Any additional notes…" /></div>
+
+          <p style={{ fontSize: 11.5, color: "var(--text-faint)", margin: "0 0 8px" }}>
+            A reference number (e.g. SC/GAR/2026/08/0001) is generated automatically. Job card items can be added once the work order is created.
+          </p>
 
           {err && <p style={S.err}>{err}</p>}
           <button type="button" style={{ ...S.btn, background: "var(--sc-blue)", opacity: saving ? 0.65 : 1 }} onClick={handleSave} disabled={saving}>

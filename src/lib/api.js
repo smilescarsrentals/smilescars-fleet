@@ -100,4 +100,8 @@ export const api = {
   getMaintenanceLog:      ()     => get("getMaintenanceLog"),
   addMaintenanceLog:      (body) => post({ action: "addMaintenanceLog",      ...body }),
   editMaintenanceLog:     (body) => post({ action: "editMaintenanceLog",     ...body }),
+  getMaintenanceItems:    (workOrderId) => get("getMaintenanceItems", { workOrderId }),
+  addMaintenanceItem:     (body) => post({ action: "addMaintenanceItem",     ...body }),
+  editMaintenanceItem:    (body) => post({ action: "editMaintenanceItem",    ...body }),
+  deleteMaintenanceItem:  (body) => post({ action: "deleteMaintenanceItem",  ...body }),
 };

@@ -475,3 +475,21 @@ CREATE TABLE IF NOT EXISTS maintenance_log (
 
 CREATE INDEX IF NOT EXISTS idx_maintenance_log_plate  ON maintenance_log(plate);
 CREATE INDEX IF NOT EXISTS idx_maintenance_log_status ON maintenance_log(status);
+
+-- Human-facing sequential reference number, e.g. SC/GAR/2026/08/0001.
+-- id stays as the internal PK (MX-XXXXXXXX); ref_no is what staff see/write down.
+ALTER TABLE maintenance_log ADD COLUMN IF NOT EXISTS ref_no text UNIQUE;
+
+-- Job card line items — one row per part, linked to a work order.
+-- No labor field: line items ARE the cost breakdown (labor isn't tracked).
+CREATE TABLE IF NOT EXISTS maintenance_items (
+  id             text PRIMARY KEY,
+  work_order_id  text NOT NULL REFERENCES maintenance_log(id) ON DELETE CASCADE,
+  item_name      text NOT NULL,
+  quantity       numeric DEFAULT 1,
+  unit_cost      numeric DEFAULT 0,
+  line_total     numeric DEFAULT 0,
+  created_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_maintenance_items_wo ON maintenance_items(work_order_id);
