@@ -13,6 +13,7 @@ import CarProfilePage from "./pages/CarProfilePage";
 import FuelPage from "./pages/FuelPage";
 import ReservationsPage from "./pages/ReservationsPage";
 import LeadsPage from "./pages/LeadsPage";
+import MaintenancePage from "./pages/MaintenancePage";
 import BlacklistPage from "./pages/BlacklistPage";
 import SignaturePage from "./pages/SignaturePage";
 import logo from "./assets/logo.js";
@@ -58,7 +59,7 @@ export default function App() {
     <BrowserRouter>
       <Layout staffName={staffName} role={role} onSignOut={handleSignOut} logo={logo}>
         <Routes>
-          <Route path="/"           element={<DashboardPage staffName={staffName} role={role} />} />
+          <Route path="/"           element={role === "Garage Manager" ? <Navigate to="/maintenance" /> : <DashboardPage staffName={staffName} role={role} />} />
           <Route path="/fleet"      element={<FleetPage staffName={staffName} role={role} />} />
           <Route path="/history"    element={<HistoryPage role={role} />} />
           <Route path="/clients"    element={<ClientsPage />} />
@@ -67,10 +68,11 @@ export default function App() {
           <Route path="/fuel"         element={<FuelPage staffName={staffName} role={role} fuelAccess={fuelAccess} />} />
           <Route path="/reservations" element={<ReservationsPage staffName={staffName} role={role} />} />
           <Route path="/leads"        element={<LeadsPage staffName={staffName} role={role} />} />
+          <Route path="/maintenance"  element={<MaintenancePage staffName={staffName} role={role} />} />
           <Route path="/sold"         element={<SoldPage />} />
           <Route path="/blacklist"    element={<BlacklistPage staffName={staffName} role={role} />} />
           <Route path="/sign/:token"  element={<SignaturePage />} />
-          <Route path="*"           element={<Navigate to="/" />} />
+          <Route path="*"           element={<Navigate to={role === "Garage Manager" ? "/maintenance" : "/"} />} />
         </Routes>
       </Layout>
     </BrowserRouter>

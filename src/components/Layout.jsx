@@ -52,6 +52,7 @@ const Icon = {
   fuel: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M6 21V8.5A2.5 2.5 0 018.5 6H12a2.5 2.5 0 012.5 2.5V21"/><path d="M4.5 21h10"/><path d="M14.5 10h1.7L19 12.7V17a1.5 1.5 0 01-3 0"/><circle cx="9" cy="4" r="1.4"/></svg>,
   sold: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M20.6 12.8l-7.8 7.8a2 2 0 01-2.8 0l-6.8-6.8a2 2 0 010-2.8l7.8-7.8H18a2.6 2.6 0 012.6 2.6v6z"/><circle cx="15.5" cy="8.5" r="1.4"/></svg>,
   blacklist: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/></svg>,
+  maintenance: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M14.7 6.3a4 4 0 00-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 005.4-5.4l-2.8 2.8-2-2 2.8-2.8z"/></svg>,
   search: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>,
   bell: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M18 8a6 6 0 10-12 0c0 6-2.5 7.5-2.5 7.5h17S18 14 18 8z"/><path d="M10.3 20a1.8 1.8 0 003.4 0"/></svg>,
   menu: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M3 6h18M3 12h18M3 18h18"/></svg>,
@@ -71,6 +72,7 @@ const NAV_GROUPS = [
     { to: "/sub-hire", key: "subhire",  label: "Sub-Hire",  icon: Icon.subhire },
     { to: "/fuel",     key: "fuel",     label: "Fuel",      icon: Icon.fuel },
     { to: "/sold",     key: "sold",     label: "Sold",      icon: Icon.sold },
+    { to: "/maintenance", key: "maintenance", label: "Maintenance", icon: Icon.maintenance },
   ]},
   { label: "Safety", items: [
     { to: "/blacklist", key: "blacklist", label: "Blacklist", icon: Icon.blacklist },
@@ -120,6 +122,12 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const [othersUpcomingCount, setOthersUpcomingCount] = useState(0); // Admin/Manager only — count of other staff's, no details
 
   const canViewAll = role === "Admin" || role === "Manager";
+  const visibleNavGroups = role === "Garage Manager"
+    ? NAV_GROUPS
+        .map(group => ({ ...group, items: group.items.filter(i => i.key === "maintenance") }))
+        .filter(group => group.items.length > 0)
+    : NAV_GROUPS
+        .map(group => ({ ...group, items: group.items.filter(i => i.key !== "maintenance") }));
 
   // Load reservation-related notification data. Runs on mount and every 60s
   // so the "pickup within 24h" banner and nav badge count stay current
@@ -216,6 +224,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
     Admin:   { bg: "#7c3aed", color: "#fff" },
     Manager: { bg: "#0284c7", color: "#fff" },
     Staff:   { bg: "#e5e7eb", color: "#555" },
+    "Garage Manager": { bg: "#d97706", color: "#fff" },
   }[role] || { bg: "#e5e7eb", color: "#555" };
 
   const switchStaff = (name) => {
@@ -282,7 +291,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
         </div>
 
         <nav className="sc-sidebar-nav">
-          {NAV_GROUPS.map(group => (
+          {visibleNavGroups.map(group => (
             <div className="sc-nav-section" key={group.label}>
               <div className="sc-nav-section-label">{group.label}</div>
               {group.items.map(item => (

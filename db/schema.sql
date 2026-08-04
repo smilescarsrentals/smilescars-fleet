@@ -450,3 +450,28 @@ CREATE INDEX IF NOT EXISTS history_staff_name_idx ON history (lower(btrim(staff_
 CREATE INDEX IF NOT EXISTS fuel_plate_idx         ON fuel (lower(btrim(plate)));
 CREATE INDEX IF NOT EXISTS files_kind_idx         ON files (kind);
 CREATE INDEX IF NOT EXISTS agreements_ref_idx     ON agreements (ref);
+
+-- ============================================================================
+--  Leads / Maintenance module additions
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS maintenance_log (
+  id                text PRIMARY KEY,
+  plate             text NOT NULL,
+  opened_by         text,
+  assigned_mechanic text,
+  issue_description text,
+  status            text DEFAULT 'Queued',
+  date_opened       timestamp DEFAULT now(),
+  date_closed       timestamp,
+  odometer          text,
+  parts_cost        numeric DEFAULT 0,
+  labor_cost        numeric DEFAULT 0,
+  total_cost        numeric DEFAULT 0,
+  notes             text,
+  created_at        timestamp DEFAULT now(),
+  updated_at        timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_maintenance_log_plate  ON maintenance_log(plate);
+CREATE INDEX IF NOT EXISTS idx_maintenance_log_status ON maintenance_log(status);

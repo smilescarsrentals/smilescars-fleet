@@ -36,6 +36,7 @@ const READS = {
   getReservations: reads.getReservations,
   getAllReservations: () => reads.getReservations({}),
   getBlacklist: reads.getBlacklist,
+  getMaintenanceLog: reads.getMaintenanceLog,
   getSettings: reads.getSettings,
   getStaffList: reads.getStaffList,
   // Files, signatures, agreements — formerly Google Drive
