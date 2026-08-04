@@ -82,6 +82,7 @@ const WRITES = {
   deleteReservation: writes.deleteReservation,
   addToBlacklist: writes.addToBlacklist,
   deleteFromBlacklist: writes.deleteFromBlacklist,
+  addMaintenanceLog: writes.addMaintenanceLog,
   // Files, signatures, agreements — formerly Google Drive
   uploadBlacklistImage: files.uploadBlacklistImage,
   storeSignature: files.storeSignature,

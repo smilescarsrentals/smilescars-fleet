@@ -98,4 +98,5 @@ export const api = {
   editLead:               (body) => post({ action: "editLead",               ...body }),
   deleteLead:             (body) => post({ action: "deleteLead",             ...body }),
   getMaintenanceLog:      ()     => get("getMaintenanceLog"),
+  addMaintenanceLog:      (body) => post({ action: "addMaintenanceLog",      ...body }),
 };
