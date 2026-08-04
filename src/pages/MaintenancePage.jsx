@@ -22,6 +22,7 @@ export default function MaintenancePage({ staffName, role }) {
   const [loading, setLoading] = useState(true);
   const [err,     setErr]     = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [showDetail, setShowDetail] = useState(null);
 
   useEffect(() => { load(); }, []);
 
@@ -87,7 +88,7 @@ export default function MaintenancePage({ staffName, role }) {
                   <p style={{ fontSize: 12, color: "var(--text-faint)", textAlign: "center", padding: "1rem 0" }}>No work orders</p>
                 )}
                 {byStatus[status].map(log => (
-                  <WorkOrderCard key={log.id} log={log} />
+                  <WorkOrderCard key={log.id} log={log} onClick={() => setShowDetail(log)} />
                 ))}
               </div>
             </div>
@@ -103,17 +104,25 @@ export default function MaintenancePage({ staffName, role }) {
           onSaved={() => { setShowAdd(false); load(); }}
         />
       )}
+
+      {showDetail && (
+        <DetailModal
+          log={showDetail}
+          onClose={() => setShowDetail(null)}
+          onUpdated={() => { setShowDetail(null); load(); }}
+        />
+      )}
     </div>
   );
 }
 
-// ── Work order card (read-only for now — editing/status moves are Phase 2b) ──
-function WorkOrderCard({ log }) {
+// ── Work order card ────────────────────────────────────────
+function WorkOrderCard({ log, onClick }) {
   return (
-    <div style={{
+    <div onClick={onClick} style={{
       background: "var(--surface)", border: "1px solid var(--border)",
       borderLeft: `3px solid ${STATUS_COLORS[log.status]}`,
-      borderRadius: 8, padding: "9px 10px", boxShadow: "var(--shadow-sm)",
+      borderRadius: 8, padding: "9px 10px", boxShadow: "var(--shadow-sm)", cursor: "pointer",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <span style={{ fontWeight: 700, fontSize: 13 }}>{log.plate}</span>
@@ -123,7 +132,112 @@ function WorkOrderCard({ log }) {
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0", lineHeight: 1.4 }}>{log.issueDescription}</p>
       )}
       <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "5px 0 0" }}>🔧 {log.assignedMechanic || "—"}</p>
-      <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "3px 0 0" }}>Opened {fmtDateTime(log.dateOpened)}</p>
+      <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "3px 0 0" }}>
+        {log.status === "Completed" ? `Closed ${fmtDateTime(log.dateClosed)}` : `Opened ${fmtDateTime(log.dateOpened)}`}
+      </p>
+    </div>
+  );
+}
+
+// ── Detail / Edit Modal ──────────────────────────────────────
+function DetailModal({ log, onClose, onUpdated }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    assignedMechanic: log.assignedMechanic, issueDescription: log.issueDescription,
+    odometer: log.odometer, notes: log.notes,
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const moveStatus = async (newStatus) => {
+    setSaving(true); setErr("");
+    try {
+      await api.editMaintenanceLog({ id: log.id, status: newStatus });
+      onUpdated();
+    } catch (e) { setErr(e.message); setSaving(false); }
+  };
+
+  const handleSave = async () => {
+    setSaving(true); setErr("");
+    try {
+      await api.editMaintenanceLog({ id: log.id, ...form });
+      onUpdated();
+    } catch (e) { setErr(e.message); setSaving(false); }
+  };
+
+  const otherStatuses = STATUSES.filter(s => s !== log.status);
+  const rows = [
+    ["Plate", log.plate],
+    ["Assigned Mechanic", log.assignedMechanic || "—"],
+    ["Odometer", log.odometer || "—"],
+    ["Issue Description", log.issueDescription || "—"],
+    ["Notes", log.notes || "—"],
+    ["Opened By", log.openedBy || "—"],
+    ["Date Opened", fmtDateTime(log.dateOpened)],
+    ...(log.status === "Completed" ? [["Date Closed", fmtDateTime(log.dateClosed)]] : []),
+  ];
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={S.modal} onClick={e => e.stopPropagation()}>
+        <div style={{ ...S.mHead, background: STATUS_COLORS[log.status] }}>
+          <div>
+            <p style={S.mTitle}>{log.plate}</p>
+            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", margin: "2px 0 0" }}>{log.status} · {log.id}</p>
+          </div>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+        </div>
+
+        <div style={S.mBody}>
+          {!editing ? (
+            <>
+              {rows.map(([label, val]) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid var(--border-light)", fontSize: 13, gap: 10 }}>
+                  <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{label}</span>
+                  <span style={{ fontWeight: 600, textAlign: "right" }}>{val}</span>
+                </div>
+              ))}
+
+              {err && <p style={S.err}>{err}</p>}
+
+              <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+                {otherStatuses.map(s => (
+                  <button key={s} type="button" disabled={saving}
+                    onClick={() => moveStatus(s)}
+                    style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer", opacity: saving ? 0.6 : 1,
+                      border: `1.5px solid ${STATUS_COLORS[s]}`, background: "var(--surface)", color: STATUS_COLORS[s] }}>
+                    Move to {s}
+                  </button>
+                ))}
+              </div>
+
+              <button type="button" className="btn btn-ghost" style={{ width: "100%", marginTop: 14 }} onClick={() => setEditing(true)}>
+                Edit Details
+              </button>
+            </>
+          ) : (
+            <>
+              <div style={S.field}><label style={S.label}>Assigned Mechanic</label>
+                <input style={S.input} value={form.assignedMechanic} onChange={e => set("assignedMechanic", e.target.value)} /></div>
+              <div style={S.field}><label style={S.label}>Odometer</label>
+                <input style={S.input} value={form.odometer} onChange={e => set("odometer", e.target.value)} /></div>
+              <div style={S.field}><label style={S.label}>Issue Description</label>
+                <textarea style={S.textarea} rows={3} value={form.issueDescription} onChange={e => set("issueDescription", e.target.value)} /></div>
+              <div style={S.field}><label style={S.label}>Notes</label>
+                <textarea style={S.textarea} rows={3} value={form.notes} onChange={e => set("notes", e.target.value)} /></div>
+
+              {err && <p style={S.err}>{err}</p>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setEditing(false)}>Cancel</button>
+                <button type="button" style={{ ...S.btn, flex: 1, marginTop: 0, background: "var(--sc-blue)", opacity: saving ? 0.65 : 1 }} onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving…" : "Save Changes"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
