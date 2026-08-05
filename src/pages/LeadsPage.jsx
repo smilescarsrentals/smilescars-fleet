@@ -424,6 +424,7 @@ function DetailModal({ lead, canEdit, onClose, onUpdated, onDeleted, onConvert }
     ["Assigned Staff", lead.assignedStaff || "—"],
     ["Notes", lead.notes || "—"],
     ...(lead.outcome === "Lost" ? [["Lost Reason", lead.lostReason || "—"]] : []),
+    ...(lead.convertedReservationId ? [["Converted to", lead.convertedReservationId]] : []),
     ["Last Contact", lead.lastContactDate ? fmtDate(lead.lastContactDate.slice(0, 10)) : "—"],
   ];
 
@@ -472,7 +473,7 @@ function DetailModal({ lead, canEdit, onClose, onUpdated, onDeleted, onConvert }
               {lead.outcome === "Won" && (
                 <div style={{ marginTop: 14 }}>
                   <button type="button" style={{ ...S.btn, background: "var(--green)", marginTop: 0 }} onClick={() => onConvert(lead)}>
-                    Convert to Reservation
+                    {lead.convertedReservationId ? "Create Another Reservation" : "Convert to Reservation"}
                   </button>
                 </div>
               )}

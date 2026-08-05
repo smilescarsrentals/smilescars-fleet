@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import { toTitleCase } from "../lib/textFormat";
 
@@ -29,6 +29,7 @@ function fmtDate(d) {
 
 export default function ReservationsPage({ staffName, role }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const canEdit  = role === "Admin" || role === "Manager";
   const today    = new Date();
   const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
@@ -39,9 +40,30 @@ export default function ReservationsPage({ staffName, role }) {
   const [fleet,        setFleet]        = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [showAdd,      setShowAdd]      = useState(null); // day number
+  const [prefillLead,  setPrefillLead]  = useState(null); // lead being converted, or null
   const [urgentExpanded, setUrgentExpanded] = useState(false);
   const [showDetail,   setShowDetail]   = useState(null);
   const [showEdit,     setShowEdit]     = useState(null);
+
+  // Arriving from Leads -> "Convert to Reservation": jump the calendar to
+  // the lead's relevant date and open the Add form pre-filled with its
+  // details. Cleared from router state immediately so a page refresh
+  // doesn't silently re-trigger this on every reload.
+  useEffect(() => {
+    const lead = location.state?.prefillFromLead;
+    if (!lead) return;
+    const relevantDate = lead.bookingType === "Transfer" ? lead.pickupDate : lead.pickupDate;
+    if (relevantDate) {
+      const [y, m, d] = relevantDate.split("-").map(Number);
+      setYear(y); setMonth(m);
+      setPrefillLead(lead);
+      setShowAdd(d);
+    } else {
+      setPrefillLead(lead);
+      setShowAdd(today.getDate());
+    }
+    navigate(location.pathname, { replace: true, state: {} });
+  }, []); // run once on mount only — router state is consumed immediately above
 
   const load = async () => {
     setLoading(true);
@@ -193,7 +215,7 @@ export default function ReservationsPage({ staffName, role }) {
         </div>
       )}
 
-      {showAdd    && <AddModal    day={showAdd}    month={month} year={year} staffName={staffName} fleet={fleet} fleetTypes={fleetTypes} onClose={()=>setShowAdd(null)}    onSaved={()=>{setShowAdd(null);load();}} />}
+      {showAdd    && <AddModal    day={showAdd}    month={month} year={year} staffName={staffName} fleet={fleet} fleetTypes={fleetTypes} prefillLead={prefillLead} onClose={()=>{setShowAdd(null);setPrefillLead(null);}}    onSaved={()=>{setShowAdd(null);setPrefillLead(null);load();}} />}
       {showDetail && <DetailModal res={showDetail} canEdit={canEdit}
         onClose={()=>setShowDetail(null)}
         onEdit={()=>{setShowEdit(showDetail);setShowDetail(null);}}
@@ -268,13 +290,14 @@ function TypeSearch({ fleetTypes, value, onChange }) {
 }
 
 // ── Add Modal ────────────────────────────────────────────────
-function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onSaved }) {
+function AddModal({ day, month, year, staffName, fleet, fleetTypes, prefillLead, onClose, onSaved }) {
   const dateStr = `${year}-${pad(month)}-${pad(day)}`;
-  const [bookingType, setBookingType] = useState("Rental");
+  const [bookingType, setBookingType] = useState(prefillLead?.bookingType === "Transfer" ? "Transfer" : "Rental");
   const [form, setForm] = useState({
-    client:"", phone:"", plate:"", carType:"",
-    pickupDate:dateStr, returnDate:"", pickUpFrom:"", remarks:"",
-    dropOffTo:"", transferDate:dateStr,
+    client: prefillLead?.clientName || "", phone: prefillLead?.phone || "", plate: "", carType: prefillLead?.vehicle || "",
+    pickupDate: prefillLead?.pickupDate || dateStr, returnDate: prefillLead?.returnDate || "",
+    pickUpFrom: prefillLead?.pickUpLocation || "", remarks: prefillLead?.notes || "",
+    dropOffTo: "", transferDate: prefillLead?.pickupDate || dateStr,
   });
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState("");
@@ -295,7 +318,13 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
     }
     setSaving(true); setErr("");
     try {
-      await api.addReservation({ ...form, bookingType, staffName });
+      const res = await api.addReservation({ ...form, bookingType, staffName });
+      if (prefillLead && res?.id) {
+        // Link back to the lead so its record shows what it became — best
+        // effort: the reservation is already saved at this point, so a
+        // failure here shouldn't block the user or look like the save failed.
+        api.editLead({ id: prefillLead.id, convertedReservationId: res.id }).catch(() => {});
+      }
       onSaved();
     } catch(e) { setErr(e.message); }
     finally { setSaving(false); }
@@ -305,7 +334,7 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, onClose, onS
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={e=>e.stopPropagation()}>
         <div style={{ ...S.mHead,background:"var(--sc-blue)" }}>
-          <div><p style={S.mTitle}>New Reservation</p><p style={S.mSub}>{displayDate}</p></div>
+          <div><p style={S.mTitle}>New Reservation</p><p style={S.mSub}>{displayDate}{prefillLead ? ` · From lead ${prefillLead.id}` : ""}</p></div>
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={S.mBody}>
