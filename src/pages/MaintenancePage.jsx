@@ -133,6 +133,7 @@ export default function MaintenancePage({ staffName, role }) {
       {openDetailLog && (
         <DetailModal
           log={openDetailLog}
+          staffName={staffName}
           onClose={() => setShowDetail(null)}
           onUpdated={load}
         />
@@ -168,7 +169,7 @@ function WorkOrderCard({ log, onClick }) {
 }
 
 // ── Detail / Edit Modal ──────────────────────────────────────
-function DetailModal({ log, onClose, onUpdated }) {
+function DetailModal({ log, staffName, onClose, onUpdated }) {
   const [editing, setEditing] = useState(false);
   const [showMarkAvailable, setShowMarkAvailable] = useState(false);
   const [form, setForm] = useState({
@@ -241,14 +242,7 @@ function DetailModal({ log, onClose, onUpdated }) {
 
               <JobCardItems workOrderId={log.id} totalCost={log.totalCost} onChanged={onUpdated} />
 
-              <div style={{ marginTop: 16 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3, display: "block", marginBottom: 6 }}>
-                  Notes / Updates
-                </span>
-                <p style={{ fontSize: 13, color: log.notes ? "var(--text)" : "var(--text-faint)", fontStyle: log.notes ? "normal" : "italic", margin: 0, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
-                  {log.notes || "No notes yet"}
-                </p>
-              </div>
+              <UpdatesTimeline workOrderId={log.id} staffName={staffName} />
 
               {err && <p style={S.err}>{err}</p>}
 
@@ -443,6 +437,84 @@ function JobCardItems({ workOrderId, totalCost, onChanged }) {
         <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 2px 0", fontSize: 13, fontWeight: 700 }}>
           <span>Total</span>
           <span style={{ color: "var(--sc-blue)" }}>TZS {fmtMoney(totalCost)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Updates timeline ──────────────────────────────────────────
+// Running log of updates on a work order — newest first, never overwritten,
+// so the full history of what was reported/decided stays visible.
+function UpdatesTimeline({ workOrderId, staffName }) {
+  const [updates, setUpdates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => { load(); }, [workOrderId]);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await api.getMaintenanceUpdates(workOrderId);
+      setUpdates(res?.data || []);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleAdd = async () => {
+    if (!message.trim()) { setErr("Update can't be empty."); return; }
+    setSaving(true); setErr("");
+    try {
+      await api.addMaintenanceUpdate({ workOrderId, author: staffName, message });
+      setMessage("");
+      setAdding(false);
+      await load();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3 }}>Notes / Updates</span>
+        {!adding && <button type="button" onClick={() => setAdding(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>+ Add Update</button>}
+      </div>
+
+      {adding && (
+        <div style={{ border: "1.5px solid var(--sc-blue)", borderRadius: 8, padding: 10, marginBottom: 10 }}>
+          <textarea style={S.textarea} rows={2} placeholder="What's new on this job…" value={message}
+            onChange={e => setMessage(e.target.value)} autoFocus />
+          {err && <p style={S.err}>{err}</p>}
+          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: "6px 0", fontSize: 12 }} onClick={() => { setAdding(false); setMessage(""); setErr(""); }}>Cancel</button>
+            <button type="button" disabled={saving}
+              style={{ flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 600, color: "#fff", background: "var(--sc-blue)", border: "none", borderRadius: 6, cursor: "pointer", opacity: saving ? 0.65 : 1 }}
+              onClick={handleAdd}>
+              {saving ? "Posting…" : "Post Update"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p style={{ fontSize: 12, color: "var(--text-faint)" }}>Loading updates…</p>
+      ) : updates.length === 0 && !adding ? (
+        <p style={{ fontSize: 13, color: "var(--text-faint)", fontStyle: "italic", margin: 0 }}>No updates yet</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {updates.map(u => (
+            <div key={u.id} style={{ borderLeft: "2px solid var(--border)", paddingLeft: 10 }}>
+              <p style={{ fontSize: 13, margin: 0, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{u.message}</p>
+              <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "3px 0 0" }}>
+                {u.author ? `${u.author} · ` : ""}{fmtDateTime(u.createdAt)}
+              </p>
+            </div>
+          ))}
         </div>
       )}
     </div>

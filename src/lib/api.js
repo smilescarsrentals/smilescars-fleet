@@ -104,4 +104,6 @@ export const api = {
   addMaintenanceItem:     (body) => post({ action: "addMaintenanceItem",     ...body }),
   editMaintenanceItem:    (body) => post({ action: "editMaintenanceItem",    ...body }),
   deleteMaintenanceItem:  (body) => post({ action: "deleteMaintenanceItem",  ...body }),
+  getMaintenanceUpdates:  (workOrderId) => get("getMaintenanceUpdates", { workOrderId }),
+  addMaintenanceUpdate:   (body) => post({ action: "addMaintenanceUpdate",   ...body }),
 };

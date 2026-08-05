@@ -493,3 +493,16 @@ CREATE TABLE IF NOT EXISTS maintenance_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_maintenance_items_wo ON maintenance_items(work_order_id);
+
+-- Running update log for a work order (timestamped entries, not a single
+-- overwritable notes field) — visible history of everything reported as
+-- the job progressed.
+CREATE TABLE IF NOT EXISTS maintenance_updates (
+  id             text PRIMARY KEY,
+  work_order_id  text NOT NULL REFERENCES maintenance_log(id) ON DELETE CASCADE,
+  author         text,
+  message        text NOT NULL,
+  created_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_maintenance_updates_wo ON maintenance_updates(work_order_id);
