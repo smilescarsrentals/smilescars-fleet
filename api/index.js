@@ -90,6 +90,7 @@ const WRITES = {
   editMaintenanceItem: writes.editMaintenanceItem,
   deleteMaintenanceItem: writes.deleteMaintenanceItem,
   addMaintenanceUpdate: writes.addMaintenanceUpdate,
+  setServiceSchedule: writes.setServiceSchedule,
   // Files, signatures, agreements — formerly Google Drive
   uploadBlacklistImage: files.uploadBlacklistImage,
   storeSignature: files.storeSignature,

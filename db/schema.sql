@@ -506,3 +506,10 @@ CREATE TABLE IF NOT EXISTS maintenance_updates (
 );
 
 CREATE INDEX IF NOT EXISTS idx_maintenance_updates_wo ON maintenance_updates(work_order_id);
+
+-- Phase 4 scheduling: Garage Manager manually sets both of these on the
+-- Maintenance page. No auto-estimation from Fuel/Maintenance readings —
+-- deliberately kept simple and explicit.
+ALTER TABLE fleet ADD COLUMN IF NOT EXISTS next_service_due_km numeric;
+ALTER TABLE fleet ADD COLUMN IF NOT EXISTS last_known_odometer numeric;
+ALTER TABLE fleet ADD COLUMN IF NOT EXISTS odometer_updated_at timestamp;

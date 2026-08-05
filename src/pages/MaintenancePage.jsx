@@ -44,6 +44,7 @@ export default function MaintenancePage({ staffName, role }) {
   const [err,     setErr]     = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [showDetail, setShowDetail] = useState(null);
+  const [showSchedule, setShowSchedule] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -70,6 +71,18 @@ export default function MaintenancePage({ staffName, role }) {
     return map;
   }, [logs]);
 
+  // Phase 4 scheduling — only cars with a due threshold actually set show up
+  // here. "Upcoming" is within 2,000km of the threshold; anything at or past
+  // it is Overdue. Cars with no last_known_odometer recorded can't be judged
+  // yet (no current reading to compare against).
+  const dueSoon = useMemo(() => {
+    return fleet
+      .filter(c => c.nextServiceDueKm && c.lastKnownOdometer != null)
+      .map(c => ({ ...c, kmRemaining: c.nextServiceDueKm - c.lastKnownOdometer }))
+      .filter(c => c.kmRemaining <= 2000)
+      .sort((a, b) => a.kmRemaining - b.kmRemaining);
+  }, [fleet]);
+
   return (
     <div style={{ padding: "1.25rem 1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: 10 }}>
@@ -79,10 +92,46 @@ export default function MaintenancePage({ staffName, role }) {
             {logs.length} work order{logs.length !== 1 ? "s" : ""} on file
           </p>
         </div>
-        <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ New Work Order</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="btn btn-ghost" onClick={() => setShowSchedule(true)}>Set Odometer / Service Due</button>
+          <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ New Work Order</button>
+        </div>
       </div>
 
       {err && <p style={{ color: "var(--red)", fontSize: 13 }}>{err}</p>}
+
+      {!loading && dueSoon.length > 0 && (
+        <div style={{ marginBottom: 16, border: "1.5px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ padding: "10px 14px", background: "var(--bg)", borderBottom: "1px solid var(--border-light)" }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>⚠ Upcoming / Overdue Service</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {dueSoon.map(c => {
+              const overdue = c.kmRemaining <= 0;
+              return (
+                <div key={c.plate} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "9px 14px", borderBottom: "1px solid var(--border-light)",
+                  background: overdue ? "var(--red-bg)" : "var(--surface)",
+                }}>
+                  <div>
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>{c.plate}</span>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 8 }}>{c.type}</span>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: overdue ? "var(--red)" : "#d97706" }}>
+                      {overdue ? `Overdue by ${fmtOdometer(Math.abs(c.kmRemaining))}` : `Due in ${fmtOdometer(c.kmRemaining)}`}
+                    </span>
+                    <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "1px 0 0" }}>
+                      Last known {fmtOdometer(c.lastKnownOdometer)} · due at {fmtOdometer(c.nextServiceDueKm)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>Loading…</div>
@@ -136,6 +185,14 @@ export default function MaintenancePage({ staffName, role }) {
           staffName={staffName}
           onClose={() => setShowDetail(null)}
           onUpdated={load}
+        />
+      )}
+
+      {showSchedule && (
+        <ScheduleModal
+          fleet={fleet}
+          onClose={() => setShowSchedule(false)}
+          onSaved={() => { setShowSchedule(false); load(); }}
         />
       )}
     </div>
@@ -517,6 +574,91 @@ function UpdatesTimeline({ workOrderId, staffName }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Set Odometer / Service Due Modal ─────────────────────────
+// Picks a car, then lets Garage Manager record its current odometer and/or
+// set the next service threshold. Both are manual — no auto-estimation.
+function ScheduleModal({ fleet, onClose, onSaved }) {
+  const [plate, setPlate] = useState("");
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [currentOdometer, setCurrentOdometer] = useState("");
+  const [nextServiceDueKm, setNextServiceDueKm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const filtered = query.trim().length > 0
+    ? fleet.filter(c => c.plate.toLowerCase().replace(/\s/g, "").includes(query.toLowerCase().replace(/\s/g, "")))
+    : [];
+
+  const selectCar = (car) => {
+    setPlate(car.plate); setQuery(car.plate); setOpen(false);
+    setCurrentOdometer(car.lastKnownOdometer != null ? String(car.lastKnownOdometer) : "");
+    setNextServiceDueKm(car.nextServiceDueKm != null ? String(car.nextServiceDueKm) : "");
+  };
+
+  const handleSave = async () => {
+    if (!plate) { setErr("Select a car first."); return; }
+    const body = { plate };
+    if (currentOdometer !== "") body.currentOdometer = Number(currentOdometer.replace(/[^\d]/g, ""));
+    if (nextServiceDueKm !== "") body.nextServiceDueKm = Number(nextServiceDueKm.replace(/[^\d]/g, ""));
+    if (!body.currentOdometer && !body.nextServiceDueKm) { setErr("Enter at least one value."); return; }
+    setSaving(true); setErr("");
+    try {
+      await api.setServiceSchedule(body);
+      onSaved();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={S.modal} onClick={e => e.stopPropagation()}>
+        <div style={{ ...S.mHead, background: "var(--sc-blue)" }}>
+          <p style={S.mTitle}>Set Odometer / Service Due</p>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={S.mBody}>
+          <div style={S.field}>
+            <label style={S.label}>Plate No. *</label>
+            <div style={{ position: "relative" }}>
+              <input style={S.input} placeholder="Type plate number…" value={query} autoComplete="off"
+                onChange={e => { setQuery(e.target.value); setPlate(""); setOpen(true); }}
+                onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+              {open && filtered.length > 0 && (
+                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow)", zIndex: 50, maxHeight: 200, overflowY: "auto" }}>
+                  {filtered.slice(0, 15).map(c => (
+                    <div key={c.plate} style={{ padding: "9px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid var(--border-light)" }}
+                      onMouseDown={() => selectCar(c)}>
+                      <span style={{ fontWeight: 600 }}>{c.plate}</span>
+                      <span style={{ color: "var(--text-muted)", marginLeft: 6 }}>{c.type}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {plate && (
+            <>
+              <div style={S.field}><label style={S.label}>Current Odometer</label>
+                <input style={S.input} value={currentOdometer} placeholder="e.g. 84,200"
+                  onChange={e => setCurrentOdometer(e.target.value)} /></div>
+              <div style={S.field}><label style={S.label}>Next Service Due (Km)</label>
+                <input style={S.input} value={nextServiceDueKm} placeholder="e.g. 90,000"
+                  onChange={e => setNextServiceDueKm(e.target.value)} /></div>
+            </>
+          )}
+
+          {err && <p style={S.err}>{err}</p>}
+          <button type="button" style={{ ...S.btn, background: "var(--sc-blue)", opacity: saving ? 0.65 : 1 }} onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
