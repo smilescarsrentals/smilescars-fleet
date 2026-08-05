@@ -124,7 +124,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const canViewAll = role === "Admin" || role === "Manager";
   const visibleNavGroups = role === "Garage Manager"
     ? NAV_GROUPS
-        .map(group => ({ ...group, items: group.items.filter(i => i.key === "maintenance") }))
+        .map(group => ({ ...group, items: group.items.filter(i => i.key === "maintenance" || i.key === "fleet") }))
         .filter(group => group.items.length > 0)
     : NAV_GROUPS
         .map(group => ({ ...group, items: group.items.filter(i => i.key !== "maintenance") }));

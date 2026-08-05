@@ -525,6 +525,12 @@ export default function FleetPage({ staffName, role }) {
 }
 
 function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOverdueCount, setOverdueBlock }) {
+  // Garage Manager can browse Fleet (it's relevant to their maintenance work)
+  // but shouldn't check cars in/out, move them, sell them, etc. — that's
+  // rental-operations territory, not theirs. View-only.
+  if (role === "Garage Manager") {
+    return <span style={{ fontSize: 10.5, color: "var(--text-faint)", fontStyle: "italic" }}>View only</span>;
+  }
   const row = { display:"flex",alignItems:"center",flexWrap:"nowrap",gap:2 };
   const btn = (label, action, color, bg, onClick) => (
     <button type="button" key={action}
