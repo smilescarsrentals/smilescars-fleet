@@ -60,6 +60,7 @@ export const api = {
   addReservation:        (body)  => post({ action: "addReservation",    ...body }),
   editReservation:       (body)  => post({ action: "editReservation",   ...body }),
   deleteReservation:     (body)  => post({ action: "deleteReservation", ...body }),
+  cancelReservation:     (body)  => post({ action: "cancelReservation", ...body }),
   verifyStaff:           (body)  => post({ action: "verifyStaff",           ...body }),
   checkOut:              (body)  => post({ action: "checkOut",               ...body }),
   addCar:                (body)  => post({ action: "addCar",                 ...body }),

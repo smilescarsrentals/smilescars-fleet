@@ -84,6 +84,7 @@ const WRITES = {
   addReservation: writes.addReservation,
   editReservation: writes.editReservation,
   deleteReservation: writes.deleteReservation,
+  cancelReservation: writes.cancelReservation,
   addToBlacklist: writes.addToBlacklist,
   deleteFromBlacklist: writes.deleteFromBlacklist,
   addMaintenanceLog: writes.addMaintenanceLog,

@@ -27,6 +27,46 @@ function fmtDate(d) {
   return `${dd}-${m}-${y}`;
 }
 
+const CITIES = ["Dar es Salaam", "Mwanza", "Arusha", "Zanzibar"];
+const LOCATION_OPTIONS = {
+  "Dar es Salaam": ["SmilesCars Office", "Airport", "Others"],
+  "Mwanza":         ["SmilesCars Office", "Airport", "Others"],
+  "Zanzibar":       ["SmilesCars Office", "Airport", "Others"],
+  "Arusha":         ["SmilesCars Office", "KIA Airport", "Arusha Airport", "Others"],
+};
+
+// Two-part location picker: city on the left, specific location on the
+// right. The right box's options depend on the chosen city (Arusha splits
+// Airport into KIA/Arusha Airport); picking "Others" swaps it to free text.
+function LocationPicker({ city, location, onCityChange, onLocationChange }) {
+  const options = LOCATION_OPTIONS[city] || [];
+  const isOther = location !== "" && !options.includes(location) && city !== "";
+  // Once a city is picked, "Others" was chosen if the stored location isn't
+  // one of that city's preset options (covers free text carried over on edit).
+  const showFreeText = city && (location === "Others" || isOther);
+
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      <select style={{ ...S.input, flex: 1 }} value={city}
+        onChange={e => { onCityChange(e.target.value); onLocationChange(""); }}>
+        <option value="">Select city…</option>
+        {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+      {showFreeText ? (
+        <input style={{ ...S.input, flex: 1 }} placeholder="Specify location…"
+          value={location === "Others" ? "" : location}
+          onChange={e => onLocationChange(e.target.value)} />
+      ) : (
+        <select style={{ ...S.input, flex: 1 }} value={location} disabled={!city}
+          onChange={e => onLocationChange(e.target.value)}>
+          <option value="">Select location…</option>
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+
 export default function ReservationsPage({ staffName, role }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -184,24 +224,28 @@ export default function ReservationsPage({ staffName, role }) {
                   {slots.map(r => {
                     const isTransfer = r.bookingType === "Transfer";
                     const isUrgent = urgentReservations.some(u => u.id === r.id);
+                    const isCancelled = r.status === "Cancelled";
                     return (
                       <div key={r.id} style={{ ...S.card,
-                        borderLeft:`3px solid ${isUrgent ? "var(--red)" : isTransfer ? "var(--purple, #8b5cf6)" : colorFor(r.plate||r.client)}`,
-                        background: isUrgent ? "var(--red-bg)" : "var(--bg)" }}
+                        borderLeft:`3px solid ${isCancelled ? "#7f1d1d" : isUrgent ? "var(--red)" : isTransfer ? "var(--purple, #8b5cf6)" : colorFor(r.plate||r.client)}`,
+                        background: isCancelled ? "#7f1d1d" : isUrgent ? "var(--red-bg)" : "var(--bg)",
+                        color: isCancelled ? "#fff" : undefined,
+                        opacity: isCancelled ? 0.9 : 1 }}
                         onClick={() => setShowDetail(r)}>
-                        {isUrgent && <span title="No car assigned — urgent!">🚨</span>}
-                        {isTransfer && <span title="Transfer">🔀</span>}
-                        <span style={{ fontWeight:600,fontSize:12 }}>{r.client}</span>
+                        {isCancelled && <span title="Cancelled" style={{ fontWeight:700 }}>✕</span>}
+                        {!isCancelled && isUrgent && <span title="No car assigned — urgent!">🚨</span>}
+                        {!isCancelled && isTransfer && <span title="Transfer">🔀</span>}
+                        <span style={{ fontWeight:600,fontSize:12, textDecoration: isCancelled ? "line-through" : "none" }}>{r.client}</span>
                         {isTransfer ? (
                           <>
-                            {r.plate && <span style={{ fontSize:11,color:"var(--text-muted)",marginLeft:5 }}>· {r.plate}</span>}
-                            {r.dropOffTo && <span style={{ fontSize:11,color:"var(--text-faint)",marginLeft:5 }}>→ {r.dropOffTo}</span>}
+                            {r.plate && <span style={{ fontSize:11,color: isCancelled ? "rgba(255,255,255,0.75)" : "var(--text-muted)",marginLeft:5 }}>· {r.plate}</span>}
+                            {r.dropOffTo && <span style={{ fontSize:11,color: isCancelled ? "rgba(255,255,255,0.6)" : "var(--text-faint)",marginLeft:5 }}>→ {r.dropOffTo}</span>}
                           </>
                         ) : (
                           <>
-                            {r.plate && <span style={{ fontSize:11,color:"var(--text-muted)",marginLeft:5 }}>· {r.plate}</span>}
-                            {!r.plate && r.carType && <span style={{ fontSize:11,color:"var(--text-muted)",marginLeft:5 }}>· {r.carType}</span>}
-                            {r.returnDate && <span style={{ fontSize:11,color:"var(--text-faint)",marginLeft:5 }}>→ {fmtDate(r.returnDate)}</span>}
+                            {r.plate && <span style={{ fontSize:11,color: isCancelled ? "rgba(255,255,255,0.75)" : "var(--text-muted)",marginLeft:5 }}>· {r.plate}</span>}
+                            {!r.plate && r.carType && <span style={{ fontSize:11,color: isCancelled ? "rgba(255,255,255,0.75)" : "var(--text-muted)",marginLeft:5 }}>· {r.carType}</span>}
+                            {r.returnDate && <span style={{ fontSize:11,color: isCancelled ? "rgba(255,255,255,0.6)" : "var(--text-faint)",marginLeft:5 }}>→ {fmtDate(r.returnDate)}</span>}
                           </>
                         )}
                       </div>
@@ -216,15 +260,16 @@ export default function ReservationsPage({ staffName, role }) {
       )}
 
       {showAdd    && <AddModal    day={showAdd}    month={month} year={year} staffName={staffName} fleet={fleet} fleetTypes={fleetTypes} prefillLead={prefillLead} onClose={()=>{setShowAdd(null);setPrefillLead(null);}}    onSaved={()=>{setShowAdd(null);setPrefillLead(null);load();}} />}
-      {showDetail && <DetailModal res={showDetail} canEdit={canEdit}
+      {showDetail && <DetailModal res={showDetail} canEdit={canEdit} staffName={staffName} role={role}
         onClose={()=>setShowDetail(null)}
         onEdit={()=>{setShowEdit(showDetail);setShowDetail(null);}}
         onDeleted={()=>{setShowDetail(null);load();}}
+        onCancelled={()=>{setShowDetail(null);load();}}
         todayStr={todayStr}
         onCheckOut={(plate) => navigate(`/?search=${encodeURIComponent(plate)}`)}
         onAssignPlate={(res) => { setShowDetail(null); setShowEdit(res); }}
       />}
-      {showEdit   && <EditModal   res={showEdit}   fleet={fleet}  fleetTypes={fleetTypes} onClose={()=>setShowEdit(null)}   onSaved={()=>{setShowEdit(null);load();}} />}
+      {showEdit   && <EditModal   res={showEdit}   fleet={fleet}  fleetTypes={fleetTypes} staffName={staffName} onClose={()=>setShowEdit(null)}   onSaved={()=>{setShowEdit(null);load();}} />}
     </div>
   );
 }
@@ -296,8 +341,8 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, prefillLead,
   const [form, setForm] = useState({
     client: prefillLead?.clientName || "", phone: prefillLead?.phone || "", plate: "", carType: prefillLead?.vehicle || "",
     pickupDate: prefillLead?.pickupDate || dateStr, returnDate: prefillLead?.returnDate || "",
-    pickUpFrom: prefillLead?.pickUpLocation || "", remarks: prefillLead?.notes || "",
-    dropOffTo: "", transferDate: prefillLead?.pickupDate || dateStr,
+    pickUpCity: "", pickUpFrom: prefillLead?.pickUpLocation || "", remarks: prefillLead?.notes || "",
+    dropOffCity: "", dropOffTo: "", transferDate: prefillLead?.pickupDate || dateStr,
   });
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState("");
@@ -381,7 +426,8 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, prefillLead,
               </div>
 
               <div style={S.field}><label style={S.label}>Pick Up Location</label>
-                <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} onBlur={e=>set("pickUpFrom",toTitleCase(e.target.value))} placeholder="e.g. Airport, Hotel name" /></div>
+                <LocationPicker city={form.pickUpCity} location={form.pickUpFrom}
+                  onCityChange={c => set("pickUpCity", c)} onLocationChange={l => set("pickUpFrom", l)} /></div>
             </>
           ) : (
             <>
@@ -394,12 +440,12 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, prefillLead,
                   onChange={type => set("carType", type)} />
               </div>
 
-              <div style={S.two}>
-                <div style={S.field}><label style={S.label}>Pick Up From</label>
-                  <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} onBlur={e=>set("pickUpFrom",toTitleCase(e.target.value))} placeholder="e.g. Airport" /></div>
-                <div style={S.field}><label style={S.label}>Drop Off To</label>
-                  <input style={S.input} value={form.dropOffTo} onChange={e=>set("dropOffTo",e.target.value)} onBlur={e=>set("dropOffTo",toTitleCase(e.target.value))} placeholder="e.g. Hotel name" /></div>
-              </div>
+              <div style={S.field}><label style={S.label}>Pick Up From</label>
+                <LocationPicker city={form.pickUpCity} location={form.pickUpFrom}
+                  onCityChange={c => set("pickUpCity", c)} onLocationChange={l => set("pickUpFrom", l)} /></div>
+              <div style={S.field}><label style={S.label}>Drop Off To</label>
+                <LocationPicker city={form.dropOffCity} location={form.dropOffTo}
+                  onCityChange={c => set("dropOffCity", c)} onLocationChange={l => set("dropOffTo", l)} /></div>
 
               <div style={S.field}><label style={S.label}>Transfer Date *</label>
                 <input style={S.input} type="date" value={form.transferDate} onChange={e=>set("transferDate",e.target.value)} /></div>
@@ -420,13 +466,20 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, prefillLead,
 }
 
 // ── Detail Modal ─────────────────────────────────────────────
-function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onCheckOut, onAssignPlate }) {
+function DetailModal({ res, canEdit, staffName, role, onClose, onEdit, onDeleted, onCancelled, todayStr, onCheckOut, onAssignPlate }) {
   const [deleting, setDeleting] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
   const isTransfer = res.bookingType === "Transfer";
-  const color = colorFor(res.plate||res.client);
+  const isCancelled = res.status === "Cancelled";
+  const color = isCancelled ? "#7f1d1d" : colorFor(res.plate||res.client);
   const isToday    = res.pickupDate === todayStr;
   const isActive   = res.pickupDate <= todayStr && res.returnDate >= todayStr;
-  const canCheckOut = !isTransfer && (isToday || isActive) && res.plate;
+  const canCheckOut = !isCancelled && !isTransfer && (isToday || isActive) && res.plate;
+  // Edit/Cancel: the staff member who made the reservation, or Admin/Manager
+  // (who keep full access to every reservation, per canEdit). Delete stays
+  // Admin/Manager-only (canEdit), unchanged from before.
+  const isOwner = staffName && res.staffName && staffName.trim() === res.staffName.trim();
+  const canEditThis = canEdit || isOwner;
 
   const handleDelete = async () => {
     if (!window.confirm("Delete this reservation?")) return;
@@ -435,17 +488,23 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
     catch(e) { alert(e.message); setDeleting(false); }
   };
 
+  const fmtLocation = (city, loc) => {
+    if (city && loc) return `${city} — ${loc}`;
+    return loc || city || "—";
+  };
+
   const rows = isTransfer ? [
     ["Booking Type",  "Transfer"],
     ["Client",        res.client],
     ["Contact No.",   res.phone      ||"—"],
     ["Plate No.",     res.plate      ||"—"],
     ["Car Type",      res.carType    ||"—"],
-    ["Pick Up From",  res.pickUpFrom ||"—"],
-    ["Drop Off To",   res.dropOffTo  ||"—"],
+    ["Pick Up From",  fmtLocation(res.pickUpCity, res.pickUpFrom)],
+    ["Drop Off To",   fmtLocation(res.dropOffCity, res.dropOffTo)],
     ["Transfer Date", fmtDate(res.transferDate)],
     ["Remarks",       res.remarks    ||"—"],
     ["Added by",      res.staffName  ||"—"],
+    ...(isCancelled ? [["Cancelled By", res.cancelledBy || "—"], ["Cancel Reason", res.cancelReason || "—"]] : []),
   ] : [
     ["Client",       res.client],
     ["Contact No.",  res.phone      ||"—"],
@@ -453,9 +512,10 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
     ["Car Type",     res.carType    ||"—"],
     ["Pickup Date",  fmtDate(res.pickupDate)],
     ["Return Date",  fmtDate(res.returnDate)],
-    ["Pick Up From", res.pickUpFrom ||"—"],
+    ["Pick Up From", fmtLocation(res.pickUpCity, res.pickUpFrom)],
     ["Remarks",      res.remarks    ||"—"],
     ["Added by",     res.staffName  ||"—"],
+    ...(isCancelled ? [["Cancelled By", res.cancelledBy || "—"], ["Cancel Reason", res.cancelReason || "—"]] : []),
   ];
 
   return (
@@ -463,9 +523,9 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
       <div style={S.modal} onClick={e=>e.stopPropagation()}>
         <div style={{ ...S.mHead,background:color }}>
           <div>
-            <p style={S.mTitle}>{res.client}</p>
+            <p style={S.mTitle}>{isCancelled && "✕ "}{res.client}</p>
             <p style={S.mSub}>
-              {isTransfer
+              {isCancelled ? "Cancelled" : isTransfer
                 ? `${res.plate ? res.plate+" · " : ""}Transfer · ${fmtDate(res.transferDate)}`
                 : `${res.plate ? res.plate+" · " : ""}${fmtDate(res.pickupDate)} → ${fmtDate(res.returnDate)}`}
             </p>
@@ -497,9 +557,19 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
             </div>
           )}
 
-          {canEdit && (
+          {canEditThis && !isCancelled && (
             <div style={{ display:"flex",gap:8,marginTop:12 }}>
               <button type="button" style={{ ...S.btn,background:"var(--amber)",flex:1 }} onClick={onEdit}>✏️ Edit</button>
+              <button type="button" style={{ ...S.btn,background:"#7f1d1d",flex:1 }} onClick={() => setShowCancel(true)}>✕ Cancel</button>
+              {canEdit && (
+                <button type="button" style={{ ...S.btn,background:"var(--red)",flex:1,opacity:deleting?0.65:1 }} onClick={handleDelete} disabled={deleting}>
+                  {deleting?"Deleting…":"🗑 Delete"}
+                </button>
+              )}
+            </div>
+          )}
+          {canEdit && isCancelled && (
+            <div style={{ display:"flex",gap:8,marginTop:12 }}>
               <button type="button" style={{ ...S.btn,background:"var(--red)",flex:1,opacity:deleting?0.65:1 }} onClick={handleDelete} disabled={deleting}>
                 {deleting?"Deleting…":"🗑 Delete"}
               </button>
@@ -507,12 +577,60 @@ function DetailModal({ res, canEdit, onClose, onEdit, onDeleted, todayStr, onChe
           )}
         </div>
       </div>
+
+      {showCancel && (
+        <CancelModal res={res} staffName={staffName}
+          onClose={() => setShowCancel(false)}
+          onCancelled={() => { setShowCancel(false); onCancelled(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Cancel Modal ──────────────────────────────────────────────
+function CancelModal({ res, staffName, onClose, onCancelled }) {
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const handleCancel = async () => {
+    if (!reason.trim()) { setErr("Please provide a reason for cancelling."); return; }
+    setSaving(true); setErr("");
+    try {
+      await api.cancelReservation({ id: res.id, reason, staffName });
+      onCancelled();
+    } catch (e) { setErr(e.message); setSaving(false); }
+  };
+
+  return (
+    <div style={{ ...S.overlay, zIndex: 120 }} onClick={onClose}>
+      <div style={{ ...S.modal, width: 380 }} onClick={e => e.stopPropagation()}>
+        <div style={{ ...S.mHead, background: "#7f1d1d" }}>
+          <p style={S.mTitle}>Cancel Reservation</p>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={S.mBody}>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 10px" }}>
+            Cancelling <strong>{res.client}</strong>'s reservation. This keeps a record — it won't be deleted, just marked cancelled.
+          </p>
+          <div style={S.field}>
+            <label style={S.label}>Reason *</label>
+            <textarea style={S.textarea} rows={3} value={reason} onChange={e => setReason(e.target.value)}
+              placeholder="Why is this being cancelled…" autoFocus />
+          </div>
+          {err && <p style={S.err}>{err}</p>}
+          <button type="button" style={{ ...S.btn, background: "#7f1d1d", opacity: saving ? 0.65 : 1 }} onClick={handleCancel} disabled={saving}>
+            {saving ? "Cancelling…" : "Confirm Cancellation"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ── Edit Modal ───────────────────────────────────────────────
-function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
+function EditModal({ res, fleet, fleetTypes, staffName, onClose, onSaved }) {
   const isTransfer = res.bookingType === "Transfer";
   const [form, setForm] = useState({
     client:       res.client       ||"",
@@ -522,8 +640,10 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
     pickupDate:   res.pickupDate   ||"",
     returnDate:   res.returnDate   ||"",
     pickUpFrom:   res.pickUpFrom   ||"",
+    pickUpCity:   res.pickUpCity   ||"",
     remarks:      res.remarks      ||"",
     dropOffTo:    res.dropOffTo    ||"",
+    dropOffCity:  res.dropOffCity  ||"",
     transferDate: res.transferDate ||"",
   });
   const [saving, setSaving] = useState(false);
@@ -540,7 +660,7 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
       if (form.returnDate <= form.pickupDate) { setErr("Return date must be after pickup date."); return; }
     }
     setSaving(true); setErr("");
-    try { await api.editReservation({ id:res.id, bookingType:res.bookingType, ...form }); onSaved(); }
+    try { await api.editReservation({ id:res.id, bookingType:res.bookingType, ...form, staffName }); onSaved(); }
     catch(e) { setErr(e.message); }
     finally { setSaving(false); }
   };
@@ -571,12 +691,12 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
 
           {isTransfer ? (
             <>
-              <div style={S.two}>
-                <div style={S.field}><label style={S.label}>Pick Up From</label>
-                  <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} onBlur={e=>set("pickUpFrom",toTitleCase(e.target.value))} /></div>
-                <div style={S.field}><label style={S.label}>Drop Off To</label>
-                  <input style={S.input} value={form.dropOffTo} onChange={e=>set("dropOffTo",e.target.value)} onBlur={e=>set("dropOffTo",toTitleCase(e.target.value))} /></div>
-              </div>
+              <div style={S.field}><label style={S.label}>Pick Up From</label>
+                <LocationPicker city={form.pickUpCity} location={form.pickUpFrom}
+                  onCityChange={c => set("pickUpCity", c)} onLocationChange={l => set("pickUpFrom", l)} /></div>
+              <div style={S.field}><label style={S.label}>Drop Off To</label>
+                <LocationPicker city={form.dropOffCity} location={form.dropOffTo}
+                  onCityChange={c => set("dropOffCity", c)} onLocationChange={l => set("dropOffTo", l)} /></div>
               <div style={S.field}><label style={S.label}>Transfer Date *</label>
                 <input style={S.input} type="date" value={form.transferDate} onChange={e=>set("transferDate",e.target.value)} /></div>
             </>
@@ -589,7 +709,8 @@ function EditModal({ res, fleet, fleetTypes, onClose, onSaved }) {
                   <input style={S.input} type="date" value={form.returnDate} min={form.pickupDate} onChange={e=>set("returnDate",e.target.value)} /></div>
               </div>
               <div style={S.field}><label style={S.label}>Pick Up Location</label>
-                <input style={S.input} value={form.pickUpFrom} onChange={e=>set("pickUpFrom",e.target.value)} onBlur={e=>set("pickUpFrom",toTitleCase(e.target.value))} /></div>
+                <LocationPicker city={form.pickUpCity} location={form.pickUpFrom}
+                  onCityChange={c => set("pickUpCity", c)} onLocationChange={l => set("pickUpFrom", l)} /></div>
             </>
           )}
 

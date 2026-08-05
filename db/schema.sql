@@ -540,3 +540,13 @@ CREATE TABLE IF NOT EXISTS leads (
 );
 
 CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(stage);
+
+-- Reservations: two-part pickup/dropoff location (city + specific location),
+-- and cancellation (kept as a record, not deleted -- status + reason).
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS pick_up_city  text;
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS drop_off_city text;
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS status             text DEFAULT 'Active';
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS cancel_reason      text;
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS cancelled_by       text;
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS cancelled_at       timestamp;
+UPDATE reservations SET status = 'Active' WHERE status IS NULL;
