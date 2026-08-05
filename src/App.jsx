@@ -14,6 +14,7 @@ import FuelPage from "./pages/FuelPage";
 import ReservationsPage from "./pages/ReservationsPage";
 import LeadsPage from "./pages/LeadsPage";
 import MaintenancePage from "./pages/MaintenancePage";
+import MaintenanceAnalyticsPage from "./pages/MaintenanceAnalyticsPage";
 import BlacklistPage from "./pages/BlacklistPage";
 import SignaturePage from "./pages/SignaturePage";
 import logo from "./assets/logo.js";
@@ -69,6 +70,7 @@ export default function App() {
           <Route path="/reservations" element={<ReservationsPage staffName={staffName} role={role} />} />
           <Route path="/leads"        element={<LeadsPage staffName={staffName} role={role} />} />
           <Route path="/maintenance"  element={<MaintenancePage staffName={staffName} role={role} />} />
+          <Route path="/maintenance-analytics" element={<MaintenanceAnalyticsPage />} />
           <Route path="/sold"         element={<SoldPage />} />
           <Route path="/blacklist"    element={<BlacklistPage staffName={staffName} role={role} />} />
           <Route path="/sign/:token"  element={<SignaturePage />} />

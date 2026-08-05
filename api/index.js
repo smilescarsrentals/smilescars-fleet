@@ -38,6 +38,7 @@ const READS = {
   getBlacklist: reads.getBlacklist,
   getMaintenanceLog: reads.getMaintenanceLog,
   getMaintenanceItems: reads.getMaintenanceItems,
+  getAllMaintenanceItems: reads.getAllMaintenanceItems,
   getMaintenanceUpdates: reads.getMaintenanceUpdates,
   getLeads: reads.getLeads,
   getSettings: reads.getSettings,
