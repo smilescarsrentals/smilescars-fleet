@@ -586,3 +586,15 @@ CREATE INDEX IF NOT EXISTS idx_parts_category ON parts(category);
 -- Links a job card item back to the part it was drawn from (nullable --
 -- free-text items have no part_id) so stock decrements are traceable.
 ALTER TABLE maintenance_items ADD COLUMN IF NOT EXISTS part_id text REFERENCES parts(id) ON DELETE SET NULL;
+
+-- Vendors: distinguish Parts Supplier / Service Provider / Both.
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS vendor_type text DEFAULT 'Parts Supplier';
+UPDATE vendors SET vendor_type = 'Parts Supplier' WHERE vendor_type IS NULL;
+
+-- Work order: service location (Internal office/garage vs External vendor)
+-- and an optional flat cost for jobs without an itemized parts breakdown.
+ALTER TABLE maintenance_log ADD COLUMN IF NOT EXISTS service_location_type text DEFAULT 'Internal';
+ALTER TABLE maintenance_log ADD COLUMN IF NOT EXISTS internal_location      text;
+ALTER TABLE maintenance_log ADD COLUMN IF NOT EXISTS external_vendor_id     text REFERENCES vendors(id) ON DELETE SET NULL;
+ALTER TABLE maintenance_log ADD COLUMN IF NOT EXISTS flat_cost              numeric;
+UPDATE maintenance_log SET service_location_type = 'Internal' WHERE service_location_type IS NULL;

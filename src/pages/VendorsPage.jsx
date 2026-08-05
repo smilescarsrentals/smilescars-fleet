@@ -69,6 +69,7 @@ export default function VendorsPage({ staffName, role }) {
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontWeight: 700, fontSize: 14 }}>{v.name}</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: "var(--sc-blue)", background: "var(--blue-bg)", borderRadius: 10, padding: "1px 8px" }}>{v.vendorType}</span>
                     {!v.active && <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-faint)", background: "var(--border-light)", borderRadius: 10, padding: "1px 8px" }}>Inactive</span>}
                   </div>
                   {v.categories && <p style={{ fontSize: 12, color: "var(--sc-blue)", margin: "3px 0 0" }}>{v.categories}</p>}
@@ -114,6 +115,7 @@ function VendorModal({ staffName, vendor, onClose, onSaved }) {
   const [form, setForm] = useState({
     name: vendor?.name || "", contactPerson: vendor?.contactPerson || "", phone: vendor?.phone || "",
     location: vendor?.location || "", categories: vendor?.categories || "", paymentTerms: vendor?.paymentTerms || "",
+    vendorType: vendor?.vendorType || "Parts Supplier",
     notes: vendor?.notes || "", active: vendor ? vendor.active : true,
   });
   const [saving, setSaving] = useState(false);
@@ -141,6 +143,12 @@ function VendorModal({ staffName, vendor, onClose, onSaved }) {
         <div style={S.mBody}>
           <div style={S.field}><label style={S.label}>Name *</label>
             <input style={S.input} value={form.name} onChange={e => set("name", e.target.value)} autoFocus /></div>
+          <div style={S.field}><label style={S.label}>Vendor Type</label>
+            <select style={S.input} value={form.vendorType} onChange={e => set("vendorType", e.target.value)}>
+              <option value="Parts Supplier">Parts Supplier</option>
+              <option value="Service Provider">Service Provider</option>
+              <option value="Both">Both</option>
+            </select></div>
           <div style={S.field}><label style={S.label}>Contact Person</label>
             <input style={S.input} value={form.contactPerson} onChange={e => set("contactPerson", e.target.value)} /></div>
           <div style={S.field}><label style={S.label}>Phone</label>

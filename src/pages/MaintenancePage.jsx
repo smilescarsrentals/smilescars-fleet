@@ -296,6 +296,7 @@ export default function MaintenancePage({ staffName, role, embedded }) {
 
 // ── Work order card ────────────────────────────────────────
 function WorkOrderCard({ log, onClick }) {
+  const isExternal = log.serviceLocationType === "External";
   return (
     <div onClick={onClick} style={{
       background: "var(--surface)", border: "1px solid var(--border)",
@@ -306,10 +307,11 @@ function WorkOrderCard({ log, onClick }) {
         <span style={{ fontWeight: 700, fontSize: 13 }}>{log.plate}</span>
         <span style={{ fontSize: 9.5, color: "var(--text-faint)", wordBreak: "break-all", textAlign: "right" }}>{log.refNo || log.id}</span>
       </div>
+      {isExternal && <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6" }}>🏢 External</span>}
       {log.issueDescription && (
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0", lineHeight: 1.4 }}>{log.issueDescription}</p>
       )}
-      <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "5px 0 0" }}>🔧 {log.assignedMechanic || "—"}</p>
+      {!isExternal && <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "5px 0 0" }}>🔧 {log.assignedMechanic || "—"}</p>}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
         <span style={{ fontSize: 11, color: "var(--text-faint)" }}>
           {log.status === "Completed" ? `Closed ${fmtDateTime(log.dateClosed)}` : `Opened ${fmtDateTime(log.dateOpened)}`}
@@ -324,13 +326,22 @@ function WorkOrderCard({ log, onClick }) {
 function DetailModal({ log, staffName, canEdit, onClose, onUpdated }) {
   const [editing, setEditing] = useState(false);
   const [showMarkAvailable, setShowMarkAvailable] = useState(false);
+  const [vendors, setVendors] = useState([]);
   const [form, setForm] = useState({
     assignedMechanic: log.assignedMechanic, issueDescription: log.issueDescription,
     odometer: log.odometer, notes: log.notes,
+    flatCost: log.flatCost != null ? String(log.flatCost) : "",
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const isExternal = log.serviceLocationType === "External";
+
+  useEffect(() => {
+    if (isExternal) api.getVendors().then(res => setVendors(res?.data || [])).catch(() => {});
+  }, [isExternal]);
+
+  const vendorName = vendors.find(v => v.id === log.externalVendorId)?.name || (isExternal ? "—" : "");
 
   const moveStatus = async (newStatus) => {
     setSaving(true); setErr("");
@@ -343,8 +354,9 @@ function DetailModal({ log, staffName, canEdit, onClose, onUpdated }) {
 
   const handleSave = async () => {
     setSaving(true); setErr("");
+    const payload = { ...form, flatCost: form.flatCost === "" ? null : Number(form.flatCost) };
     try {
-      await api.editMaintenanceLog({ id: log.id, ...form, staffName });
+      await api.editMaintenanceLog({ id: log.id, ...payload, staffName });
       onUpdated();
       setEditing(false);
     } catch (e) { setErr(e.message); }
@@ -354,9 +366,11 @@ function DetailModal({ log, staffName, canEdit, onClose, onUpdated }) {
   const rows = [
     ["Ref No.", log.refNo || "—"],
     ["Plate", log.plate],
+    ["Service Location", isExternal ? `External — ${vendorName}` : `Internal — ${log.internalLocation || "—"}`],
     ["Assigned Mechanic", log.assignedMechanic || "—"],
     ["Odometer", log.odometer ? fmtOdometer(log.odometer) : "—"],
     ["Issue Description", log.issueDescription || "—"],
+    ...(log.flatCost != null ? [["Flat Job Cost", `TZS ${fmtMoney(log.flatCost)}`]] : []),
     ["Opened By", log.openedBy || "—"],
     ["Date Opened", fmtDateTime(log.dateOpened)],
     ...(log.status === "Completed" ? [["Date Closed", fmtDateTime(log.dateClosed)]] : []),
@@ -423,6 +437,10 @@ function DetailModal({ log, staffName, canEdit, onClose, onUpdated }) {
             <>
               <div style={S.field}><label style={S.label}>Assigned Mechanic</label>
                 <input style={S.input} value={form.assignedMechanic} onChange={e => set("assignedMechanic", e.target.value)} /></div>
+              {isExternal && (
+                <div style={S.field}><label style={S.label}>Flat Job Cost (TZS) <span style={{ color:"var(--text-faint)",fontWeight:400 }}>(leave blank to use itemized parts total instead)</span></label>
+                  <input style={S.input} type="number" min="0" value={form.flatCost} onChange={e => set("flatCost", e.target.value)} placeholder="e.g. 150000" /></div>
+              )}
               <div style={S.field}><label style={S.label}>Odometer</label>
                 <input style={S.input} value={form.odometer} placeholder="e.g. 84,200"
                   onChange={e => set("odometer", e.target.value)}
@@ -839,14 +857,24 @@ function ScheduleModal({ fleet, staffName, onClose, onSaved }) {
 function AddWorkOrderModal({ staffName, fleet, onClose, onSaved }) {
   const [form, setForm] = useState({
     plate: "", assignedMechanic: "", issueDescription: "", odometer: "", notes: "",
+    serviceLocationType: "Internal", internalLocation: "SmilesCars Office", externalVendorId: "",
   });
+  const [vendors, setVendors] = useState([]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const isExternal = form.serviceLocationType === "External";
+
+  useEffect(() => {
+    api.getVendors().then(res => {
+      const all = res?.data || [];
+      setVendors(all.filter(v => v.active && (v.vendorType === "Service Provider" || v.vendorType === "Both")));
+    }).catch(() => {});
+  }, []);
 
   const handleSave = async () => {
-    if (!form.plate.trim())            { setErr("Plate is required."); return; }
-    if (!form.assignedMechanic.trim()) { setErr("Assigned mechanic is required."); return; }
+    if (!form.plate.trim()) { setErr("Plate is required."); return; }
+    if (!isExternal && !form.assignedMechanic.trim()) { setErr("Assigned mechanic is required."); return; }
     setSaving(true); setErr("");
     try {
       await api.addMaintenanceLog({ ...form, openedBy: staffName });
@@ -866,8 +894,46 @@ function AddWorkOrderModal({ staffName, fleet, onClose, onSaved }) {
           <div style={S.field}><label style={S.label}>Plate No. *</label>
             <PlateField fleet={fleet} value={form.plate} onChange={p => set("plate", p)} />
           </div>
-          <div style={S.field}><label style={S.label}>Assigned Mechanic *</label>
-            <input style={S.input} value={form.assignedMechanic} onChange={e => set("assignedMechanic", e.target.value)} placeholder="Mechanic's name" /></div>
+
+          <div style={S.field}>
+            <label style={S.label}>Service Location</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[["Internal","Internal (Own Mechanic)"],["External","External (Outside Garage)"]].map(([val,lab]) => (
+                <button key={val} type="button" onClick={() => set("serviceLocationType", val)}
+                  style={{ flex:1, padding:"8px 4px", fontSize:12, fontWeight:600, borderRadius:7, cursor:"pointer", fontFamily:"inherit",
+                    border:`1.5px solid ${form.serviceLocationType===val ? "var(--sc-blue)" : "var(--border)"}`,
+                    background: form.serviceLocationType===val ? "var(--blue-bg)" : "var(--surface)",
+                    color: form.serviceLocationType===val ? "var(--sc-blue)" : "var(--text-muted)" }}>
+                  {lab}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isExternal ? (
+            <div style={S.field}><label style={S.label}>External Provider</label>
+              <select style={S.input} value={form.externalVendorId} onChange={e => set("externalVendorId", e.target.value)}>
+                <option value="">Select a vendor…</option>
+                {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+              {vendors.length === 0 && (
+                <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "4px 0 0" }}>
+                  No Service Provider vendors yet — add one under Garage → Vendors.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div style={S.field}><label style={S.label}>Location</label>
+              <select style={S.input} value={form.internalLocation} onChange={e => set("internalLocation", e.target.value)}>
+                <option value="SmilesCars Office">SmilesCars Office</option>
+                <option value="SmilesCars Garage">SmilesCars Garage</option>
+              </select>
+            </div>
+          )}
+
+          <div style={S.field}><label style={S.label}>Assigned Mechanic{isExternal ? "" : " *"}</label>
+            <input style={S.input} value={form.assignedMechanic} onChange={e => set("assignedMechanic", e.target.value)}
+              placeholder={isExternal ? "Optional — if known" : "Mechanic's name"} /></div>
           <div style={S.field}><label style={S.label}>Odometer</label>
             <input style={S.input} value={form.odometer} placeholder="e.g. 84,200"
               onChange={e => set("odometer", e.target.value)}
@@ -878,7 +944,8 @@ function AddWorkOrderModal({ staffName, fleet, onClose, onSaved }) {
             <textarea style={S.textarea} rows={2} value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Any additional notes…" /></div>
 
           <p style={{ fontSize: 11.5, color: "var(--text-faint)", margin: "0 0 8px" }}>
-            A reference number (e.g. SC/GAR/2026/08/0001) is generated automatically. Job card items can be added once the work order is created.
+            A reference number (e.g. SC/GAR/2026/08/0001) is generated automatically.
+            {isExternal ? " You can set a flat job cost or add itemized parts once the work order is created." : " Job card items can be added once the work order is created."}
           </p>
 
           {err && <p style={S.err}>{err}</p>}
