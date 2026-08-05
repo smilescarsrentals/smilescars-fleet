@@ -38,6 +38,10 @@ function fmtOdometer(val) {
 }
 
 export default function MaintenancePage({ staffName, role }) {
+  // Manager gets full visibility into Maintenance but can't touch anything —
+  // this is Garage Manager's operational tool. Admin and Garage Manager can
+  // both edit; Manager is the one role that's explicitly view-only here.
+  const canEdit = role !== "Manager";
   const [logs,    setLogs]    = useState([]);
   const [fleet,   setFleet]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -130,10 +134,12 @@ export default function MaintenancePage({ staffName, role }) {
             {logs.length} work order{logs.length !== 1 ? "s" : ""} on file
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="btn btn-ghost" onClick={() => setShowSchedule(true)}>Set Odometer / Service Due</button>
-          <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ New Work Order</button>
-        </div>
+        {canEdit && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" className="btn btn-ghost" onClick={() => setShowSchedule(true)}>Set Odometer / Service Due</button>
+            <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ New Work Order</button>
+          </div>
+        )}
       </div>
 
       {err && <p style={{ color: "var(--red)", fontSize: 13 }}>{err}</p>}
@@ -270,6 +276,7 @@ export default function MaintenancePage({ staffName, role }) {
         <DetailModal
           log={openDetailLog}
           staffName={staffName}
+          canEdit={canEdit}
           onClose={() => setShowDetail(null)}
           onUpdated={load}
         />
@@ -278,6 +285,7 @@ export default function MaintenancePage({ staffName, role }) {
       {showSchedule && (
         <ScheduleModal
           fleet={fleet}
+          staffName={staffName}
           onClose={() => setShowSchedule(false)}
           onSaved={() => { setShowSchedule(false); load(); }}
         />
@@ -313,7 +321,7 @@ function WorkOrderCard({ log, onClick }) {
 }
 
 // ── Detail / Edit Modal ──────────────────────────────────────
-function DetailModal({ log, staffName, onClose, onUpdated }) {
+function DetailModal({ log, staffName, canEdit, onClose, onUpdated }) {
   const [editing, setEditing] = useState(false);
   const [showMarkAvailable, setShowMarkAvailable] = useState(false);
   const [form, setForm] = useState({
@@ -327,7 +335,7 @@ function DetailModal({ log, staffName, onClose, onUpdated }) {
   const moveStatus = async (newStatus) => {
     setSaving(true); setErr("");
     try {
-      await api.editMaintenanceLog({ id: log.id, status: newStatus });
+      await api.editMaintenanceLog({ id: log.id, status: newStatus, staffName });
       onUpdated();
     } catch (e) { setErr(e.message); }
     finally { setSaving(false); }
@@ -336,7 +344,7 @@ function DetailModal({ log, staffName, onClose, onUpdated }) {
   const handleSave = async () => {
     setSaving(true); setErr("");
     try {
-      await api.editMaintenanceLog({ id: log.id, ...form });
+      await api.editMaintenanceLog({ id: log.id, ...form, staffName });
       onUpdated();
       setEditing(false);
     } catch (e) { setErr(e.message); }
@@ -361,7 +369,7 @@ function DetailModal({ log, staffName, onClose, onUpdated }) {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <p style={S.mTitle}>{log.plate}</p>
-              {!editing && (
+              {!editing && canEdit && (
                 <button type="button" onClick={() => setEditing(true)}
                   style={{ fontSize: 10.5, fontWeight: 600, color: "#fff", background: "rgba(255,255,255,0.22)",
                     border: "1px solid rgba(255,255,255,0.4)", borderRadius: 20, padding: "3px 10px", cursor: "pointer" }}>
@@ -384,30 +392,32 @@ function DetailModal({ log, staffName, onClose, onUpdated }) {
                 </div>
               ))}
 
-              <JobCardItems workOrderId={log.id} totalCost={log.totalCost} onChanged={onUpdated} />
+              <JobCardItems workOrderId={log.id} totalCost={log.totalCost} canEdit={canEdit} staffName={staffName} onChanged={onUpdated} />
 
-              <UpdatesTimeline workOrderId={log.id} staffName={staffName} />
+              <UpdatesTimeline workOrderId={log.id} staffName={staffName} canEdit={canEdit} />
 
               {err && <p style={S.err}>{err}</p>}
 
-              <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-                {log.status === "Completed" ? (
-                  <button type="button" disabled={saving} onClick={() => setShowMarkAvailable(true)}
-                    style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer", opacity: saving ? 0.6 : 1,
-                      border: "1.5px solid var(--green)", background: "var(--surface)", color: "var(--green)" }}>
-                    Mark Available
-                  </button>
-                ) : (
-                  TRANSITIONS[log.status].map(s => (
-                    <button key={s} type="button" disabled={saving}
-                      onClick={() => moveStatus(s)}
+              {canEdit && (
+                <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+                  {log.status === "Completed" ? (
+                    <button type="button" disabled={saving} onClick={() => setShowMarkAvailable(true)}
                       style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer", opacity: saving ? 0.6 : 1,
-                        border: `1.5px solid ${STATUS_COLORS[s]}`, background: "var(--surface)", color: STATUS_COLORS[s] }}>
-                      Move to {s}
+                        border: "1.5px solid var(--green)", background: "var(--surface)", color: "var(--green)" }}>
+                      Mark Available
                     </button>
-                  ))
-                )}
-              </div>
+                  ) : (
+                    TRANSITIONS[log.status].map(s => (
+                      <button key={s} type="button" disabled={saving}
+                        onClick={() => moveStatus(s)}
+                        style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer", opacity: saving ? 0.6 : 1,
+                          border: `1.5px solid ${STATUS_COLORS[s]}`, background: "var(--surface)", color: STATUS_COLORS[s] }}>
+                        Move to {s}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -513,7 +523,7 @@ function MarkAvailableModal({ log, onClose }) {
 // Item-level cost breakdown for a work order — this IS the cost of the job,
 // there's no separate labor lump sum. Each add/edit/delete recomputes the
 // parent work order's total_cost server-side.
-function JobCardItems({ workOrderId, totalCost, onChanged }) {
+function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -538,7 +548,7 @@ function JobCardItems({ workOrderId, totalCost, onChanged }) {
     try {
       await api.addMaintenanceItem({
         workOrderId, itemName: newItem.itemName,
-        quantity: Number(newItem.quantity) || 1, unitCost: Number(newItem.unitCost) || 0,
+        quantity: Number(newItem.quantity) || 1, unitCost: Number(newItem.unitCost) || 0, staffName,
       });
       setNewItem({ itemName: "", quantity: "1", unitCost: "" });
       setAdding(false);
@@ -549,7 +559,7 @@ function JobCardItems({ workOrderId, totalCost, onChanged }) {
 
   const handleDelete = async (id) => {
     try {
-      await api.deleteMaintenanceItem({ id });
+      await api.deleteMaintenanceItem({ id, staffName });
       await load();
       onChanged();
     } catch (e) { setErr(e.message); }
@@ -559,7 +569,7 @@ function JobCardItems({ workOrderId, totalCost, onChanged }) {
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3 }}>Job Card Items</span>
-        {!adding && <button type="button" onClick={() => setAdding(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>+ Add Item</button>}
+        {!adding && canEdit && <button type="button" onClick={() => setAdding(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>+ Add Item</button>}
       </div>
 
       {loading ? (
@@ -573,8 +583,10 @@ function JobCardItems({ workOrderId, totalCost, onChanged }) {
               <span style={{ flex: 1 }}>{item.itemName}</span>
               <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{item.quantity} × {fmtMoney(item.unitCost)}</span>
               <span style={{ fontWeight: 700, flexShrink: 0, minWidth: 70, textAlign: "right" }}>{fmtMoney(item.lineTotal)}</span>
-              <button type="button" onClick={() => handleDelete(item.id)}
-                style={{ background: "none", border: "none", color: "var(--red)", cursor: "pointer", fontSize: 14, padding: "0 2px", flexShrink: 0 }}>✕</button>
+              {canEdit && (
+                <button type="button" onClick={() => handleDelete(item.id)}
+                  style={{ background: "none", border: "none", color: "var(--red)", cursor: "pointer", fontSize: 14, padding: "0 2px", flexShrink: 0 }}>✕</button>
+              )}
             </div>
           ))}
         </div>
@@ -611,7 +623,7 @@ function JobCardItems({ workOrderId, totalCost, onChanged }) {
 // ── Updates timeline ──────────────────────────────────────────
 // Running log of updates on a work order — newest first, never overwritten,
 // so the full history of what was reported/decided stays visible.
-function UpdatesTimeline({ workOrderId, staffName }) {
+function UpdatesTimeline({ workOrderId, staffName, canEdit }) {
   const [updates, setUpdates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -647,7 +659,7 @@ function UpdatesTimeline({ workOrderId, staffName }) {
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3 }}>Notes / Updates</span>
-        {!adding && <button type="button" onClick={() => setAdding(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>+ Add Update</button>}
+        {!adding && canEdit && <button type="button" onClick={() => setAdding(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>+ Add Update</button>}
       </div>
 
       {adding && (
@@ -689,7 +701,7 @@ function UpdatesTimeline({ workOrderId, staffName }) {
 // ── Set Odometer / Service Due Modal ─────────────────────────
 // Picks a car, then lets Garage Manager record its current odometer and/or
 // set the next service threshold. Both are manual — no auto-estimation.
-function ScheduleModal({ fleet, onClose, onSaved }) {
+function ScheduleModal({ fleet, staffName, onClose, onSaved }) {
   const [plate, setPlate] = useState("");
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -710,7 +722,7 @@ function ScheduleModal({ fleet, onClose, onSaved }) {
 
   const handleSave = async () => {
     if (!plate) { setErr("Select a car first."); return; }
-    const body = { plate };
+    const body = { plate, staffName };
     if (currentOdometer !== "") body.currentOdometer = Number(currentOdometer.replace(/[^\d]/g, ""));
     if (nextServiceDueKm !== "") body.nextServiceDueKm = Number(nextServiceDueKm.replace(/[^\d]/g, ""));
     if (!body.currentOdometer && !body.nextServiceDueKm) { setErr("Enter at least one value."); return; }
