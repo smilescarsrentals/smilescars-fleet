@@ -231,7 +231,8 @@ export default function CarProfilePage({ staffName, role }) {
         {[
           { id:"overview",    label:"Overview" },
           { id:"history",     label:`Rentals (${rentalHistory.length})` },
-          { id:"maintenance", label:`Maintenance (${maintenanceHistory.length})` },
+          { id:"garage",      label:"Maintenance" },
+          { id:"statuslog",   label:`Status Log (${maintenanceHistory.length})` },
           { id:"notes",       label:`Notes (${noteHistory.length})` },
         ].map(t => (
           <button key={t.id} style={{ ...S.tab,...(activeTab===t.id?S.tabActive:{}) }} onClick={() => setActiveTab(t.id)}>{t.label}</button>
@@ -330,7 +331,7 @@ export default function CarProfilePage({ staffName, role }) {
         </div>
       )}
 
-      {activeTab==="maintenance" && (
+      {activeTab==="statuslog" && (
         <div style={S.tabContent}>
           {maintenanceHistory.length===0 ? <p style={S.empty}>No maintenance history yet.</p> : (
             <div className="sc-table-wrap">
@@ -357,6 +358,12 @@ export default function CarProfilePage({ staffName, role }) {
         </div>
       )}
 
+      {activeTab==="garage" && (
+        <div style={S.tabContent}>
+          <CarMaintenanceTab plate={decodedPlate} />
+        </div>
+      )}
+
       {activeTab==="notes" && (
         <div style={S.tabContent}>
           {noteToast && <div style={S.toast}>{noteToast}</div>}
@@ -378,6 +385,112 @@ export default function CarProfilePage({ staffName, role }) {
                   </div>
                 ))}
               </div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const WORK_ORDER_STATUS_COLORS = {
+  "Queued":         "#3b82f6",
+  "In Progress":    "#d97706",
+  "Awaiting Parts": "#8b5cf6",
+  "Completed":      "#16a34a",
+};
+
+// Read-only view of this car's maintenance work orders — visible to all
+// staff on Car Profile, even though only Garage Manager can actually work
+// the Maintenance dashboard itself. Filters the full work order list down
+// to this plate client-side (dataset is small; no dedicated by-plate
+// endpoint needed for this).
+function CarMaintenanceTab({ plate }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(null);
+
+  useEffect(() => {
+    api.getMaintenanceLog().then(res => {
+      const norm = plate.trim().toLowerCase().replace(/\s+/g, "");
+      const mine = (res?.data || []).filter(o => o.plate.trim().toLowerCase().replace(/\s+/g, "") === norm);
+      setOrders(mine);
+    }).finally(() => setLoading(false));
+  }, [plate]);
+
+  if (loading) return <p style={S.empty}>Loading maintenance history…</p>;
+  if (orders.length === 0) return <p style={S.empty}>No maintenance work orders yet.</p>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {orders.map(o => (
+        <div key={o.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden" }}>
+          <div onClick={() => setExpanded(expanded === o.id ? null : o.id)}
+            style={{ padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>{o.refNo || o.id}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", borderRadius: 12, color: "#fff", background: WORK_ORDER_STATUS_COLORS[o.status] || "#888" }}>{o.status}</span>
+              </div>
+              {o.issueDescription && <p style={{ fontSize: 12.5, color: "#666", margin: "4px 0 0" }}>{o.issueDescription}</p>}
+              <p style={{ fontSize: 11.5, color: "#999", margin: "3px 0 0" }}>
+                🔧 {o.assignedMechanic || "Unassigned"} · Opened {fmtDateTime(o.dateOpened)}
+                {o.status === "Completed" && ` · Closed ${fmtDateTime(o.dateClosed)}`}
+              </p>
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              {o.totalCost > 0 && <p style={{ fontSize: 13, fontWeight: 700, color: "#16a34a", margin: 0 }}>TZS {Number(o.totalCost).toLocaleString()}</p>}
+              <span style={{ fontSize: 11, color: "#aaa" }}>{expanded === o.id ? "▲ hide" : "▼ details"}</span>
+            </div>
+          </div>
+          {expanded === o.id && <CarMaintenanceOrderDetail workOrderId={o.id} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CarMaintenanceOrderDetail({ workOrderId }) {
+  const [items, setItems] = useState([]);
+  const [updates, setUpdates] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([api.getMaintenanceItems(workOrderId), api.getMaintenanceUpdates(workOrderId)])
+      .then(([itemsRes, updatesRes]) => {
+        setItems(itemsRes?.data || []);
+        setUpdates(updatesRes?.data || []);
+      })
+      .finally(() => setLoading(false));
+  }, [workOrderId]);
+
+  if (loading) return <p style={{ ...S.empty, padding: "1rem" }}>Loading details…</p>;
+
+  return (
+    <div style={{ borderTop: "1px solid #f3f4f6", padding: "12px 14px", background: "#fafafa" }}>
+      <p style={{ fontSize: 11.5, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: ".3px", margin: "0 0 6px" }}>Job Card Items</p>
+      {items.length === 0 ? (
+        <p style={{ fontSize: 12.5, color: "#aaa", fontStyle: "italic", margin: "0 0 10px" }}>No items logged</p>
+      ) : (
+        <div style={{ marginBottom: 12 }}>
+          {items.map(it => (
+            <div key={it.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "4px 0", borderBottom: "1px solid #eee" }}>
+              <span>{it.itemName}</span>
+              <span style={{ color: "#666" }}>{it.quantity} × {Number(it.unitCost).toLocaleString()} = <strong>{Number(it.lineTotal).toLocaleString()}</strong></span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p style={{ fontSize: 11.5, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: ".3px", margin: "0 0 6px" }}>Notes / Updates</p>
+      {updates.length === 0 ? (
+        <p style={{ fontSize: 12.5, color: "#aaa", fontStyle: "italic", margin: 0 }}>No updates yet</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {updates.map(u => (
+            <div key={u.id} style={{ borderLeft: "2px solid #ddd", paddingLeft: 8 }}>
+              <p style={{ fontSize: 12.5, margin: 0, lineHeight: 1.5 }}>{u.message}</p>
+              <p style={{ fontSize: 10.5, color: "#aaa", margin: "2px 0 0" }}>{u.author ? `${u.author} · ` : ""}{fmtDateTime(u.createdAt)}</p>
+            </div>
+          ))}
         </div>
       )}
     </div>
