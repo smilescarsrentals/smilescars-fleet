@@ -230,9 +230,9 @@ export default function CarProfilePage({ staffName, role }) {
       <div style={S.tabs}>
         {[
           { id:"overview",    label:"Overview" },
-          { id:"history",     label:`Rentals (${rentalHistory.length})` },
-          { id:"garage",      label:"Maintenance" },
-          { id:"statuslog",   label:`Status Log (${maintenanceHistory.length})` },
+          { id:"history",     label:`Rentals Log (${rentalHistory.length})` },
+          { id:"statuslog",   label:`Maintenance Log (${maintenanceHistory.length})` },
+          { id:"garage",      label:"Garage Updates" },
           { id:"notes",       label:`Notes (${noteHistory.length})` },
         ].map(t => (
           <button key={t.id} style={{ ...S.tab,...(activeTab===t.id?S.tabActive:{}) }} onClick={() => setActiveTab(t.id)}>{t.label}</button>
