@@ -66,6 +66,7 @@ const NAV_GROUPS = [
     { to: "/fleet",     key: "fleet",     label: "Fleet",     icon: Icon.fleet },
     { to: "/reservations", key: "reservations", label: "Reservations", icon: Icon.reservations, badgeKey: "urgent" },
     { to: "/leads",     key: "leads",     label: "Leads",      icon: Icon.leads },
+    { to: "/garage",    key: "garage",    label: "Garage",     icon: Icon.maintenance },
     { to: "/clients",   key: "clients",   label: "Clients",   icon: Icon.clients },
   ]},
   { label: "Operations", items: [
@@ -73,8 +74,6 @@ const NAV_GROUPS = [
     { to: "/sub-hire", key: "subhire",  label: "Sub-Hire",  icon: Icon.subhire },
     { to: "/fuel",     key: "fuel",     label: "Fuel",      icon: Icon.fuel },
     { to: "/sold",     key: "sold",     label: "Sold",      icon: Icon.sold },
-    { to: "/maintenance", key: "maintenance", label: "Maintenance", icon: Icon.maintenance },
-    { to: "/maintenance-analytics", key: "maintenanceAnalytics", label: "Analytics", icon: Icon.analytics },
   ]},
   { label: "Safety", items: [
     { to: "/blacklist", key: "blacklist", label: "Blacklist", icon: Icon.blacklist },
@@ -126,12 +125,12 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const canViewAll = role === "Admin" || role === "Manager";
   const visibleNavGroups = role === "Garage Manager"
     ? NAV_GROUPS
-        .map(group => ({ ...group, items: group.items.filter(i => i.key === "maintenance" || i.key === "maintenanceAnalytics" || i.key === "fleet") }))
+        .map(group => ({ ...group, items: group.items.filter(i => i.key === "garage" || i.key === "fleet") }))
         .filter(group => group.items.length > 0)
     : canViewAll
     ? NAV_GROUPS
     : NAV_GROUPS
-        .map(group => ({ ...group, items: group.items.filter(i => i.key !== "maintenance" && i.key !== "maintenanceAnalytics") }));
+        .map(group => ({ ...group, items: group.items.filter(i => i.key !== "garage") }));
 
   // Load reservation-related notification data. Runs on mount and every 60s
   // so the "pickup within 24h" banner and nav badge count stay current

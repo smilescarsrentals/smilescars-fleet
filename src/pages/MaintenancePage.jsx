@@ -37,7 +37,7 @@ function fmtOdometer(val) {
   return Number(digits).toLocaleString() + " Km";
 }
 
-export default function MaintenancePage({ staffName, role }) {
+export default function MaintenancePage({ staffName, role, embedded }) {
   // Manager gets full visibility into Maintenance but can't touch anything —
   // this is Garage Manager's operational tool. Admin and Garage Manager can
   // both edit; Manager is the one role that's explicitly view-only here.
@@ -126,11 +126,11 @@ export default function MaintenancePage({ staffName, role }) {
   }, [fleet]);
 
   return (
-    <div style={{ padding: "1.25rem 1.5rem" }}>
+    <div style={{ padding: embedded ? "1rem 1.5rem 1.5rem" : "1.25rem 1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: 10 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Maintenance</h1>
-          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "2px 0 0" }}>
+          {!embedded && <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Maintenance</h1>}
+          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: embedded ? 0 : "2px 0 0" }}>
             {logs.length} work order{logs.length !== 1 ? "s" : ""} on file
           </p>
         </div>

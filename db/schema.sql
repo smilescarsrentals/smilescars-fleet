@@ -550,3 +550,39 @@ ALTER TABLE reservations ADD COLUMN IF NOT EXISTS cancel_reason      text;
 ALTER TABLE reservations ADD COLUMN IF NOT EXISTS cancelled_by       text;
 ALTER TABLE reservations ADD COLUMN IF NOT EXISTS cancelled_at       timestamp;
 UPDATE reservations SET status = 'Active' WHERE status IS NULL;
+
+-- Garage: vendors/suppliers and parts inventory with real stock tracking.
+CREATE TABLE IF NOT EXISTS vendors (
+  id               text PRIMARY KEY,
+  name             text NOT NULL,
+  contact_person   text,
+  phone            text,
+  location         text,
+  categories       text,
+  payment_terms    text,
+  notes            text,
+  active           text DEFAULT 'TRUE',
+  created_at       timestamp DEFAULT now(),
+  updated_at       timestamp DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS parts (
+  id                 text PRIMARY KEY,
+  name               text NOT NULL,
+  category           text,
+  vendor_id          text REFERENCES vendors(id) ON DELETE SET NULL,
+  unit_cost          numeric DEFAULT 0,
+  quantity_on_hand   numeric DEFAULT 0,
+  reorder_threshold  numeric DEFAULT 0,
+  notes              text,
+  active             text DEFAULT 'TRUE',
+  created_at         timestamp DEFAULT now(),
+  updated_at         timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_parts_vendor ON parts(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_parts_category ON parts(category);
+
+-- Links a job card item back to the part it was drawn from (nullable --
+-- free-text items have no part_id) so stock decrements are traceable.
+ALTER TABLE maintenance_items ADD COLUMN IF NOT EXISTS part_id text REFERENCES parts(id) ON DELETE SET NULL;

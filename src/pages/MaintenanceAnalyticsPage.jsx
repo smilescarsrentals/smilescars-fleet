@@ -6,7 +6,7 @@ function fmtMoney(n) {
 }
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-export default function MaintenanceAnalyticsPage() {
+export default function MaintenanceAnalyticsPage({ embedded }) {
   const [logs, setLogs] = useState([]);
   const [items, setItems] = useState([]);
   const [fleet, setFleet] = useState([]);
@@ -87,11 +87,13 @@ export default function MaintenanceAnalyticsPage() {
   }, [logs, plateToType]);
 
   return (
-    <div style={{ padding: "1.25rem 1.5rem" }}>
-      <div style={{ marginBottom: "1.25rem" }}>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text)" }}>Maintenance Analytics</div>
-        <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>Spend and repair trends across the fleet.</div>
-      </div>
+    <div style={{ padding: embedded ? "1rem 1.5rem 1.5rem" : "1.25rem 1.5rem" }}>
+      {!embedded && (
+        <div style={{ marginBottom: "1.25rem" }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text)" }}>Maintenance Analytics</div>
+          <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>Spend and repair trends across the fleet.</div>
+        </div>
+      )}
 
       {err && <p style={{ color: "var(--red)", fontSize: 13 }}>{err}</p>}
 
