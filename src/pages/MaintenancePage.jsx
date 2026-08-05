@@ -525,8 +525,11 @@ function MarkAvailableModal({ log, onClose }) {
 // parent work order's total_cost server-side.
 function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged }) {
   const [items, setItems] = useState([]);
+  const [parts, setParts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [fromStock, setFromStock] = useState(true);
+  const [selectedPartId, setSelectedPartId] = useState("");
   const [newItem, setNewItem] = useState({ itemName: "", quantity: "1", unitCost: "" });
   const [err, setErr] = useState("");
 
@@ -535,22 +538,38 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
   async function load() {
     setLoading(true);
     try {
-      const res = await api.getMaintenanceItems(workOrderId);
-      setItems(res?.data || []);
+      const [itemsRes, partsRes] = await Promise.all([api.getMaintenanceItems(workOrderId), api.getParts()]);
+      setItems(itemsRes?.data || []);
+      setParts((partsRes?.data || []).filter(p => p.active));
     } finally {
       setLoading(false);
     }
   }
 
+  const selectedPart = parts.find(p => p.id === selectedPartId);
+
+  const selectPart = (partId) => {
+    setSelectedPartId(partId);
+    const p = parts.find(x => x.id === partId);
+    if (p) setNewItem(n => ({ ...n, itemName: p.name, unitCost: String(p.unitCost) }));
+  };
+
   const handleAdd = async () => {
     if (!newItem.itemName.trim()) { setErr("Item name is required."); return; }
+    const qty = Number(newItem.quantity) || 1;
+    if (fromStock && selectedPart && qty > selectedPart.quantityOnHand) {
+      setErr(`Only ${selectedPart.quantityOnHand} in stock.`);
+      return;
+    }
     setErr("");
     try {
       await api.addMaintenanceItem({
         workOrderId, itemName: newItem.itemName,
-        quantity: Number(newItem.quantity) || 1, unitCost: Number(newItem.unitCost) || 0, staffName,
+        quantity: qty, unitCost: Number(newItem.unitCost) || 0, staffName,
+        partId: fromStock && selectedPartId ? selectedPartId : undefined,
       });
       setNewItem({ itemName: "", quantity: "1", unitCost: "" });
+      setSelectedPartId("");
       setAdding(false);
       await load();
       onChanged();
@@ -580,7 +599,10 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
         <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden" }}>
           {items.map(item => (
             <div key={item.id} style={{ display: "flex", alignItems: "center", padding: "7px 10px", borderBottom: "1px solid var(--border-light)", fontSize: 12.5, gap: 8 }}>
-              <span style={{ flex: 1 }}>{item.itemName}</span>
+              <span style={{ flex: 1 }}>
+                {item.itemName}
+                {item.partId && <span title="From stock" style={{ marginLeft: 5, fontSize: 10, color: "var(--sc-blue)" }}>📦</span>}
+              </span>
               <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{item.quantity} × {fmtMoney(item.unitCost)}</span>
               <span style={{ fontWeight: 700, flexShrink: 0, minWidth: 70, textAlign: "right" }}>{fmtMoney(item.lineTotal)}</span>
               {canEdit && (
@@ -594,17 +616,47 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
 
       {adding && (
         <div style={{ border: "1.5px solid var(--sc-blue)", borderRadius: 8, padding: 10, marginTop: items.length > 0 ? 0 : 8 }}>
-          <input style={{ ...S.input, marginBottom: 6 }} placeholder="Item name (e.g. Brake pads)" value={newItem.itemName}
-            onChange={e => setNewItem(n => ({ ...n, itemName: e.target.value }))} autoFocus />
+          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+            {[["stock","From Stock"],["free","Free Text"]].map(([val,lab]) => (
+              <button key={val} type="button"
+                onClick={() => { setFromStock(val==="stock"); setSelectedPartId(""); setNewItem({ itemName:"", quantity:"1", unitCost:"" }); setErr(""); }}
+                style={{ flex:1, padding:"6px 0", fontSize:11.5, fontWeight:600, borderRadius:6, cursor:"pointer", fontFamily:"inherit",
+                  border:`1.5px solid ${(val==="stock")===fromStock ? "var(--sc-blue)" : "var(--border)"}`,
+                  background: (val==="stock")===fromStock ? "var(--blue-bg)" : "var(--surface)",
+                  color: (val==="stock")===fromStock ? "var(--sc-blue)" : "var(--text-muted)" }}>
+                {lab}
+              </button>
+            ))}
+          </div>
+
+          {fromStock ? (
+            <select style={{ ...S.input, marginBottom: 6 }} value={selectedPartId} onChange={e => selectPart(e.target.value)}>
+              <option value="">Select a part…</option>
+              {parts.map(p => (
+                <option key={p.id} value={p.id} disabled={p.quantityOnHand <= 0}>
+                  {p.name} — {p.quantityOnHand} in stock{p.quantityOnHand <= 0 ? " (out of stock)" : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input style={{ ...S.input, marginBottom: 6 }} placeholder="Item name (e.g. Brake pads)" value={newItem.itemName}
+              onChange={e => setNewItem(n => ({ ...n, itemName: e.target.value }))} autoFocus />
+          )}
+
+          {fromStock && selectedPart && selectedPart.quantityOnHand <= selectedPart.reorderThreshold && selectedPart.reorderThreshold > 0 && (
+            <p style={{ fontSize: 11, color: "#d97706", margin: "0 0 6px" }}>⚠ Low stock — only {selectedPart.quantityOnHand} left</p>
+          )}
+
           <div style={{ display: "flex", gap: 6 }}>
             <input style={{ ...S.input, width: 70 }} type="number" min="0" placeholder="Qty" value={newItem.quantity}
               onChange={e => setNewItem(n => ({ ...n, quantity: e.target.value }))} />
             <input style={{ ...S.input, flex: 1 }} type="number" min="0" placeholder="Unit cost (TZS)" value={newItem.unitCost}
+              disabled={fromStock && !!selectedPart}
               onChange={e => setNewItem(n => ({ ...n, unitCost: e.target.value }))} />
           </div>
           {err && <p style={S.err}>{err}</p>}
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-            <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: "6px 0", fontSize: 12 }} onClick={() => { setAdding(false); setErr(""); }}>Cancel</button>
+            <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: "6px 0", fontSize: 12 }} onClick={() => { setAdding(false); setErr(""); setSelectedPartId(""); }}>Cancel</button>
             <button type="button" style={{ flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 600, color: "#fff", background: "var(--sc-blue)", border: "none", borderRadius: 6, cursor: "pointer" }} onClick={handleAdd}>Add</button>
           </div>
         </div>
