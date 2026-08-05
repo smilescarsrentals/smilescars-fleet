@@ -4,9 +4,11 @@ import { api } from "../lib/api";
 export default function VendorsPage({ staffName, role }) {
   const canEdit = role !== "Manager";
   const [vendors, setVendors] = useState([]);
+  const [vendorCategories, setVendorCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
 
@@ -15,8 +17,9 @@ export default function VendorsPage({ staffName, role }) {
   async function load() {
     setLoading(true); setErr("");
     try {
-      const res = await api.getVendors();
-      setVendors(res?.data || []);
+      const [vendorRes, catRes] = await Promise.all([api.getVendors(), api.getVendorCategories()]);
+      setVendors(vendorRes?.data || []);
+      setVendorCategories(catRes?.data || []);
     } catch (e) {
       setErr(e.message || "Could not load vendors.");
     } finally {
@@ -26,13 +29,15 @@ export default function VendorsPage({ staffName, role }) {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return vendors;
-    return vendors.filter(v =>
-      v.name.toLowerCase().includes(q) ||
-      (v.categories || "").toLowerCase().includes(q) ||
-      (v.contactPerson || "").toLowerCase().includes(q)
-    );
-  }, [vendors, search]);
+    return vendors.filter(v => {
+      if (categoryFilter && !(v.categoryList || []).some(c => c.id === categoryFilter)) return false;
+      if (!q) return true;
+      return v.name.toLowerCase().includes(q) ||
+        (v.categories || "").toLowerCase().includes(q) ||
+        (v.contactPerson || "").toLowerCase().includes(q) ||
+        (v.categoryList || []).some(c => c.name.toLowerCase().includes(q));
+    });
+  }, [vendors, search, categoryFilter]);
 
   const handleDelete = async (vendor) => {
     if (!window.confirm(`Delete vendor "${vendor.name}"?`)) return;
@@ -45,8 +50,15 @@ export default function VendorsPage({ staffName, role }) {
   return (
     <div style={{ padding: "1rem 1.5rem 1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
-        <input type="text" placeholder="Search vendors…" value={search} onChange={e => setSearch(e.target.value)}
-          style={{ flex: "1 1 240px", padding: "8px 12px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit" }} />
+        <div style={{ display: "flex", gap: 8, flex: "1 1 auto", flexWrap: "wrap" }}>
+          <input type="text" placeholder="Search vendors…" value={search} onChange={e => setSearch(e.target.value)}
+            style={{ flex: "1 1 220px", padding: "8px 12px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit" }} />
+          <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+            style={{ padding: "8px 10px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit" }}>
+            <option value="">All categories</option>
+            {vendorCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
         {canEdit && <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ Add Vendor</button>}
       </div>
 
@@ -73,6 +85,13 @@ export default function VendorsPage({ staffName, role }) {
                     {!v.active && <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-faint)", background: "var(--border-light)", borderRadius: 10, padding: "1px 8px" }}>Inactive</span>}
                   </div>
                   {v.categories && <p style={{ fontSize: 12, color: "var(--sc-blue)", margin: "3px 0 0" }}>{v.categories}</p>}
+                  {v.categoryList && v.categoryList.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                      {v.categoryList.map(c => (
+                        <span key={c.id} style={{ fontSize: 10.5, fontWeight: 600, color: "#8b5cf6", background: "#f3e8ff", borderRadius: 10, padding: "2px 8px" }}>{c.name}</span>
+                      ))}
+                    </div>
+                  )}
                   <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: "4px 0 0" }}>
                     {v.contactPerson && <>{v.contactPerson} · </>}{v.phone || "—"}
                   </p>
@@ -101,16 +120,16 @@ export default function VendorsPage({ staffName, role }) {
       )}
 
       {showAdd && (
-        <VendorModal staffName={staffName} onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />
+        <VendorModal staffName={staffName} vendorCategories={vendorCategories} onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />
       )}
       {editing && (
-        <VendorModal staffName={staffName} vendor={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
+        <VendorModal staffName={staffName} vendorCategories={vendorCategories} vendor={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
       )}
     </div>
   );
 }
 
-function VendorModal({ staffName, vendor, onClose, onSaved }) {
+function VendorModal({ staffName, vendor, vendorCategories, onClose, onSaved }) {
   const isEdit = !!vendor;
   const [form, setForm] = useState({
     name: vendor?.name || "", contactPerson: vendor?.contactPerson || "", phone: vendor?.phone || "",
@@ -118,16 +137,36 @@ function VendorModal({ staffName, vendor, onClose, onSaved }) {
     vendorType: vendor?.vendorType || "Parts Supplier",
     notes: vendor?.notes || "", active: vendor ? vendor.active : true,
   });
+  const [selectedCategories, setSelectedCategories] = useState((vendor?.categoryList || []).map(c => c.id));
+  const [categoryList, setCategoryList] = useState(vendorCategories || []);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const toggleCategory = (id) => setSelectedCategories(sel => sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id]);
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    try {
+      const res = await api.addVendorCategory({ name: newCategoryName.trim(), staffName });
+      const newCat = { id: res.id, name: newCategoryName.trim() };
+      setCategoryList(list => [...list, newCat].sort((a, b) => a.name.localeCompare(b.name)));
+      setSelectedCategories(sel => [...sel, res.id]);
+      setNewCategoryName("");
+      setAddingCategory(false);
+    } catch (e) { setErr(e.message); }
+  };
 
   const handleSave = async () => {
     if (!form.name.trim()) { setErr("Vendor name is required."); return; }
     setSaving(true); setErr("");
     try {
+      let vendorId = vendor?.id;
       if (isEdit) await api.editVendor({ id: vendor.id, ...form, staffName });
-      else await api.addVendor({ ...form, staffName });
+      else { const res = await api.addVendor({ ...form, staffName }); vendorId = res.id; }
+      await api.setVendorCategories({ vendorId, categoryIds: selectedCategories, staffName });
       onSaved();
     } catch (e) { setErr(e.message); }
     finally { setSaving(false); }
@@ -149,6 +188,31 @@ function VendorModal({ staffName, vendor, onClose, onSaved }) {
               <option value="Service Provider">Service Provider</option>
               <option value="Both">Both</option>
             </select></div>
+
+          <div style={S.field}>
+            <label style={S.label}>Categories</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {categoryList.map(c => (
+                <button key={c.id} type="button" onClick={() => toggleCategory(c.id)}
+                  style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit",
+                    border: `1.5px solid ${selectedCategories.includes(c.id) ? "#8b5cf6" : "var(--border)"}`,
+                    background: selectedCategories.includes(c.id) ? "#f3e8ff" : "var(--surface)",
+                    color: selectedCategories.includes(c.id) ? "#8b5cf6" : "var(--text-muted)" }}>
+                  {c.name}
+                </button>
+              ))}
+            </div>
+            {addingCategory ? (
+              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                <input style={{ ...S.input, flex: 1 }} placeholder="New category name" value={newCategoryName}
+                  onChange={e => setNewCategoryName(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddCategory()} autoFocus />
+                <button type="button" onClick={handleAddCategory} style={{ padding: "0 14px", fontSize: 12, fontWeight: 600, color: "#fff", background: "#8b5cf6", border: "none", borderRadius: 6, cursor: "pointer" }}>Add</button>
+                <button type="button" onClick={() => { setAddingCategory(false); setNewCategoryName(""); }} style={{ padding: "0 10px", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 6, cursor: "pointer" }}>✕</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setAddingCategory(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "#8b5cf6", background: "none", border: "none", cursor: "pointer", marginTop: 8, padding: 0 }}>+ New Category</button>
+            )}
+          </div>
           <div style={S.field}><label style={S.label}>Contact Person</label>
             <input style={S.input} value={form.contactPerson} onChange={e => set("contactPerson", e.target.value)} /></div>
           <div style={S.field}><label style={S.label}>Phone</label>

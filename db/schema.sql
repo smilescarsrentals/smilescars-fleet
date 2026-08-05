@@ -688,3 +688,37 @@ CREATE TABLE IF NOT EXISTS checklist_instance_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_checklist_instance_items_instance ON checklist_instance_items(instance_id);
+
+-- Vendor categories: master list (extensible by Admin/Garage Manager) +
+-- many-to-many links, so a vendor can carry multiple categories
+-- (e.g. Tyres + Parts) separate from the coarser vendor_type field.
+CREATE TABLE IF NOT EXISTS vendor_categories (
+  id         text PRIMARY KEY,
+  name       text NOT NULL UNIQUE,
+  created_at timestamp DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS vendor_category_links (
+  id           text PRIMARY KEY,
+  vendor_id    text NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+  category_id  text NOT NULL REFERENCES vendor_categories(id) ON DELETE CASCADE,
+  UNIQUE(vendor_id, category_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vendor_category_links_vendor ON vendor_category_links(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_vendor_category_links_category ON vendor_category_links(category_id);
+
+INSERT INTO vendor_categories (id, name) VALUES
+  ('VC-GARAGE',    'Garage'),
+  ('VC-PARTS',     'Parts'),
+  ('VC-TYRES',     'Tyres'),
+  ('VC-BATTERY',   'Battery'),
+  ('VC-BODYPAINT', 'Body & Paint'),
+  ('VC-ELECTRICAL','Electrical'),
+  ('VC-ACCOOLING', 'AC / Cooling'),
+  ('VC-GLASS',     'Glass / Windscreen'),
+  ('VC-TOWING',    'Towing'),
+  ('VC-FUEL',      'Fuel'),
+  ('VC-UPHOLSTERY','Upholstery / Interior'),
+  ('VC-CARWASH',   'Car Wash / Detailing')
+ON CONFLICT (name) DO NOTHING;
