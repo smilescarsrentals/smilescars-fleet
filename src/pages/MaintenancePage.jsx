@@ -364,11 +364,22 @@ function DetailModal({ log, staffName, onClose, onUpdated }) {
 function MarkAvailableModal({ log, onClose }) {
   const [locations, setLocations] = useState([]);
   const [location, setLocation] = useState("");
+  const [currentKm, setCurrentKm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
 
   useEffect(() => {
     api.getConfig().then(res => setLocations(res?.locations || [])).finally(() => setLoading(false));
   }, []);
+
+  const handleClose = () => {
+    // Nothing is saved yet — Mark Available is intentionally still a stub
+    // (see note below) — this just validates the fields exist before
+    // closing, so the form behaves like a real save even though it isn't one.
+    if (!location) { setErr("Select a location."); return; }
+    if (!currentKm.trim()) { setErr("Current KM is required."); return; }
+    onClose();
+  };
 
   return (
     <div style={{ ...S.overlay, zIndex: 110 }} onClick={onClose}>
@@ -379,20 +390,30 @@ function MarkAvailableModal({ log, onClose }) {
         </div>
         <div style={S.mBody}>
           <div style={S.field}>
-            <label style={S.label}>To which location?</label>
+            <label style={S.label}>Current KM *</label>
+            <input style={S.input} value={currentKm} placeholder="e.g. 84,200"
+              onChange={e => setCurrentKm(e.target.value)}
+              onBlur={e => setCurrentKm(fmtOdometer(e.target.value).replace(" Km", ""))} />
+          </div>
+
+          <div style={S.field}>
+            <label style={S.label}>To which location? *</label>
             {loading ? (
               <p style={{ fontSize: 12, color: "var(--text-faint)" }}>Loading locations…</p>
             ) : (
               <select style={S.input} value={location} onChange={e => setLocation(e.target.value)}>
                 <option value="">Select a location…</option>
+                <option value="At Garage (Ready for Pickup)">At Garage (Ready for Pickup)</option>
                 {locations.map(l => <option key={l} value={l}>{l}</option>)}
               </select>
             )}
           </div>
+
+          {err && <p style={S.err}>{err}</p>}
           <p style={{ fontSize: 11.5, color: "var(--text-faint)", margin: "4px 0 10px" }}>
             This will be wired up to update the car's Fleet status and location shortly.
           </p>
-          <button type="button" className="btn btn-ghost" style={{ width: "100%" }} onClick={onClose}>
+          <button type="button" className="btn btn-ghost" style={{ width: "100%" }} onClick={handleClose}>
             Close
           </button>
         </div>
