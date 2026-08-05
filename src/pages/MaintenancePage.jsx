@@ -227,10 +227,10 @@ export default function MaintenancePage({ staffName, role }) {
       {loading ? (
         <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>Loading…</div>
       ) : (
-        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
           {STATUSES.map(status => (
             <div key={status} style={{
-              flex: "0 0 280px", background: "var(--bg)", border: "1.5px solid var(--border)",
+              minWidth: 0, background: "var(--bg)", border: "1.5px solid var(--border)",
               borderRadius: 12, display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 190px)",
             }}>
               <div style={{
@@ -302,9 +302,9 @@ function WorkOrderCard({ log, onClick }) {
       borderLeft: `3px solid ${STATUS_COLORS[log.status]}`,
       borderRadius: 8, padding: "9px 10px", boxShadow: "var(--shadow-sm)", cursor: "pointer",
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6, flexWrap: "wrap" }}>
         <span style={{ fontWeight: 700, fontSize: 13 }}>{log.plate}</span>
-        <span style={{ fontSize: 10, color: "var(--text-faint)" }}>{log.refNo || log.id}</span>
+        <span style={{ fontSize: 9.5, color: "var(--text-faint)", wordBreak: "break-all", textAlign: "right" }}>{log.refNo || log.id}</span>
       </div>
       {log.issueDescription && (
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0", lineHeight: 1.4 }}>{log.issueDescription}</p>

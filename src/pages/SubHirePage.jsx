@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../lib/api";
+import DateField from "../components/DateField";
+import { exportToExcel } from "../lib/exportExcel";
 
 function fmtDate(val) {
   if (!val) return "—";
@@ -24,6 +26,7 @@ export default function SubHirePage({ staffName }) {
   const [selected, setSelected] = useState(null);
   const [search,   setSearch]   = useState("");
   const [fStatus,  setFStatus]  = useState("");
+  const [showExport, setShowExport] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -57,10 +60,15 @@ export default function SubHirePage({ staffName }) {
           <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{entries.length} total bookings</div>
         </div>
         <div style={{ display:"flex",gap:8 }}>
+          <button type="button" className="btn btn-success btn-sm" onClick={() => setShowExport(v => !v)}>⬇ Export</button>
           <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ Add Booking</button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={load}>↻</button>
         </div>
       </div>
+
+      {showExport && (
+        <ExportPanel entries={entries} onClose={() => setShowExport(false)} />
+      )}
 
       <div className="sc-stat-grid" style={{ gridTemplateColumns:"repeat(3,1fr)" }}>
         {[
@@ -139,6 +147,224 @@ export default function SubHirePage({ staffName }) {
 
       {showAdd && <AddSubHireModal staffName={staffName} onClose={() => setShowAdd(false)} onSaved={load} />}
       {selected && <ReturnSubHireModal entry={selected} staffName={staffName} onClose={() => setSelected(null)} onSaved={load} />}
+    </div>
+  );
+}
+
+// ── Export Panel ──────────────────────────────────────────────
+// Two statement modes: Client Statement shows the client-facing side of
+// the deal (who rented, what they owe/paid); Supplier Statement is the
+// mirror for the supplier's side, deliberately excluding client pricing —
+// it keeps just one column noting who the customer was, for the
+// supplier's own reconciliation, without exposing your client-side rates.
+async function loadJsPDFSubHire() {
+  if (window.jspdf) return window.jspdf.jsPDF;
+  await new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  return window.jspdf.jsPDF;
+}
+
+const CLIENT_COLUMNS = [
+  ["Plate", e => e.plate],
+  ["Vehicle", e => e.vehicleDesc],
+  ["Client", e => e.client],
+  ["Phone", e => e.clientPhone],
+  ["Booked From", e => fmtDate(e.bookedFrom)],
+  ["Return Date", e => fmtDate(e.returnDate)],
+  ["Actual Return", e => fmtDate(e.actualReturn)],
+  ["Location", e => e.location],
+  ["Amount", e => fmt(e.amount, e.currency)],
+  ["Payment Status", e => e.paymentStatus],
+  ["Amount Paid", e => fmt(e.amountPaid, e.currency)],
+  ["Police Fine", e => e.policeFine || "—"],
+  ["Parking Fine", e => e.parkingFine || "—"],
+  ["Remarks", e => e.remarks || "—"],
+  ["Staff", e => e.staffName],
+];
+
+const SUPPLIER_COLUMNS = [
+  ["Plate", e => e.plate],
+  ["Vehicle", e => e.vehicleDesc],
+  ["Supplier", e => e.supplierName],
+  ["Supplier Contact", e => e.supplierContact],
+  ["Customer (Ref)", e => e.client],
+  ["Booked From", e => fmtDate(e.bookedFrom)],
+  ["Return Date", e => fmtDate(e.returnDate)],
+  ["Actual Return", e => fmtDate(e.actualReturn)],
+  ["Location", e => e.location],
+  ["Supplier Amount", e => fmt(e.supplierAmount, e.supplierCurrency)],
+  ["Supplier Pay Status", e => e.supplierPayStatus],
+  ["Supplier Amount Paid", e => fmt(e.supplierAmountPaid, e.supplierCurrency)],
+  ["Remarks", e => e.remarks || "—"],
+];
+
+function ExportPanel({ entries, onClose }) {
+  const [mode, setMode]   = useState("client"); // "client" | "supplier"
+  const [status, setStatus] = useState("");
+  const [supplier, setSupplier] = useState("");
+  const [payStatus, setPayStatus] = useState("");
+  const [location, setLocation] = useState("");
+  const [from, setFrom]   = useState("");
+  const [to, setTo]       = useState("");
+  const [generating, setGenerating] = useState(false);
+
+  const suppliers = useMemo(() => [...new Set(entries.map(e => e.supplierName).filter(Boolean))].sort(), [entries]);
+  const locations = useMemo(() => [...new Set(entries.map(e => e.location).filter(Boolean))].sort(), [entries]);
+
+  const filtered = useMemo(() => {
+    return entries.filter(e => {
+      if (status && e.status !== status) return false;
+      if (supplier && e.supplierName !== supplier) return false;
+      if (location && e.location !== location) return false;
+      if (payStatus) {
+        const relevant = mode === "client" ? e.paymentStatus : e.supplierPayStatus;
+        if (relevant !== payStatus) return false;
+      }
+      const bookedFrom = e.bookedFrom ? e.bookedFrom.slice(0, 10) : "";
+      if (from && (!bookedFrom || bookedFrom < from)) return false;
+      if (to && (!bookedFrom || bookedFrom > to)) return false;
+      return true;
+    });
+  }, [entries, status, supplier, location, payStatus, mode]);
+
+  const columns = mode === "client" ? CLIENT_COLUMNS : SUPPLIER_COLUMNS;
+  const label = () => {
+    const parts = [mode === "client" ? "ClientStatement" : "SupplierStatement"];
+    if (supplier) parts.push(supplier.replace(/\s/g, ""));
+    if (from || to) parts.push(`${from || "start"}_to_${to || "now"}`);
+    return parts.join("_");
+  };
+
+  const handleExportExcel = () => {
+    const rows = filtered.map(e => {
+      const row = {};
+      columns.forEach(([label, get]) => { row[label] = get(e); });
+      return row;
+    });
+    exportToExcel(`SmilesCars_SubHire_${label()}.xlsx`, [{ name: mode === "client" ? "Client Statement" : "Supplier Statement", rows }]);
+  };
+
+  const handleExportPDF = async () => {
+    setGenerating(true);
+    try {
+      const jsPDF = await loadJsPDFSubHire();
+      const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
+      const pageW = doc.internal.pageSize.getWidth();
+      const marginX = 10;
+      const usableW = pageW - marginX * 2;
+      const colW = usableW / columns.length;
+      const title = mode === "client" ? "Sub-Hire — Client Statement" : "Sub-Hire — Supplier Statement";
+
+      doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+      doc.text(title, marginX, 14);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+      doc.text(`Generated ${new Date().toLocaleDateString()} · ${filtered.length} bookings`, marginX, 20);
+
+      let y = 28;
+      const rowH = 7;
+      const drawHeader = () => {
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7.5);
+        doc.setFillColor(230, 230, 230);
+        doc.rect(marginX, y - 5, usableW, rowH, "F");
+        columns.forEach(([label], i) => {
+          doc.text(String(label), marginX + i * colW + 1, y);
+        });
+        y += rowH;
+      };
+      drawHeader();
+
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7.5);
+      filtered.forEach((e, idx) => {
+        if (y > doc.internal.pageSize.getHeight() - 12) {
+          doc.addPage();
+          y = 20;
+          drawHeader();
+        }
+        if (idx % 2 === 1) { doc.setFillColor(248, 248, 248); doc.rect(marginX, y - 5, usableW, rowH, "F"); }
+        columns.forEach(([, get], i) => {
+          const val = String(get(e) ?? "—");
+          const truncated = val.length > 22 ? val.slice(0, 20) + "…" : val;
+          doc.text(truncated, marginX + i * colW + 1, y);
+        });
+        y += rowH;
+      });
+
+      doc.save(`SmilesCars_SubHire_${label()}.pdf`);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const sel = { padding:"8px 10px",fontSize:13,border:"1.5px solid var(--border)",borderRadius:7,background:"var(--surface)",color:"var(--text)", width:"100%", boxSizing:"border-box" };
+
+  return (
+    <div style={{ background:"var(--green-bg)",border:"1px solid var(--green-border)",borderRadius:10,padding:"1rem",marginBottom:"1.25rem" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+        <p style={{ fontSize:14,fontWeight:600,color:"var(--green)",margin:0 }}>Export Sub-Hire</p>
+        <button type="button" onClick={onClose} style={{ background:"none",border:"none",cursor:"pointer",fontSize:14,color:"var(--text-muted)" }}>✕</button>
+      </div>
+
+      <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+        {[["client","Client Statement"],["supplier","Supplier Statement"]].map(([val,lab]) => (
+          <button key={val} type="button" onClick={() => { setMode(val); setPayStatus(""); }}
+            style={{ flex:1, padding:"8px 0", fontSize:13, fontWeight:600, borderRadius:7, cursor:"pointer",
+              border:`1.5px solid ${mode===val ? "var(--green)" : "var(--border)"}`,
+              background: mode===val ? "var(--surface)" : "transparent",
+              color: mode===val ? "var(--green)" : "var(--text-muted)" }}>
+            {lab}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10 }}>
+        <div><label style={{ fontSize:11,fontWeight:500,color:"var(--text-muted)",display:"block",marginBottom:4 }}>Status</label>
+          <select style={sel} value={status} onChange={e=>setStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            <option value="Active">Active</option>
+            <option value="Returned">Returned</option>
+          </select>
+        </div>
+        <div><label style={{ fontSize:11,fontWeight:500,color:"var(--text-muted)",display:"block",marginBottom:4 }}>Supplier</label>
+          <select style={sel} value={supplier} onChange={e=>setSupplier(e.target.value)}>
+            <option value="">All suppliers</option>
+            {suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div><label style={{ fontSize:11,fontWeight:500,color:"var(--text-muted)",display:"block",marginBottom:4 }}>{mode==="client" ? "Client" : "Supplier"} Payment Status</label>
+          <select style={sel} value={payStatus} onChange={e=>setPayStatus(e.target.value)}>
+            <option value="">All</option>
+            {PAYMENT_STATUSES.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div><label style={{ fontSize:11,fontWeight:500,color:"var(--text-muted)",display:"block",marginBottom:4 }}>Location</label>
+          <select style={sel} value={location} onChange={e=>setLocation(e.target.value)}>
+            <option value="">All locations</option>
+            {locations.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <DateField label="From" style={sel} value={from} onChange={e=>setFrom(e.target.value)} />
+          <DateField label="To" style={sel} value={to} onChange={e=>setTo(e.target.value)} />
+        </div>
+      </div>
+
+      <p style={{ fontSize:12,color:"var(--text-muted)",margin:"12px 0" }}>
+        {mode === "supplier" && "Client pricing is excluded from the Supplier Statement — only the customer name is shown for reference. "}
+        Exports {filtered.length} booking{filtered.length !== 1 ? "s" : ""} matching the filters above.
+      </p>
+
+      <div style={{ display:"flex", gap:8 }}>
+        <button type="button" className="btn btn-success" onClick={handleExportExcel} disabled={filtered.length===0}>
+          ⬇ Excel ({filtered.length})
+        </button>
+        <button type="button" className="btn btn-success" onClick={handleExportPDF} disabled={filtered.length===0 || generating}>
+          {generating ? "Generating…" : `⬇ PDF (${filtered.length})`}
+        </button>
+      </div>
     </div>
   );
 }

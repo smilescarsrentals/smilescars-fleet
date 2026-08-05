@@ -108,7 +108,7 @@ export default function LeadsPage({ staffName, role }) {
       {loading ? (
         <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>Loading…</div>
       ) : (
-        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
           {STAGES.map(stage => (
             <div
               key={stage}
@@ -116,7 +116,7 @@ export default function LeadsPage({ staffName, role }) {
               onDragLeave={() => setDragOverStage(null)}
               onDrop={e => handleDrop(e, stage)}
               style={{
-                flex: "0 0 280px", background: "var(--bg)",
+                minWidth: 0, background: "var(--bg)",
                 border: `1.5px solid ${dragOverStage === stage ? STAGE_COLORS[stage] : "var(--border)"}`,
                 borderRadius: 12, display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 190px)",
                 transition: "border-color .12s",
