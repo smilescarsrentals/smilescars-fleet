@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toTitleCase } from "../lib/textFormat";
+import { api } from "../lib/api";
 
 const ACTIONS = {
   checkOut:       { title: "Check Out Car",      color: "#16a34a", btnLabel: "Confirm Check Out"  },
@@ -36,6 +37,81 @@ function FineInput({ value, onChange, label }) {
   );
 }
 
+// Replaces the old free-text garage list. Internal = your own garage;
+// External = a real Vendor (Service Provider or Both), searched type-ahead
+// rather than picked from a giant dropdown. No "add new" escape hatch here
+// on purpose — vendors are managed in Garage -> Vendors now, so this stays
+// a single source of truth instead of drifting back into free text.
+export function GarageLocationPicker({ serviceLocationType, internalLocation, externalVendorId, onChange }) {
+  const [vendors, setVendors] = useState([]);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    api.getVendors().then(res => {
+      const all = res?.data || [];
+      setVendors(all.filter(v => v.active && (v.vendorType === "Service Provider" || v.vendorType === "Both")));
+    }).catch(() => {}).finally(() => setLoaded(true));
+  }, []);
+
+  const selectedVendor = vendors.find(v => v.id === externalVendorId);
+  const filtered = query.trim().length > 0
+    ? vendors.filter(v => v.name.toLowerCase().includes(query.toLowerCase()))
+    : vendors;
+
+  const isExternal = serviceLocationType === "External";
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        {[["Internal", "Our Garage"], ["External", "Outside Garage"]].map(([val, lab]) => (
+          <button key={val} type="button"
+            onClick={() => onChange({ serviceLocationType: val, internalLocation: val === "Internal" ? (internalLocation || "SmilesCars Garage") : "", externalVendorId: "" })}
+            style={{ flex: 1, padding: "8px 4px", fontSize: 12, fontWeight: 600, borderRadius: 7, cursor: "pointer", fontFamily: "inherit",
+              border: `1.5px solid ${serviceLocationType === val ? "var(--sc-blue)" : "#e5e7eb"}`,
+              background: serviceLocationType === val ? "var(--blue-bg)" : "#fff",
+              color: serviceLocationType === val ? "var(--sc-blue)" : "#666" }}>
+            {lab}
+          </button>
+        ))}
+      </div>
+
+      {isExternal ? (
+        <div style={{ position: "relative" }}>
+          <input style={{ width: "100%", padding: "9px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, boxSizing: "border-box", fontFamily: "inherit", background: selectedVendor ? "var(--blue-bg)" : "#fff" }}
+            placeholder="Type to search garages/vendors…" autoComplete="off"
+            value={selectedVendor ? selectedVendor.name : query}
+            onChange={e => { setQuery(e.target.value); onChange({ serviceLocationType, internalLocation, externalVendorId: "" }); setOpen(true); }}
+            onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+          {open && filtered.length > 0 && (
+            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", zIndex: 50, maxHeight: 180, overflowY: "auto" }}>
+              {filtered.slice(0, 20).map(v => (
+                <div key={v.id} style={{ padding: "9px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #f3f4f6" }}
+                  onMouseDown={() => { onChange({ serviceLocationType, internalLocation, externalVendorId: v.id }); setQuery(""); setOpen(false); }}>
+                  {v.name}
+                </div>
+              ))}
+            </div>
+          )}
+          {loaded && vendors.length === 0 && (
+            <p style={{ fontSize: 11.5, color: "#999", margin: "6px 0 0" }}>
+              No garage vendors set up yet — add one under Garage → Vendors (set type to Service Provider).
+            </p>
+          )}
+        </div>
+      ) : (
+        <select style={{ width: "100%", padding: "9px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, boxSizing: "border-box", fontFamily: "inherit" }}
+          value={internalLocation || "SmilesCars Garage"}
+          onChange={e => onChange({ serviceLocationType, internalLocation: e.target.value, externalVendorId })}>
+          <option value="SmilesCars Garage">SmilesCars Garage</option>
+          <option value="SmilesCars Office">SmilesCars Office</option>
+        </select>
+      )}
+    </div>
+  );
+}
+
 export default function ActionModal({ car, action, locations, garages, drivers, staff, staffName, role, blacklist, onConfirm, onClose, loading, embedded }) {
   const today = new Date().toISOString().split("T")[0];
   const canAddLocGarage = role === "Admin" || role === "Manager";
@@ -62,9 +138,9 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const [addingDriver,  setAddingDriver] = useState(false);
   const [newLoc,        setNewLoc]       = useState("");
   const [addingLoc,     setAddingLoc]    = useState(false);
-  const [garage,        setGarage]       = useState("");
-  const [newGarage,     setNewGarage]    = useState("");
-  const [addingGarage,  setAddingGarage] = useState(false);
+  const [serviceLocationType, setServiceLocationType] = useState("Internal");
+  const [internalLocation,    setInternalLocation]    = useState("SmilesCars Garage");
+  const [externalVendorId,    setExternalVendorId]    = useState("");
   const [assignedTo,    setAssignedTo]   = useState("");
   const [assignedQuery, setAssignedQuery]= useState("");
   const [assignedOpen,  setAssignedOpen] = useState(false);
@@ -82,7 +158,6 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   // destabilize this component's identity mid-render and reset its state.
   const uniq = (arr) => Array.from(new Set((arr || []).filter(Boolean)));
   const locationsList = uniq(locations);
-  const garagesList   = uniq(garages);
   const driversList   = uniq(drivers);
   const staffList     = uniq(staff);
 
@@ -109,11 +184,10 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
     if (isTransfer && !dropoffTo.trim())  { setErr("Drop-off location is required."); return; }
     if (isTransfer && !(addingDriver ? newDriver.trim() : driver)) { setErr("Driver Allocated is required for a Transfer."); return; }
     if ((needsClient && bookingType === "Rental") || isExtend) { if (!returnDate) { setErr("Return date is required."); return; } }
-    if (isMaintenance && !addingGarage && !garage) { setErr("Please select or add a garage."); return; }
+    if (isMaintenance && serviceLocationType === "External" && !externalVendorId) { setErr("Please select a garage."); return; }
     if (needsClient && paymentStatus === "Partial Paid" && !amountPaid) { setErr("Please enter amount paid."); return; }
     if (isStaffUse && !assignedTo) { setErr("Please select a staff member."); return; }
     const loc = addingLoc    ? newLoc.trim()    : location;
-    const gar = addingGarage ? newGarage.trim() : garage;
     const drv = addingDriver ? newDriver.trim() : driver;
     onConfirm({
       client, clientPhone,
@@ -122,9 +196,8 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
       amount: unformat(amount), currency,
       policeFine: unformat(policeFine), parkingFine: unformat(parkingFine),
       paymentStatus, amountPaid: unformat(amountPaid),
-      garage: gar, driver: drv, assignedTo,
+      serviceLocationType, internalLocation, externalVendorId, driver: drv, assignedTo,
       newLocation: addingLoc    ? loc : null,
-      newGarage:   addingGarage ? gar : null,
       newDriver:   addingDriver ? drv : null,
       bookingType: needsClient ? bookingType : undefined,
       pickupFrom: isTransfer ? pickupFrom.trim() : undefined,
@@ -378,19 +451,12 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
 
           {/* Maintenance */}
           {isMaintenance && (
-            <div style={S.field}><label style={S.label}>Garage *</label>
-              {!addingGarage ? (
-                <select style={sel} value={garage} onChange={e => { if (e.target.value === "__new__") setAddingGarage(true); else setGarage(e.target.value); }}>
-                  <option value="">— Select garage —</option>
-                  {garagesList.map(g => <option key={g}>{g}</option>)}
-                  {canAddLocGarage && <option value="__new__">+ Add new garage</option>}
-                </select>
-              ) : (
-                <div style={{ display:"flex", gap:6 }}>
-                  <input style={{ ...S.input, flex:1 }} placeholder="New garage name" value={newGarage} onChange={e => setNewGarage(e.target.value)} onBlur={e => setNewGarage(toTitleCase(e.target.value))} autoFocus />
-                  <button type="button" style={S.cancelSmall} onClick={() => setAddingGarage(false)}>✕</button>
-                </div>
-              )}
+            <div style={S.field}><label style={S.label}>Send to *</label>
+              <GarageLocationPicker
+                serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId}
+                onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev }) => {
+                  setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev);
+                }} />
             </div>
           )}
 

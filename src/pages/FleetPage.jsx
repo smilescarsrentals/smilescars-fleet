@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import { cache } from "../lib/cache";
 import { exportToExcel } from "../lib/exportExcel";
-import ActionModal from "../components/ActionModal";
+import ActionModal, { GarageLocationPicker } from "../components/ActionModal";
 import MoveCarModal from "../components/MoveCarModal";
 import RentalAgreementModal from "../components/RentalAgreementModal";
 import AddCarModal from "../components/AddCarModal";
@@ -196,7 +196,9 @@ export default function FleetPage({ staffName, role }) {
         amountPaid:    replaceCar.amountPaid,
         driver:        replaceCar.driver,
         location:      replaceCar.location,
-        garage:        fields.garage || "",
+        serviceLocationType: fields.serviceLocationType || "",
+        internalLocation:    fields.internalLocation || "",
+        externalVendorId:    fields.externalVendorId || "",
         remarks:       fields.remarks || "",
       });
       setReplaceCar(null);
@@ -579,9 +581,9 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
   const available = fleet.filter(c => c.status === "Available");
   const [replacePlate, setReplacePlate] = useState("");
   const [originalAction, setOriginalAction] = useState("garage"); // "garage" | "available"
-  const [garage,       setGarage]       = useState("");
-  const [newGarage,    setNewGarage]    = useState("");
-  const [addingGarage, setAddingGarage] = useState(false);
+  const [serviceLocationType, setServiceLocationType] = useState("Internal");
+  const [internalLocation,    setInternalLocation]    = useState("SmilesCars Garage");
+  const [externalVendorId,    setExternalVendorId]    = useState("");
   const [remarks,      setRemarks]      = useState("");
   const [err,          setErr]          = useState("");
   const [query,        setQuery]        = useState("");
@@ -597,12 +599,14 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
     if (!replacePlate) { setErr("Please select a replacement car."); return; }
     const repCar = available.find(c => c.plate === replacePlate);
     if (!repCar) { setErr("Selected car not found in available fleet."); return; }
-    if (originalAction === "garage" && !addingGarage && !garage) { setErr("Please select a garage."); return; }
+    if (originalAction === "garage" && serviceLocationType === "External" && !externalVendorId) { setErr("Please select a garage."); return; }
     onConfirm({
       replacePlate,
       replaceType:    repCar.type,
       originalAction,
-      garage: originalAction === "garage" ? (addingGarage ? newGarage.trim() : garage) : "",
+      serviceLocationType: originalAction === "garage" ? serviceLocationType : "",
+      internalLocation: originalAction === "garage" ? internalLocation : "",
+      externalVendorId: originalAction === "garage" ? externalVendorId : "",
       remarks,
     });
   };
@@ -665,20 +669,11 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
               ))}
             </div>
             {originalAction === "garage" && (
-              !addingGarage ? (
-                <select style={{ width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,boxSizing:"border-box",fontFamily:"inherit" }}
-                  value={garage} onChange={e => { if(e.target.value==="__new__") setAddingGarage(true); else setGarage(e.target.value); }}>
-                  <option value="">— Select garage —</option>
-                  {(garages||[]).map(g => <option key={g}>{g}</option>)}
-                  <option value="__new__">+ Add new garage</option>
-                </select>
-              ) : (
-                <div style={{ display:"flex",gap:6 }}>
-                  <input style={{ flex:1,padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,fontFamily:"inherit" }}
-                    placeholder="New garage name" value={newGarage} onChange={e=>setNewGarage(e.target.value)} autoFocus />
-                  <button type="button" style={{ padding:"9px 12px",border:"1.5px solid #e5e7eb",borderRadius:7,background:"#fff",cursor:"pointer",color:"#666" }} onClick={()=>setAddingGarage(false)}>✕</button>
-                </div>
-              )
+              <GarageLocationPicker
+                serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId}
+                onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev }) => {
+                  setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev);
+                }} />
             )}
           </div>
 
