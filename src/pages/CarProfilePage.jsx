@@ -405,22 +405,74 @@ const WORK_ORDER_STATUS_COLORS = {
 // endpoint needed for this).
 function CarMaintenanceTab({ plate }) {
   const [orders, setOrders] = useState([]);
+  const [checklists, setChecklists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
+  const [expandedChecklist, setExpandedChecklist] = useState(null);
 
   useEffect(() => {
-    api.getMaintenanceLog().then(res => {
-      const norm = plate.trim().toLowerCase().replace(/\s+/g, "");
-      const mine = (res?.data || []).filter(o => o.plate.trim().toLowerCase().replace(/\s+/g, "") === norm);
+    const norm = plate.trim().toLowerCase().replace(/\s+/g, "");
+    Promise.all([
+      api.getMaintenanceLog(),
+      api.getChecklistInstances({ plate }),
+    ]).then(([logRes, checklistRes]) => {
+      const mine = (logRes?.data || []).filter(o => o.plate.trim().toLowerCase().replace(/\s+/g, "") === norm);
       setOrders(mine);
+      setChecklists(checklistRes?.data || []);
     }).finally(() => setLoading(false));
   }, [plate]);
 
   if (loading) return <p style={S.empty}>Loading maintenance history…</p>;
-  if (orders.length === 0) return <p style={S.empty}>No maintenance work orders yet.</p>;
+  if (orders.length === 0 && checklists.length === 0) return <p style={S.empty}>No maintenance history yet.</p>;
+
+  const CHECKLIST_STATE_COLORS = { "Good": "#16a34a", "Needs Attention": "#d97706", "Fail": "#dc2626" };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      {checklists.length > 0 && (
+        <div>
+          <p style={{ fontSize: 11.5, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: ".3px", margin: "0 0 8px" }}>Checklists / Inspections</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {checklists.map(c => (
+              <div key={c.id} style={{ border: `1px solid ${c.hasFailure ? "#dc2626" : "#e5e7eb"}`, borderRadius: 10, overflow: "hidden" }}>
+                {c.hasFailure && (
+                  <div style={{ background: "#dc2626", color: "#fff", padding: "5px 14px", fontSize: 11.5, fontWeight: 700 }}>
+                    ⚠ ONE OR MORE ITEMS FAILED
+                  </div>
+                )}
+                <div onClick={() => setExpandedChecklist(expandedChecklist === c.id ? null : c.id)}
+                  style={{ padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{c.templateName}</span>
+                    <p style={{ fontSize: 11.5, color: "#999", margin: "3px 0 0" }}>
+                      {c.completedBy || "—"} · {fmtDateTime(c.createdAt)}{c.workOrderId ? " · linked to work order" : " · standalone"}
+                    </p>
+                  </div>
+                  <span style={{ fontSize: 11, color: "#aaa" }}>{expandedChecklist === c.id ? "▲ hide" : "▼ details"}</span>
+                </div>
+                {expandedChecklist === c.id && (
+                  <div style={{ borderTop: "1px solid #f3f4f6", padding: "10px 14px", background: "#fafafa" }}>
+                    {c.items.map(it => (
+                      <div key={it.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: "1px solid #eee", gap: 8 }}>
+                        <div>
+                          <span style={{ fontSize: 12.5 }}>{it.label}</span>
+                          {it.note && <p style={{ fontSize: 11.5, color: "#888", margin: "2px 0 0", fontStyle: "italic" }}>{it.note}</p>}
+                        </div>
+                        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, color: "#fff", background: CHECKLIST_STATE_COLORS[it.state], flexShrink: 0 }}>{it.state}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {orders.length > 0 && (
+        <div>
+          {checklists.length > 0 && <p style={{ fontSize: 11.5, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: ".3px", margin: "0 0 8px" }}>Work Orders</p>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {orders.map(o => (
         <div key={o.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden" }}>
           <div onClick={() => setExpanded(expanded === o.id ? null : o.id)}
@@ -444,6 +496,9 @@ function CarMaintenanceTab({ plate }) {
           {expanded === o.id && <CarMaintenanceOrderDetail workOrderId={o.id} />}
         </div>
       ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -639,3 +639,52 @@ CREATE INDEX IF NOT EXISTS idx_car_service_plate ON car_service_assignments(plat
 CREATE INDEX IF NOT EXISTS idx_car_service_template ON car_service_assignments(template_id);
 
 ALTER TABLE maintenance_log ADD COLUMN IF NOT EXISTS service_assignment_id text REFERENCES car_service_assignments(id) ON DELETE SET NULL;
+
+-- Checklist/Inspection templates: reusable item lists (e.g. "Pre-Rental
+-- Inspection"), filled out either against a work order or standalone
+-- against a car directly.
+CREATE TABLE IF NOT EXISTS checklist_templates (
+  id             text PRIMARY KEY,
+  name           text NOT NULL,
+  description    text,
+  active         text DEFAULT 'TRUE',
+  created_at     timestamp DEFAULT now(),
+  updated_at     timestamp DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS checklist_template_items (
+  id             text PRIMARY KEY,
+  template_id    text NOT NULL REFERENCES checklist_templates(id) ON DELETE CASCADE,
+  label          text NOT NULL,
+  sort_order     numeric DEFAULT 0,
+  created_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_checklist_template_items_template ON checklist_template_items(template_id);
+
+CREATE TABLE IF NOT EXISTS checklist_instances (
+  id             text PRIMARY KEY,
+  template_id    text NOT NULL REFERENCES checklist_templates(id) ON DELETE RESTRICT,
+  plate          text NOT NULL,
+  work_order_id  text REFERENCES maintenance_log(id) ON DELETE SET NULL,
+  completed_by   text,
+  has_failure    text DEFAULT 'FALSE',
+  created_at     timestamp DEFAULT now(),
+  updated_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_checklist_instances_plate ON checklist_instances(plate);
+CREATE INDEX IF NOT EXISTS idx_checklist_instances_wo ON checklist_instances(work_order_id);
+CREATE INDEX IF NOT EXISTS idx_checklist_instances_failure ON checklist_instances(has_failure);
+
+CREATE TABLE IF NOT EXISTS checklist_instance_items (
+  id             text PRIMARY KEY,
+  instance_id    text NOT NULL REFERENCES checklist_instances(id) ON DELETE CASCADE,
+  label          text NOT NULL,
+  state          text DEFAULT 'Good',
+  note           text,
+  sort_order     numeric DEFAULT 0,
+  created_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_checklist_instance_items_instance ON checklist_instance_items(instance_id);
