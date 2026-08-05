@@ -39,6 +39,7 @@ const READS = {
   getMaintenanceLog: reads.getMaintenanceLog,
   getMaintenanceItems: reads.getMaintenanceItems,
   getMaintenanceUpdates: reads.getMaintenanceUpdates,
+  getLeads: reads.getLeads,
   getSettings: reads.getSettings,
   getStaffList: reads.getStaffList,
   // Files, signatures, agreements — formerly Google Drive
@@ -90,6 +91,9 @@ const WRITES = {
   editMaintenanceItem: writes.editMaintenanceItem,
   deleteMaintenanceItem: writes.deleteMaintenanceItem,
   addMaintenanceUpdate: writes.addMaintenanceUpdate,
+  addLead: writes.addLead,
+  editLead: writes.editLead,
+  deleteLead: writes.deleteLead,
   setServiceSchedule: writes.setServiceSchedule,
   // Files, signatures, agreements — formerly Google Drive
   uploadBlacklistImage: files.uploadBlacklistImage,

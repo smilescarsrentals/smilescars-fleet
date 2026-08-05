@@ -513,3 +513,30 @@ CREATE INDEX IF NOT EXISTS idx_maintenance_updates_wo ON maintenance_updates(wor
 ALTER TABLE fleet ADD COLUMN IF NOT EXISTS next_service_due_km numeric;
 ALTER TABLE fleet ADD COLUMN IF NOT EXISTS last_known_odometer numeric;
 ALTER TABLE fleet ADD COLUMN IF NOT EXISTS odometer_updated_at timestamp;
+
+-- Leads pipeline (Kanban board): New / Contacted / Negotiating / Outcome.
+-- Sourced from WhatsApp automation (via /api endpoint, not direct table
+-- access) and manual entry. outcome ('Won'/'Lost') is a sub-state of the
+-- Outcome stage, not a separate stage.
+CREATE TABLE IF NOT EXISTS leads (
+  id                       text PRIMARY KEY,
+  client_name              text NOT NULL,
+  phone                    text NOT NULL,
+  booking_type             text DEFAULT 'Rental',
+  pick_up_location         text,
+  vehicle                  text,
+  pickup_date              timestamp,
+  return_date              timestamp,
+  source                   text DEFAULT 'WhatsApp',
+  stage                    text DEFAULT 'New',
+  outcome                  text,
+  assigned_staff           text,
+  notes                    text,
+  lost_reason              text,
+  last_contact_date        timestamp,
+  converted_reservation_id text,
+  created_at               timestamp DEFAULT now(),
+  updated_at               timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(stage);

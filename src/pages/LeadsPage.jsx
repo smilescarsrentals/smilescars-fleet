@@ -38,18 +38,11 @@ function todayStr() {
 }
 
 // ── Mock data (page built ahead of the Supabase table + WhatsApp integration) ──
-const MOCK_LEADS = [
-  { id: "LEAD-00001", clientName: "James Mushi", phone: "+255 754 111 222", bookingType: "Rental", pickUpLocation: "Dar es Salaam", vehicle: "Harrier/RAV4/Vanguard", pickupDate: "2026-08-10", returnDate: "2026-08-15", source: "WhatsApp", stage: "New", outcome: "", assignedStaff: "", notes: "", lostReason: "", lastContactDate: nowISO(), createdAt: nowISO(), updatedAt: nowISO(), convertedReservationId: "" },
-  { id: "LEAD-00002", clientName: "Grace Kimaro", phone: "+255 713 445 900", bookingType: "Transfer", pickUpLocation: "Zanzibar", vehicle: "Prado/Land Cruiser", pickupDate: "2026-08-06", returnDate: "2026-08-06", source: "Phone Call", stage: "Contacted", outcome: "", assignedStaff: "Amina", notes: "Called back, wants airport pickup at 4pm.", lostReason: "", lastContactDate: "2026-08-02T10:00:00Z", createdAt: "2026-08-01T09:00:00Z", updatedAt: "2026-08-02T10:00:00Z", convertedReservationId: "" },
-  { id: "LEAD-00003", clientName: "Peter Mnyamani", phone: "+255 655 900 111", bookingType: "Rental", pickUpLocation: "Arusha", vehicle: "Alphard/Wish", pickupDate: "2026-08-20", returnDate: "2026-08-28", source: "Referral", stage: "Negotiating", outcome: "", assignedStaff: "John", notes: "Asked for weekly discount, following up Friday.", lostReason: "", lastContactDate: "2026-08-03T14:00:00Z", createdAt: "2026-07-30T08:00:00Z", updatedAt: "2026-08-03T14:00:00Z", convertedReservationId: "" },
-  { id: "LEAD-00004", clientName: "Fatma Said", phone: "+255 777 222 333", bookingType: "Rental", pickUpLocation: "Dar es Salaam", vehicle: "IST/Aqua/Vitz", pickupDate: "2026-08-05", returnDate: "2026-08-09", source: "WhatsApp", stage: "Outcome", outcome: "Won", assignedStaff: "Amina", notes: "Confirmed, deposit received.", lostReason: "", lastContactDate: "2026-08-01T11:00:00Z", createdAt: "2026-07-28T12:00:00Z", updatedAt: "2026-08-01T11:00:00Z", convertedReservationId: "" },
-  { id: "LEAD-00005", clientName: "David Kessy", phone: "+255 622 888 001", bookingType: "Rental", pickUpLocation: "Arusha", vehicle: "Hilux/Navara/Ranger", pickupDate: "2026-08-14", returnDate: "2026-08-18", source: "Walk-in", stage: "Outcome", outcome: "Lost", assignedStaff: "John", notes: "", lostReason: "Went with another company", lastContactDate: "2026-07-29T09:00:00Z", createdAt: "2026-07-27T09:00:00Z", updatedAt: "2026-07-29T09:00:00Z", convertedReservationId: "" },
-];
-
 export default function LeadsPage({ staffName, role }) {
   const navigate = useNavigate();
   const [leads,   setLeads]   = useState([]);
   const [loading, setLoading] = useState(true);
+  const [err,     setErr]     = useState("");
   const [showAdd,    setShowAdd]    = useState(false);
   const [showDetail, setShowDetail] = useState(null);
   const [outcomePrompt, setOutcomePrompt] = useState(null);
@@ -58,13 +51,12 @@ export default function LeadsPage({ staffName, role }) {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    setLoading(true);
+    setLoading(true); setErr("");
     try {
-      // Backend not wired yet — falls back to mock data until the Leads
-      // Supabase table + /api endpoints exist. Swap for `api.getLeads()`
-      // once that's live.
-      const data = await api.getLeads().catch(() => null);
-      setLeads(data || MOCK_LEADS);
+      const res = await api.getLeads();
+      setLeads(res?.data || []);
+    } catch (e) {
+      setErr(e.message || "Could not load leads.");
     } finally {
       setLoading(false);
     }
@@ -77,8 +69,16 @@ export default function LeadsPage({ staffName, role }) {
   }, [leads]);
 
   async function moveStage(lead, newStage, outcome = "") {
+    const prevStage = lead.stage, prevOutcome = lead.outcome;
     setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, stage: newStage, outcome, updatedAt: nowISO() } : l));
-    try { await api.editLead({ id: lead.id, stage: newStage, outcome }); } catch { /* mock mode — ignore */ }
+    try {
+      await api.editLead({ id: lead.id, stage: newStage, outcome });
+    } catch (e) {
+      // Revert the optimistic move if the save actually failed, so the
+      // board never silently drifts out of sync with the database.
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, stage: prevStage, outcome: prevOutcome } : l));
+      setErr(e.message || "Could not move lead.");
+    }
   }
 
   function handleDrop(e, stage) {
@@ -102,6 +102,8 @@ export default function LeadsPage({ staffName, role }) {
         </div>
         <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ New Lead</button>
       </div>
+
+      {err && <p style={{ color: "var(--red)", fontSize: 13 }}>{err}</p>}
 
       {loading ? (
         <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>Loading…</div>
@@ -152,7 +154,7 @@ export default function LeadsPage({ staffName, role }) {
         <AddLeadModal
           staffName={staffName}
           onClose={() => setShowAdd(false)}
-          onSaved={(newLead) => { setLeads(prev => [newLead, ...prev]); setShowAdd(false); }}
+          onSaved={() => { setShowAdd(false); load(); }}
         />
       )}
 
@@ -161,10 +163,7 @@ export default function LeadsPage({ staffName, role }) {
           lead={showDetail}
           canEdit={role === "Admin" || role === "Manager" || true /* all staff per spec */}
           onClose={() => setShowDetail(null)}
-          onUpdated={(updated) => {
-            setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
-            setShowDetail(updated);
-          }}
+          onUpdated={() => { load(); setShowDetail(null); }}
           onDeleted={(id) => { setLeads(prev => prev.filter(l => l.id !== id)); setShowDetail(null); }}
           onConvert={(lead) => {
             navigate("/reservations", { state: { prefillFromLead: lead } });
@@ -177,10 +176,17 @@ export default function LeadsPage({ staffName, role }) {
           lead={outcomePrompt}
           onClose={() => setOutcomePrompt(null)}
           onChoose={(outcome, lostReason) => {
+            const prevStage = outcomePrompt.stage, prevOutcome = outcomePrompt.outcome, prevReason = outcomePrompt.lostReason;
             setLeads(prev => prev.map(l => l.id === outcomePrompt.id
               ? { ...l, stage: "Outcome", outcome, lostReason: outcome === "Lost" ? lostReason : "", updatedAt: nowISO() }
               : l));
-            api.editLead({ id: outcomePrompt.id, stage: "Outcome", outcome, lostReason: outcome === "Lost" ? lostReason : "" }).catch(() => {});
+            api.editLead({ id: outcomePrompt.id, stage: "Outcome", outcome, lostReason: outcome === "Lost" ? lostReason : "" })
+              .catch(e => {
+                setLeads(prev => prev.map(l => l.id === outcomePrompt.id
+                  ? { ...l, stage: prevStage, outcome: prevOutcome, lostReason: prevReason }
+                  : l));
+                setErr(e.message || "Could not save outcome.");
+              });
             setOutcomePrompt(null);
           }}
         />
@@ -299,14 +305,9 @@ function AddLeadModal({ staffName, onClose, onSaved }) {
     if (!form.clientName.trim()) { setErr("Client name is required."); return; }
     if (!form.phone.trim())      { setErr("Contact number is required."); return; }
     setSaving(true); setErr("");
-    const now = nowISO();
-    const newLead = {
-      id: `LEAD-${Date.now()}`, ...form, stage: "New", outcome: "", lostReason: "",
-      lastContactDate: now, createdAt: now, updatedAt: now, convertedReservationId: "",
-    };
     try {
-      await api.addLead(newLead).catch(() => null); // falls back silently until backend exists
-      onSaved(newLead);
+      await api.addLead({ ...form });
+      onSaved();
     } catch (e) { setErr(e.message); }
     finally { setSaving(false); }
   };
@@ -399,19 +400,16 @@ function DetailModal({ lead, canEdit, onClose, onUpdated, onDeleted, onConvert }
     if (!form.clientName.trim()) { setErr("Client name is required."); return; }
     if (form.stage === "Outcome" && form.outcome === "Lost" && !form.lostReason) { setErr("Please select a lost reason."); return; }
     setSaving(true); setErr("");
-    const updated = { ...lead, ...form, updatedAt: nowISO(), lastContactDate: nowISO() };
     try {
-      await api.editLead(updated).catch(() => null);
-      onUpdated(updated);
-      setEditing(false);
-    } catch (e) { setErr(e.message); }
-    finally { setSaving(false); }
+      await api.editLead({ id: lead.id, ...form });
+      onUpdated();
+    } catch (e) { setErr(e.message); setSaving(false); }
   };
 
   const handleDelete = async () => {
     if (!window.confirm("Delete this lead?")) return;
     setDeleting(true);
-    try { await api.deleteLead({ id: lead.id }).catch(() => null); onDeleted(lead.id); }
+    try { await api.deleteLead({ id: lead.id }); onDeleted(lead.id); }
     catch (e) { alert(e.message); setDeleting(false); }
   };
 
