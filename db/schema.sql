@@ -598,3 +598,44 @@ ALTER TABLE maintenance_log ADD COLUMN IF NOT EXISTS internal_location      text
 ALTER TABLE maintenance_log ADD COLUMN IF NOT EXISTS external_vendor_id     text REFERENCES vendors(id) ON DELETE SET NULL;
 ALTER TABLE maintenance_log ADD COLUMN IF NOT EXISTS flat_cost              numeric;
 UPDATE maintenance_log SET service_location_type = 'Internal' WHERE service_location_type IS NULL;
+
+-- Recurring service templates: reusable definitions (e.g. "Oil Change every
+-- 5,000km / 3 months") with an optional standard parts list, assignable to
+-- multiple cars independently.
+CREATE TABLE IF NOT EXISTS service_templates (
+  id                 text PRIMARY KEY,
+  name               text NOT NULL,
+  description        text,
+  interval_km        numeric,
+  interval_months    numeric,
+  active             text DEFAULT 'TRUE',
+  created_at         timestamp DEFAULT now(),
+  updated_at         timestamp DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS service_template_parts (
+  id             text PRIMARY KEY,
+  template_id    text NOT NULL REFERENCES service_templates(id) ON DELETE CASCADE,
+  part_id        text NOT NULL REFERENCES parts(id) ON DELETE CASCADE,
+  quantity       numeric DEFAULT 1,
+  created_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_template_parts_template ON service_template_parts(template_id);
+
+CREATE TABLE IF NOT EXISTS car_service_assignments (
+  id             text PRIMARY KEY,
+  plate          text NOT NULL,
+  template_id    text NOT NULL REFERENCES service_templates(id) ON DELETE CASCADE,
+  last_done_km   numeric,
+  last_done_date timestamp,
+  active         text DEFAULT 'TRUE',
+  created_at     timestamp DEFAULT now(),
+  updated_at     timestamp DEFAULT now(),
+  UNIQUE(plate, template_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_car_service_plate ON car_service_assignments(plate);
+CREATE INDEX IF NOT EXISTS idx_car_service_template ON car_service_assignments(template_id);
+
+ALTER TABLE maintenance_log ADD COLUMN IF NOT EXISTS service_assignment_id text REFERENCES car_service_assignments(id) ON DELETE SET NULL;
