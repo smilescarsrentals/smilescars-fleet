@@ -238,6 +238,7 @@ function PlateSearch({ plates, value, onChange }) {
 function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
   const [form, setForm] = useState({
     date: todayStr(), plate: "", product: "Diesel", mode: "amount", amount: "", litres: "", remarks: "", currentKm: "",
+    isShowroomCar: false, showroomDescription: "",
   });
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
@@ -289,7 +290,11 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
   const currentRental = carState;
 
   const handleSave = async () => {
-    if (!form.plate)   return setError("Please select a vehicle.");
+    if (form.isShowroomCar) {
+      if (!form.showroomDescription.trim()) return setError("Please describe the showroom car.");
+    } else {
+      if (!form.plate) return setError("Please select a vehicle.");
+    }
     if (!form.product) return setError("Please select a product.");
     if (!form.currentKm || !form.currentKm.replace(/,/g,""))
       return setError("Current KM is required.");
@@ -303,7 +308,8 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
       const payload = {
         action:       "addFuel",
         date:         form.date,
-        plate:        form.plate,
+        plate:        form.isShowroomCar ? `Showroom: ${form.showroomDescription.trim()}` : form.plate,
+        type:         form.isShowroomCar ? "Showroom Car" : undefined,
         product:      form.product,
         amount:       form.mode === "amount" ? form.amount.replace(/,/g, "") : "",
         litres:       form.mode === "litres" ? form.litres : "",
@@ -311,9 +317,9 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
         submittedBy:  staffName,
         remarks:      form.remarks || "",
         currentKm:    form.currentKm.replace(/,/g,"") || "",
-        // Auto-link to current rental
-        linkedClient: carState ? carState.linkedClient : "",
-        linkedClientPhone: carState?.car?.clientPhone || "",
+        // Auto-link to current rental — not applicable for showroom cars
+        linkedClient: !form.isShowroomCar && carState ? carState.linkedClient : "",
+        linkedClientPhone: !form.isShowroomCar ? (carState?.car?.clientPhone || "") : "",
       };
       const res = await post(payload);
       if (!res.success) throw new Error(res.error || "Save failed");
@@ -403,13 +409,28 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
             onChange={e => set("date", e.target.value)} style={S.input} />
 
           <label style={S.label}>Vehicle No.</label>
-          <PlateSearch
-            plates={plateOptions}
-            value={form.plate}
-            onChange={v => set("plate", v)}
-          />
 
-          {carState && (() => {
+          <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 500, color: "var(--text-muted)", margin: "2px 0 8px", cursor: "pointer" }}>
+            <input type="checkbox" checked={form.isShowroomCar}
+              onChange={e => set("isShowroomCar", e.target.checked)}
+              style={{ width: 15, height: 15, cursor: "pointer" }} />
+            Showroom Car <span style={{ color: "var(--text-faint)", fontWeight: 400 }}>(not in our fleet / unregistered)</span>
+          </label>
+
+          {form.isShowroomCar ? (
+            <input type="text" value={form.showroomDescription}
+              onChange={e => set("showroomDescription", e.target.value)}
+              placeholder="Describe the car (e.g. make, model, or any ID available)"
+              style={S.input} />
+          ) : (
+            <PlateSearch
+              plates={plateOptions}
+              value={form.plate}
+              onChange={v => set("plate", v)}
+            />
+          )}
+
+          {!form.isShowroomCar && carState && (() => {
             const themes = {
               rented:   { bg:"var(--yellow-bg)", border:"var(--yellow-border)", color:"var(--yellow)", icon:"🚗" },
               staff:    { bg:"var(--blue-bg)", border:"var(--blue-border)", color:"var(--sc-blue)", icon:"👤" },
@@ -427,7 +448,7 @@ function AddFuelModal({ fleet, subHire, staffName, onClose, onSaved }) {
               </div>
             );
           })()}
-          {form.plate && !carState && (
+          {!form.isShowroomCar && form.plate && !carState && (
             <div style={{ marginTop:8,fontSize:12,color:"var(--text-faint)" }}>
               ℹ️ Car is available — no client will be linked
             </div>
