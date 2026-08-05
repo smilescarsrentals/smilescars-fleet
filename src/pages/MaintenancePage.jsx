@@ -45,6 +45,10 @@ export default function MaintenancePage({ staffName, role }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showDetail, setShowDetail] = useState(null);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [search,      setSearch]      = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [dateFrom,    setDateFrom]    = useState("");
+  const [dateTo,      setDateTo]      = useState("");
 
   useEffect(() => { load(); }, []);
 
@@ -65,10 +69,44 @@ export default function MaintenancePage({ staffName, role }) {
   // latest logs list rather than trusting a stale closure).
   const openDetailLog = showDetail ? logs.find(l => l.id === showDetail.id) || showDetail : null;
 
+  // Search + status + date-range filter, applied before grouping into
+  // columns. All three combine (AND), not either/or.
+  const filteredLogs = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return logs.filter(l => {
+      if (q && !(l.plate.toLowerCase().includes(q) || (l.assignedMechanic||"").toLowerCase().includes(q) || (l.refNo||"").toLowerCase().includes(q))) return false;
+      if (statusFilter && l.status !== statusFilter) return false;
+      if (dateFrom && (!l.dateOpened || l.dateOpened.slice(0,10) < dateFrom)) return false;
+      if (dateTo && (!l.dateOpened || l.dateOpened.slice(0,10) > dateTo)) return false;
+      return true;
+    });
+  }, [logs, search, statusFilter, dateFrom, dateTo]);
+
   const byStatus = useMemo(() => {
     const map = {}; STATUSES.forEach(s => map[s] = []);
-    logs.forEach(l => { if (map[l.status]) map[l.status].push(l); });
+    filteredLogs.forEach(l => { if (map[l.status]) map[l.status].push(l); });
     return map;
+  }, [filteredLogs]);
+
+  // Cost summary — always computed off the FULL unfiltered log set, since
+  // "this month's total spend" shouldn't silently change because someone
+  // typed into the search box. Filtering affects the board, not the summary.
+  const costSummary = useMemo(() => {
+    const now = new Date();
+    const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+    let monthTotal = 0, allTimeTotal = 0;
+    const perCar = {};
+    logs.forEach(l => {
+      const cost = Number(l.totalCost) || 0;
+      allTimeTotal += cost;
+      if (l.dateOpened && l.dateOpened.slice(0,7) === thisMonthKey) monthTotal += cost;
+      if (cost > 0) perCar[l.plate] = (perCar[l.plate] || 0) + cost;
+    });
+    const topCars = Object.entries(perCar)
+      .sort((a,b) => b[1]-a[1])
+      .slice(0,5)
+      .map(([plate,total]) => ({ plate, total }));
+    return { monthTotal, allTimeTotal, topCars };
   }, [logs]);
 
   // Phase 4 scheduling — only cars with a due threshold actually set show up
@@ -99,6 +137,53 @@ export default function MaintenancePage({ staffName, role }) {
       </div>
 
       {err && <p style={{ color: "var(--red)", fontSize: 13 }}>{err}</p>}
+
+      {!loading && logs.length > 0 && (
+        <div style={{ marginBottom: 16, border: "1.5px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
+            <div>
+              <p style={{ fontSize: 11, color: "var(--text-faint)", margin: 0, textTransform: "uppercase", letterSpacing: 0.3 }}>This Month</p>
+              <p style={{ fontSize: 20, fontWeight: 700, margin: "2px 0 0", color: "var(--sc-blue)" }}>TZS {fmtMoney(costSummary.monthTotal)}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: 11, color: "var(--text-faint)", margin: 0, textTransform: "uppercase", letterSpacing: 0.3 }}>All Time</p>
+              <p style={{ fontSize: 20, fontWeight: 700, margin: "2px 0 0" }}>TZS {fmtMoney(costSummary.allTimeTotal)}</p>
+            </div>
+            {costSummary.topCars.length > 0 && (
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <p style={{ fontSize: 11, color: "var(--text-faint)", margin: 0, textTransform: "uppercase", letterSpacing: 0.3 }}>Top 5 Most Expensive Cars</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 4 }}>
+                  {costSummary.topCars.map(c => (
+                    <span key={c.plate} style={{ fontSize: 12.5 }}>
+                      <strong>{c.plate}</strong> <span style={{ color: "var(--text-muted)" }}>· TZS {fmtMoney(c.total)}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!loading && logs.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16, alignItems: "center" }}>
+          <input type="text" placeholder="Search plate, mechanic, or ref no…" value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ flex: "1 1 240px", padding: "8px 12px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit" }} />
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            style={{ padding: "8px 10px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit" }}>
+            <option value="">All statuses</option>
+            {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} placeholder="From"
+            style={{ padding: "8px 10px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit" }} />
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} placeholder="To"
+            style={{ padding: "8px 10px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit" }} />
+          {(search || statusFilter || dateFrom || dateTo) && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSearch(""); setStatusFilter(""); setDateFrom(""); setDateTo(""); }}>Clear</button>
+          )}
+        </div>
+      )}
 
       {!loading && dueSoon.length > 0 && (
         <div style={{ marginBottom: 16, border: "1.5px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
@@ -159,7 +244,9 @@ export default function MaintenancePage({ staffName, role }) {
 
               <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 8, overflowY: "auto" }}>
                 {byStatus[status].length === 0 && (
-                  <p style={{ fontSize: 12, color: "var(--text-faint)", textAlign: "center", padding: "1rem 0" }}>No work orders</p>
+                  <p style={{ fontSize: 12, color: "var(--text-faint)", textAlign: "center", padding: "1rem 0" }}>
+                    {(search || statusFilter || dateFrom || dateTo) ? "No matches" : "No work orders"}
+                  </p>
                 )}
                 {byStatus[status].map(log => (
                   <WorkOrderCard key={log.id} log={log} onClick={() => setShowDetail(log)} />
