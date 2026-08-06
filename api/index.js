@@ -68,6 +68,7 @@ const WRITES = {
   markReturned: writes.markReturned,
   extendBooking: writes.extendBooking,
   setMaintenance: writes.setMaintenance,
+  sendRentedCarToMaintenance: writes.sendRentedCarToMaintenance,
   setAvailable: writes.setAvailable,
   setStaffUse: writes.setStaffUse,
   updateLocation: writes.updateLocation,

@@ -161,6 +161,7 @@ export default function FleetPage({ staffName, role }) {
       if (action === "markReturned")   await api.markReturned(payload);
       if (action === "extendBooking")  await api.extendBooking(payload);
       if (action === "setMaintenance") await api.setMaintenance(payload);
+      if (action === "sendRentedToMaintenance") await api.sendRentedCarToMaintenance(payload);
       if (action === "setAvailable")   await api.setAvailable(payload);
       if (action === "setStaffUse")    await api.setStaffUse(payload);
       if (action === "markSold")       await api.markSold(payload);
@@ -564,6 +565,7 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
     <div style={row}>
       {btn("Returned","markReturned","var(--orange)","var(--orange-bg)")}
       {btn("Extend Booking","extendBooking","var(--blue-bg)","var(--sidebar-bg)")}
+      {btn("Maintenance","sendRentedToMaintenance","var(--amber)","var(--amber-bg)")}
       {btn("Replace","replace","var(--purple)","var(--purple-bg)",()=>onReplace(car))}
     </div>
   );

@@ -7,6 +7,7 @@ const ACTIONS = {
   extendBooking:  { title: "Extend Booking",      color: "#0284c7", btnLabel: "Confirm Extension"  },
   markReturned:   { title: "Mark as Returned",    color: "#2563eb", btnLabel: "Confirm Return"     },
   setMaintenance: { title: "Send to Maintenance", color: "#d97706", btnLabel: "Confirm"            },
+  sendRentedToMaintenance: { title: "Send for Quick Service", color: "#d97706", btnLabel: "Confirm" },
   setAvailable:   { title: "Mark as Available",   color: "#16a34a", btnLabel: "Confirm"            },
   setStaffUse:    { title: "Assign to Staff",     color: "#2563eb", btnLabel: "Confirm Assignment" },
   markSold:       { title: "Mark Car as Sold",    color: "#dc2626", btnLabel: "Confirm Sale"       },
@@ -164,7 +165,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const needsClient   = action === "checkOut";
   const isExtend      = action === "extendBooking";
   const isReturn      = action === "markReturned";
-  const isMaintenance = action === "setMaintenance";
+  const isMaintenance = action === "setMaintenance" || action === "sendRentedToMaintenance";
   const isAvailable   = action === "setAvailable";
   const isSold        = action === "markSold";
   const isStaffUse    = action === "setStaffUse";
@@ -457,6 +458,11 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev }) => {
                   setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev);
                 }} />
+              {action === "sendRentedToMaintenance" && (
+                <p style={{ fontSize: 11.5, color: "#666", margin: "6px 0 0" }}>
+                  {car.currentClient ? `${car.currentClient}'s booking stays intact` : "The client's booking stays intact"} — this car comes straight back to them once the service is done.
+                </p>
+              )}
             </div>
           )}
 
