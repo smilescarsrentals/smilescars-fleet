@@ -528,12 +528,11 @@ export default function FleetPage({ staffName, role }) {
 }
 
 function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOverdueCount, setOverdueBlock }) {
-  // Garage Manager can browse Fleet (it's relevant to their maintenance work)
-  // but shouldn't check cars in/out, move them, sell them, etc. — that's
-  // rental-operations territory, not theirs. View-only.
-  if (role === "Garage Manager") {
-    return <span style={{ fontSize: 10.5, color: "var(--text-faint)", fontStyle: "italic" }}>View only</span>;
-  }
+  // Garage Manager still can't touch rental-operations actions (Check Out,
+  // Extend, Sell, Staff Use, Move, Replace) — that stays view-only. But
+  // Maintenance and Mark Available ARE their job now, so those two get
+  // through per status rather than blocking everything equally.
+  const isGarageManager = role === "Garage Manager";
   const row = { display:"flex",alignItems:"center",flexWrap:"nowrap",gap:2 };
   const btn = (label, action, color, bg, onClick) => (
     <button type="button" key={action}
@@ -545,17 +544,24 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
   const isStaff = role !== "Admin" && role !== "Manager";
   if (car.status==="Available") return (
     <div style={row}>
-      {btn("Check Out","checkOut","var(--green)","var(--green-bg)", () => {
-        if (isStaff && myOverdueCount >= 2) { setOverdueBlock(true); return; }
-        onAction(car, "checkOut");
-      })}
-      {btn("Staff Use","setStaffUse","var(--yellow)","var(--yellow-bg)")}
-      {btn("Maintenance","setMaintenance","var(--amber)","var(--amber-bg)")}
-      {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
-      {canSell&&btn("Sold","markSold","var(--red)","var(--red-bg)")}
+      {isGarageManager ? (
+        btn("Maintenance","setMaintenance","var(--amber)","var(--amber-bg)")
+      ) : (
+        <>
+          {btn("Check Out","checkOut","var(--green)","var(--green-bg)", () => {
+            if (isStaff && myOverdueCount >= 2) { setOverdueBlock(true); return; }
+            onAction(car, "checkOut");
+          })}
+          {btn("Staff Use","setStaffUse","var(--yellow)","var(--yellow-bg)")}
+          {btn("Maintenance","setMaintenance","var(--amber)","var(--amber-bg)")}
+          {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
+          {canSell&&btn("Sold","markSold","var(--red)","var(--red-bg)")}
+        </>
+      )}
     </div>
   );
   if (car.status==="Staff Use") return (
+    isGarageManager ? <span style={{ fontSize: 10.5, color: "var(--text-faint)", fontStyle: "italic" }}>View only</span> :
     <div style={row}>
       {btn("Mark Available","setAvailable","var(--green)","var(--green-bg)")}
       {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
@@ -563,16 +569,22 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
   );
   if (car.status==="Rented") return (
     <div style={row}>
-      {btn("Returned","markReturned","var(--orange)","var(--orange-bg)")}
-      {btn("Extend Booking","extendBooking","var(--blue-bg)","var(--sidebar-bg)")}
-      {btn("Maintenance","sendRentedToMaintenance","var(--amber)","var(--amber-bg)")}
-      {btn("Replace","replace","var(--purple)","var(--purple-bg)",()=>onReplace(car))}
+      {isGarageManager ? (
+        btn("Maintenance","sendRentedToMaintenance","var(--amber)","var(--amber-bg)")
+      ) : (
+        <>
+          {btn("Returned","markReturned","var(--orange)","var(--orange-bg)")}
+          {btn("Extend Booking","extendBooking","var(--blue-bg)","var(--sidebar-bg)")}
+          {btn("Maintenance","sendRentedToMaintenance","var(--amber)","var(--amber-bg)")}
+          {btn("Replace","replace","var(--purple)","var(--purple-bg)",()=>onReplace(car))}
+        </>
+      )}
     </div>
   );
   if (car.status==="Maintenance") return (
     <div style={row}>
       {btn("Mark Available","setAvailable","var(--green)","var(--green-bg)")}
-      {btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
+      {!isGarageManager && btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
     </div>
   );
   return null;
