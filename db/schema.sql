@@ -797,3 +797,28 @@ CREATE INDEX IF NOT EXISTS idx_vendor_locations_vendor ON vendor_locations(vendo
 ALTER TABLE maintenance_items ADD COLUMN IF NOT EXISTS supplier_location text;
 ALTER TABLE customer_job_items ADD COLUMN IF NOT EXISTS supplier_location text;
 ALTER TABLE maintenance_log ADD COLUMN IF NOT EXISTS external_vendor_location text;
+
+-- Staff notifications: persisted, per-recipient, read/unread. recipient is
+-- either a staff name (individual) or a role string like 'Garage Manager'
+-- / 'Admin' (broadcast to everyone with that role). dedupe_key prevents
+-- the same underlying event (e.g. a scheduled reminder re-running) from
+-- creating duplicate notifications.
+CREATE TABLE IF NOT EXISTS notifications (
+  id           text PRIMARY KEY,
+  recipient    text NOT NULL,
+  type         text NOT NULL,
+  title        text NOT NULL,
+  message      text,
+  link_path    text,
+  read         text DEFAULT 'FALSE',
+  read_at      timestamp,
+  dedupe_key   text,
+  created_at   timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient, read, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe ON notifications(dedupe_key) WHERE dedupe_key IS NOT NULL;
+
+-- Per-staff setting: receive a reminder for EVERY reservation (not just
+-- their own) 24h before pickup.
+ALTER TABLE config ADD COLUMN IF NOT EXISTS receives_all_reservation_reminders text DEFAULT 'FALSE';

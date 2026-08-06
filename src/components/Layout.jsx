@@ -80,6 +80,183 @@ const NAV_GROUPS = [
   ]},
 ];
 
+// Short synthesized chime via the Web Audio API — no static audio file
+// needed, keeps this self-contained. Two quick tones so it reads as a
+// distinct "notification" sound rather than a generic beep.
+function playChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const playTone = (freq, startTime, duration) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = "sine";
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.15, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+      osc.start(startTime); osc.stop(startTime + duration);
+    };
+    const now = ctx.currentTime;
+    playTone(880, now, 0.15);
+    playTone(1320, now + 0.12, 0.18);
+  } catch { /* audio not available (e.g. no user gesture yet) — silently skip */ }
+}
+
+const NOTIF_ICONS = {
+  fleet_to_garage: "🔧", low_stock: "⚠️", car_out_for_service: "🚗", car_back_from_service: "✅",
+  reservation_reminder: "📅", unpaid_customer_job: "💰",
+};
+
+function timeAgo(iso) {
+  if (!iso) return "";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// Bell icon + dropdown in the topbar. Polls every 60s (same cadence as the
+// existing reservation-urgency polling) — plays a chime only when the
+// unread count genuinely increases since the last check, not on every
+// poll, so opening the dropdown or a normal refresh doesn't re-trigger it.
+function NotificationBell({ staffName }) {
+  const navigate = useNavigate();
+  const [items, setItems] = useState([]);
+  const [unread, setUnread] = useState(0);
+  const [open, setOpen] = useState(false);
+  const prevUnreadRef = useState({ current: null })[0]; // null = no baseline yet (first poll)
+
+  useEffect(() => {
+    if (!staffName) return;
+    const poll = () => {
+      api.getUnreadNotificationCount(staffName).then(res => {
+        const count = res?.count || 0;
+        // Only chime once a baseline exists and the count has genuinely
+        // gone UP since the last poll — not on the very first load (that
+        // would chime for every pre-existing unread notification on
+        // login) and not when it goes down (someone read something).
+        if (prevUnreadRef.current !== null && count > prevUnreadRef.current) {
+          playChime();
+        }
+        prevUnreadRef.current = count;
+        setUnread(count);
+      }).catch(() => {});
+    };
+    poll();
+    const interval = setInterval(poll, 60000);
+    return () => clearInterval(interval);
+  }, [staffName]);
+
+  // Standing "check the app" chime at 9am / 2pm / 4:30pm EAT, regardless
+  // of whether anything new actually arrived — a periodic nudge, not a
+  // new-item alert. Only reaches staff who have the tab open at that
+  // moment; the always-reaches-everyone version is push (later, once the
+  // PWA/Add-to-Home-Screen layer exists). Checked once a minute against
+  // the browser's local time — assumes the device is set to Tanzania time,
+  // same assumption the rest of the app already makes.
+  useEffect(() => {
+    if (!staffName) return;
+    const CHECK_TIMES = [[9, 0], [14, 0], [16, 30]];
+    let lastFiredMinute = null;
+    const check = () => {
+      const now = new Date();
+      const hm = `${now.getHours()}:${now.getMinutes()}`;
+      if (hm === lastFiredMinute) return; // already fired this exact minute
+      const matches = CHECK_TIMES.some(([h, m]) => now.getHours() === h && now.getMinutes() === m);
+      if (matches) { playChime(); lastFiredMinute = hm; }
+    };
+    const interval = setInterval(check, 30000);
+    return () => clearInterval(interval);
+  }, [staffName]);
+
+  const loadList = () => {
+    api.getNotifications(staffName).then(res => setItems(res?.data || [])).catch(() => {});
+  };
+
+  const handleOpen = () => {
+    setOpen(v => !v);
+    if (!open) loadList();
+  };
+
+  const handleClick = async (n) => {
+    if (!n.read) {
+      await api.markNotificationRead({ id: n.id }).catch(() => {});
+      setUnread(u => Math.max(0, u - 1));
+      setItems(list => list.map(i => i.id === n.id ? { ...i, read: true } : i));
+    }
+    setOpen(false);
+    if (n.linkPath) navigate(n.linkPath);
+  };
+
+  const handleMarkAllRead = async (e) => {
+    e.stopPropagation();
+    await api.markAllNotificationsRead({ staffName }).catch(() => {});
+    setUnread(0);
+    setItems(list => list.map(i => ({ ...i, read: true })));
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button type="button" onClick={handleOpen}
+        style={{ position: "relative", background: "none", border: "none", cursor: "pointer", padding: "6px 8px", borderRadius: 8, display: "flex", alignItems: "center" }}
+        onMouseEnter={e => e.currentTarget.style.background = "var(--bg)"}
+        onMouseLeave={e => e.currentTarget.style.background = "none"}
+        title="Notifications">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="20" height="20" style={{ color: "var(--text-muted)" }}>
+          <path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 01-3.46 0" />
+        </svg>
+        {unread > 0 && (
+          <span style={{ position: "absolute", top: 2, right: 2, background: "var(--red)", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 20, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setOpen(false)} />
+          <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 340, maxHeight: 420, overflowY: "auto", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow-lg)", zIndex: 91 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderBottom: "1px solid var(--border-light)" }}>
+              <span style={{ fontSize: 13.5, fontWeight: 700 }}>Notifications</span>
+              {unread > 0 && (
+                <button type="button" onClick={handleMarkAllRead} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>
+                  Mark all read
+                </button>
+              )}
+            </div>
+            {items.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--text-faint)", fontStyle: "italic", padding: "24px 14px", textAlign: "center", margin: 0 }}>No notifications</p>
+            ) : (
+              items.map(n => (
+                <div key={n.id} onClick={() => handleClick(n)}
+                  style={{ padding: "11px 14px", borderBottom: "1px solid var(--border-light)", cursor: "pointer", display: "flex", gap: 10,
+                    background: n.read ? "var(--surface)" : "var(--blue-bg)" }}
+                  onMouseEnter={e => e.currentTarget.style.background = n.read ? "var(--bg)" : "var(--blue-bg)"}
+                  onMouseLeave={e => e.currentTarget.style.background = n.read ? "var(--surface)" : "var(--blue-bg)"}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{NOTIF_ICONS[n.type] || "🔔"}</span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <p style={{ fontSize: 13, fontWeight: n.read ? 500 : 700, margin: 0 }}>{n.title}</p>
+                    {n.message && <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 0" }}>{n.message}</p>}
+                    <p style={{ fontSize: 10.5, color: "var(--text-faint)", margin: "4px 0 0" }}>{timeAgo(n.createdAt)}</p>
+                  </div>
+                  {!n.read && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--sc-blue)", flexShrink: 0, marginTop: 4 }} />}
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -379,6 +556,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
             )}
           </div>
           <div className="sc-topbar-actions">
+            <NotificationBell staffName={staffName} />
             {/* Clickable avatar + name — opens Activity Panel */}
             <button type="button" onClick={() => setPanelOpen(true)} className="sc-topbar-userbtn"
               style={{ display:"flex", alignItems:"center", gap:8, background:"none", border:"none", cursor:"pointer", padding:"4px 8px", borderRadius:8, transition:"background .15s" }}

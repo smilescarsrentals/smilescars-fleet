@@ -1,8 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/index.js": { "maxDuration": 30 }
+    "api/index.js": { "maxDuration": 30 },
+    "api/cron-notifications.js": { "maxDuration": 30 }
   },
+  "crons": [
+    { "path": "/api/cron-notifications", "schedule": "0 6 * * *" },
+    { "path": "/api/cron-notifications", "schedule": "0 11 * * *" },
+    { "path": "/api/cron-notifications", "schedule": "30 13 * * *" }
+  ],
   "rewrites": [
     { "source": "/((?!api(?:/|$)).*)", "destination": "/index.html" }
   ]
