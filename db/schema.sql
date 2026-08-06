@@ -775,3 +775,25 @@ CREATE TABLE IF NOT EXISTS customer_job_updates (
 );
 
 CREATE INDEX IF NOT EXISTS idx_customer_job_updates_job ON customer_job_updates(job_id);
+
+-- "From Supplier" job card items can optionally link to a real vendor.
+ALTER TABLE maintenance_items ADD COLUMN IF NOT EXISTS supplier_vendor_id text REFERENCES vendors(id) ON DELETE SET NULL;
+ALTER TABLE customer_job_items ADD COLUMN IF NOT EXISTS supplier_vendor_id text REFERENCES vendors(id) ON DELETE SET NULL;
+
+-- Free-text branch/location names per supplier (not tied to real Fleet
+-- locations -- just which of that supplier's own branches).
+CREATE TABLE IF NOT EXISTS vendor_locations (
+  id          text PRIMARY KEY,
+  vendor_id   text NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+  name        text NOT NULL,
+  created_at  timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_vendor_locations_vendor ON vendor_locations(vendor_id);
+
+-- Which of the supplier's branches an item/job/work order was from, copied
+-- at selection time (not a foreign key) so history stays intact even if
+-- the supplier's location list changes later.
+ALTER TABLE maintenance_items ADD COLUMN IF NOT EXISTS supplier_location text;
+ALTER TABLE customer_job_items ADD COLUMN IF NOT EXISTS supplier_location text;
+ALTER TABLE maintenance_log ADD COLUMN IF NOT EXISTS external_vendor_location text;

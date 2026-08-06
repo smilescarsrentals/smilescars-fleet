@@ -113,6 +113,8 @@ const WRITES = {
   addVendor: writes.addVendor,
   editVendor: writes.editVendor,
   deleteVendor: writes.deleteVendor,
+  addVendorLocation: writes.addVendorLocation,
+  deleteVendorLocation: writes.deleteVendorLocation,
   addVendorCategory: writes.addVendorCategory,
   setVendorCategories: writes.setVendorCategories,
   addPart: writes.addPart,

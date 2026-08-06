@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../lib/api";
+import { SupplierPicker } from "./MaintenancePage";
 
 const STATUSES = ["Queued", "In Progress", "Awaiting Parts", "Completed"];
 const STATUS_COLORS = {
@@ -372,11 +373,12 @@ function DetailModal({ job, staffName, canEdit, onClose, onUpdated }) {
 function JobCardItems({ jobId, totalCost, canEdit, staffName, onChanged }) {
   const [items, setItems] = useState([]);
   const [parts, setParts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [fromStock, setFromStock] = useState(true);
   const [selectedPartId, setSelectedPartId] = useState("");
-  const [newItem, setNewItem] = useState({ itemName: "", quantity: "1", unitCost: "" });
+  const [newItem, setNewItem] = useState({ itemName: "", quantity: "1", unitCost: "", supplierVendorId: "", supplierLocation: "" });
   const [err, setErr] = useState("");
 
   useEffect(() => { load(); }, [jobId]);
@@ -384,9 +386,10 @@ function JobCardItems({ jobId, totalCost, canEdit, staffName, onChanged }) {
   async function load() {
     setLoading(true);
     try {
-      const [itemsRes, partsRes] = await Promise.all([api.getCustomerJobItems(jobId), api.getParts()]);
+      const [itemsRes, partsRes, vendorsRes] = await Promise.all([api.getCustomerJobItems(jobId), api.getParts(), api.getVendors()]);
       setItems(itemsRes?.data || []);
       setParts((partsRes?.data || []).filter(p => p.active));
+      setSuppliers((vendorsRes?.data || []).filter(v => v.active && (v.vendorType === "Parts Supplier" || v.vendorType === "Both")));
     } finally {
       setLoading(false);
     }
@@ -408,8 +411,10 @@ function JobCardItems({ jobId, totalCost, canEdit, staffName, onChanged }) {
       await api.addCustomerJobItem({
         jobId, itemName: newItem.itemName, quantity: qty, unitCost: Number(newItem.unitCost) || 0, staffName,
         partId: fromStock && selectedPartId ? selectedPartId : undefined,
+        supplierVendorId: !fromStock && newItem.supplierVendorId ? newItem.supplierVendorId : undefined,
+        supplierLocation: !fromStock && newItem.supplierLocation ? newItem.supplierLocation : undefined,
       });
-      setNewItem({ itemName: "", quantity: "1", unitCost: "" });
+      setNewItem({ itemName: "", quantity: "1", unitCost: "", supplierVendorId: "", supplierLocation: "" });
       setSelectedPartId("");
       setAdding(false);
       await load();
@@ -421,6 +426,8 @@ function JobCardItems({ jobId, totalCost, canEdit, staffName, onChanged }) {
     try { await api.deleteCustomerJobItem({ id, staffName }); await load(); onChanged(); }
     catch (e) { setErr(e.message); }
   };
+
+  const supplierName = (id) => suppliers.find(s => s.id === id)?.name;
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -437,7 +444,14 @@ function JobCardItems({ jobId, totalCost, canEdit, staffName, onChanged }) {
         <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden" }}>
           {items.map(item => (
             <div key={item.id} style={{ display: "flex", alignItems: "center", padding: "7px 10px", borderBottom: "1px solid var(--border-light)", fontSize: 12.5, gap: 8 }}>
-              <span style={{ flex: 1 }}>{item.itemName}{item.partId && <span title="From stock" style={{ marginLeft: 5, fontSize: 10, color: "var(--sc-blue)" }}>📦</span>}</span>
+              <span style={{ flex: 1 }}>
+                {item.itemName}{item.partId && <span title="From stock" style={{ marginLeft: 5, fontSize: 10, color: "var(--sc-blue)" }}>📦</span>}
+                {item.supplierVendorId && supplierName(item.supplierVendorId) && (
+                  <span style={{ display: "block", fontSize: 10.5, color: "var(--text-faint)" }}>
+                    {supplierName(item.supplierVendorId)}{item.supplierLocation ? ` — ${item.supplierLocation}` : ""}
+                  </span>
+                )}
+              </span>
               <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{item.quantity} × {fmtMoney(item.unitCost)}</span>
               <span style={{ fontWeight: 700, flexShrink: 0, minWidth: 70, textAlign: "right" }}>{fmtMoney(item.lineTotal)}</span>
               {canEdit && (
@@ -451,9 +465,9 @@ function JobCardItems({ jobId, totalCost, canEdit, staffName, onChanged }) {
       {adding && (
         <div style={{ border: "1.5px solid var(--sc-blue)", borderRadius: 8, padding: 10, marginTop: items.length > 0 ? 0 : 8 }}>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-            {[["stock","From Stock"],["free","Free Text"]].map(([val,lab]) => (
+            {[["stock","From Stock"],["free","From Supplier"]].map(([val,lab]) => (
               <button key={val} type="button"
-                onClick={() => { setFromStock(val==="stock"); setSelectedPartId(""); setNewItem({ itemName:"", quantity:"1", unitCost:"" }); setErr(""); }}
+                onClick={() => { setFromStock(val==="stock"); setSelectedPartId(""); setNewItem({ itemName:"", quantity:"1", unitCost:"", supplierVendorId:"", supplierLocation:"" }); setErr(""); }}
                 style={{ flex:1, padding:"6px 0", fontSize:11.5, fontWeight:600, borderRadius:6, cursor:"pointer", fontFamily:"inherit",
                   border:`1.5px solid ${(val==="stock")===fromStock ? "var(--sc-blue)" : "var(--border)"}`,
                   background: (val==="stock")===fromStock ? "var(--blue-bg)" : "var(--surface)",
@@ -468,7 +482,12 @@ function JobCardItems({ jobId, totalCost, canEdit, staffName, onChanged }) {
               {parts.map(p => <option key={p.id} value={p.id} disabled={p.quantityOnHand <= 0}>{p.name} — {p.quantityOnHand} in stock{p.quantityOnHand <= 0 ? " (out of stock)" : ""}</option>)}
             </select>
           ) : (
-            <input style={{ ...S.input, marginBottom: 6 }} placeholder="Item name" value={newItem.itemName} onChange={e => setNewItem(n => ({ ...n, itemName: e.target.value }))} autoFocus />
+            <>
+              <SupplierPicker suppliers={suppliers} value={newItem.supplierVendorId} location={newItem.supplierLocation}
+                onChange={(id, loc) => setNewItem(n => ({ ...n, supplierVendorId: id, supplierLocation: loc }))}
+                onSupplierAdded={s => setSuppliers(list => [...list, s])} />
+              <input style={{ ...S.input, marginTop: 6, marginBottom: 6 }} placeholder="Item" value={newItem.itemName} onChange={e => setNewItem(n => ({ ...n, itemName: e.target.value }))} />
+            </>
           )}
           <div style={{ display: "flex", gap: 6 }}>
             <input style={{ ...S.input, width: 70 }} type="number" min="0" placeholder="Qty" value={newItem.quantity} onChange={e => setNewItem(n => ({ ...n, quantity: e.target.value }))} />

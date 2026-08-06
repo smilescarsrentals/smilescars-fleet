@@ -51,7 +51,7 @@ export default function VendorsPage({ staffName, role }) {
     <div style={{ padding: "1rem 1.5rem 1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
         <div style={{ display: "flex", gap: 8, flex: "1 1 auto", flexWrap: "wrap" }}>
-          <input type="text" placeholder="Search vendors…" value={search} onChange={e => setSearch(e.target.value)}
+          <input type="text" placeholder="Search suppliers…" value={search} onChange={e => setSearch(e.target.value)}
             style={{ flex: "1 1 220px", padding: "8px 12px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit" }} />
           <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
             style={{ padding: "8px 10px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--surface)", color: "var(--text)", fontFamily: "inherit" }}>
@@ -59,7 +59,7 @@ export default function VendorsPage({ staffName, role }) {
             {vendorCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        {canEdit && <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ Add Vendor</button>}
+        {canEdit && <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ Add Supplier</button>}
       </div>
 
       {err && <p style={{ color: "var(--red)", fontSize: 13 }}>{err}</p>}
@@ -68,7 +68,7 @@ export default function VendorsPage({ staffName, role }) {
         <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>Loading…</div>
       ) : filtered.length === 0 ? (
         <p style={{ fontSize: 13, color: "var(--text-faint)", fontStyle: "italic" }}>
-          {search ? "No matching vendors." : "No vendors yet."}
+          {search ? "No matching suppliers." : "No suppliers yet."}
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -160,7 +160,7 @@ function VendorModal({ staffName, vendor, vendorCategories, onClose, onSaved }) 
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { setErr("Vendor name is required."); return; }
+    if (!form.name.trim()) { setErr("Supplier name is required."); return; }
     setSaving(true); setErr("");
     try {
       let vendorId = vendor?.id;
@@ -176,13 +176,13 @@ function VendorModal({ staffName, vendor, vendorCategories, onClose, onSaved }) 
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={e => e.stopPropagation()}>
         <div style={{ ...S.mHead, background: "var(--sc-blue)" }}>
-          <p style={S.mTitle}>{isEdit ? "Edit Vendor" : "Add Vendor"}</p>
+          <p style={S.mTitle}>{isEdit ? "Edit Supplier" : "Add Supplier"}</p>
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={S.mBody}>
           <div style={S.field}><label style={S.label}>Name *</label>
             <input style={S.input} value={form.name} onChange={e => set("name", e.target.value)} autoFocus /></div>
-          <div style={S.field}><label style={S.label}>Vendor Type</label>
+          <div style={S.field}><label style={S.label}>Supplier Type</label>
             <select style={S.input} value={form.vendorType} onChange={e => set("vendorType", e.target.value)}>
               <option value="Parts Supplier">Parts Supplier</option>
               <option value="Service Provider">Service Provider</option>

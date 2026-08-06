@@ -13,8 +13,8 @@ const TABS = [
   { key: "analytics",   label: "Analytics" },
   { key: "templates",   label: "Service Templates" },
   { key: "checklists",  label: "Checklists" },
-  { key: "vendors",     label: "Vendors" },
-  { key: "parts",       label: "Parts Inventory" },
+  { key: "vendors",     label: "Supplier" },
+  { key: "parts",       label: "Inventory" },
 ];
 
 export default function GaragePage({ staffName, role }) {

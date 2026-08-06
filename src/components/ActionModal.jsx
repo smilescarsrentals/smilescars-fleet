@@ -43,7 +43,7 @@ function FineInput({ value, onChange, label }) {
 // rather than picked from a giant dropdown. No "add new" escape hatch here
 // on purpose — vendors are managed in Garage -> Vendors now, so this stays
 // a single source of truth instead of drifting back into free text.
-export function GarageLocationPicker({ serviceLocationType, internalLocation, externalVendorId, onChange }) {
+export function GarageLocationPicker({ serviceLocationType, internalLocation, externalVendorId, externalVendorLocation, onChange }) {
   const [vendors, setVendors] = useState([]);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -68,7 +68,7 @@ export function GarageLocationPicker({ serviceLocationType, internalLocation, ex
       <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
         {[["Internal", "Our Garage"], ["External", "Outside Garage"]].map(([val, lab]) => (
           <button key={val} type="button"
-            onClick={() => onChange({ serviceLocationType: val, internalLocation: val === "Internal" ? (internalLocation || "SmilesCars Garage") : "", externalVendorId: "" })}
+            onClick={() => onChange({ serviceLocationType: val, internalLocation: val === "Internal" ? (internalLocation || "SmilesCars Garage") : "", externalVendorId: "", externalVendorLocation: "" })}
             style={{ flex: 1, padding: "8px 4px", fontSize: 12, fontWeight: 600, borderRadius: 7, cursor: "pointer", fontFamily: "inherit",
               border: `1.5px solid ${serviceLocationType === val ? "var(--sc-blue)" : "#e5e7eb"}`,
               background: serviceLocationType === val ? "var(--blue-bg)" : "#fff",
@@ -79,26 +79,36 @@ export function GarageLocationPicker({ serviceLocationType, internalLocation, ex
       </div>
 
       {isExternal ? (
-        <div style={{ position: "relative" }}>
-          <input style={{ width: "100%", padding: "9px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, boxSizing: "border-box", fontFamily: "inherit", background: selectedVendor ? "var(--blue-bg)" : "#fff" }}
-            placeholder="Type to search garages/vendors…" autoComplete="off"
-            value={selectedVendor ? selectedVendor.name : query}
-            onChange={e => { setQuery(e.target.value); onChange({ serviceLocationType, internalLocation, externalVendorId: "" }); setOpen(true); }}
-            onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
-          {open && filtered.length > 0 && (
-            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", zIndex: 50, maxHeight: 180, overflowY: "auto" }}>
-              {filtered.slice(0, 20).map(v => (
-                <div key={v.id} style={{ padding: "9px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #f3f4f6" }}
-                  onMouseDown={() => { onChange({ serviceLocationType, internalLocation, externalVendorId: v.id }); setQuery(""); setOpen(false); }}>
-                  {v.name}
-                </div>
-              ))}
-            </div>
-          )}
-          {loaded && vendors.length === 0 && (
-            <p style={{ fontSize: 11.5, color: "#999", margin: "6px 0 0" }}>
-              No garage vendors set up yet — add one under Garage → Vendors (set type to Service Provider).
-            </p>
+        <div>
+          <div style={{ position: "relative" }}>
+            <input style={{ width: "100%", padding: "9px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, boxSizing: "border-box", fontFamily: "inherit", background: selectedVendor ? "var(--blue-bg)" : "#fff" }}
+              placeholder="Type to search suppliers…" autoComplete="off"
+              value={selectedVendor ? selectedVendor.name : query}
+              onChange={e => { setQuery(e.target.value); onChange({ serviceLocationType, internalLocation, externalVendorId: "", externalVendorLocation: "" }); setOpen(true); }}
+              onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+            {open && filtered.length > 0 && (
+              <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", zIndex: 50, maxHeight: 180, overflowY: "auto" }}>
+                {filtered.slice(0, 20).map(v => (
+                  <div key={v.id} style={{ padding: "9px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #f3f4f6" }}
+                    onMouseDown={() => { onChange({ serviceLocationType, internalLocation, externalVendorId: v.id, externalVendorLocation: "" }); setQuery(""); setOpen(false); }}>
+                    {v.name}
+                  </div>
+                ))}
+              </div>
+            )}
+            {loaded && vendors.length === 0 && (
+              <p style={{ fontSize: 11.5, color: "#999", margin: "6px 0 0" }}>
+                No suppliers set up yet — add one under Garage → Supplier (set type to Service Provider).
+              </p>
+            )}
+          </div>
+
+          {selectedVendor && selectedVendor.locationList && selectedVendor.locationList.length > 0 && (
+            <select style={{ width: "100%", padding: "9px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, boxSizing: "border-box", fontFamily: "inherit", marginTop: 6 }}
+              value={externalVendorLocation || ""} onChange={e => onChange({ serviceLocationType, internalLocation, externalVendorId, externalVendorLocation: e.target.value })}>
+              <option value="">Select {selectedVendor.name}'s location…</option>
+              {selectedVendor.locationList.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+            </select>
           )}
         </div>
       ) : (
@@ -142,6 +152,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const [serviceLocationType, setServiceLocationType] = useState("Internal");
   const [internalLocation,    setInternalLocation]    = useState("SmilesCars Garage");
   const [externalVendorId,    setExternalVendorId]    = useState("");
+  const [externalVendorLocation, setExternalVendorLocation] = useState("");
   const [assignedTo,    setAssignedTo]   = useState("");
   const [assignedQuery, setAssignedQuery]= useState("");
   const [assignedOpen,  setAssignedOpen] = useState(false);
@@ -199,7 +210,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
       amount: unformat(amount), currency,
       policeFine: unformat(policeFine), parkingFine: unformat(parkingFine),
       paymentStatus, amountPaid: unformat(amountPaid),
-      serviceLocationType, internalLocation, externalVendorId, driver: drv, assignedTo,
+      serviceLocationType, internalLocation, externalVendorId, externalVendorLocation, driver: drv, assignedTo,
       newLocation: addingLoc    ? loc : null,
       newDriver:   addingDriver ? drv : null,
       bookingType: needsClient ? bookingType : undefined,
@@ -456,9 +467,9 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
           {isMaintenance && (
             <div style={S.field}><label style={S.label}>Send to *</label>
               <GarageLocationPicker
-                serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId}
-                onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev }) => {
-                  setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev);
+                serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId} externalVendorLocation={externalVendorLocation}
+                onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev, externalVendorLocation: evl }) => {
+                  setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev); setExternalVendorLocation(evl || "");
                 }} />
               {action === "sendRentedToMaintenance" && (
                 <p style={{ fontSize: 11.5, color: "#666", margin: "6px 0 0" }}>

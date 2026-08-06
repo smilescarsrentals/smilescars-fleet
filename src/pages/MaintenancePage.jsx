@@ -582,11 +582,12 @@ function MarkAvailableModal({ log, staffName, onClose, onDone }) {
 function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged }) {
   const [items, setItems] = useState([]);
   const [parts, setParts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [fromStock, setFromStock] = useState(true);
   const [selectedPartId, setSelectedPartId] = useState("");
-  const [newItem, setNewItem] = useState({ itemName: "", quantity: "1", unitCost: "" });
+  const [newItem, setNewItem] = useState({ itemName: "", quantity: "1", unitCost: "", supplierVendorId: "", supplierLocation: "" });
   const [err, setErr] = useState("");
 
   useEffect(() => { load(); }, [workOrderId]);
@@ -594,9 +595,10 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
   async function load() {
     setLoading(true);
     try {
-      const [itemsRes, partsRes] = await Promise.all([api.getMaintenanceItems(workOrderId), api.getParts()]);
+      const [itemsRes, partsRes, vendorsRes] = await Promise.all([api.getMaintenanceItems(workOrderId), api.getParts(), api.getVendors()]);
       setItems(itemsRes?.data || []);
       setParts((partsRes?.data || []).filter(p => p.active));
+      setSuppliers((vendorsRes?.data || []).filter(v => v.active && (v.vendorType === "Parts Supplier" || v.vendorType === "Both")));
     } finally {
       setLoading(false);
     }
@@ -623,8 +625,10 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
         workOrderId, itemName: newItem.itemName,
         quantity: qty, unitCost: Number(newItem.unitCost) || 0, staffName,
         partId: fromStock && selectedPartId ? selectedPartId : undefined,
+        supplierVendorId: !fromStock && newItem.supplierVendorId ? newItem.supplierVendorId : undefined,
+        supplierLocation: !fromStock && newItem.supplierLocation ? newItem.supplierLocation : undefined,
       });
-      setNewItem({ itemName: "", quantity: "1", unitCost: "" });
+      setNewItem({ itemName: "", quantity: "1", unitCost: "", supplierVendorId: "", supplierLocation: "" });
       setSelectedPartId("");
       setAdding(false);
       await load();
@@ -639,6 +643,8 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
       onChanged();
     } catch (e) { setErr(e.message); }
   };
+
+  const supplierName = (id) => suppliers.find(s => s.id === id)?.name;
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -658,6 +664,11 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
               <span style={{ flex: 1 }}>
                 {item.itemName}
                 {item.partId && <span title="From stock" style={{ marginLeft: 5, fontSize: 10, color: "var(--sc-blue)" }}>📦</span>}
+                {item.supplierVendorId && supplierName(item.supplierVendorId) && (
+                  <span style={{ display: "block", fontSize: 10.5, color: "var(--text-faint)" }}>
+                    {supplierName(item.supplierVendorId)}{item.supplierLocation ? ` — ${item.supplierLocation}` : ""}
+                  </span>
+                )}
               </span>
               <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{item.quantity} × {fmtMoney(item.unitCost)}</span>
               <span style={{ fontWeight: 700, flexShrink: 0, minWidth: 70, textAlign: "right" }}>{fmtMoney(item.lineTotal)}</span>
@@ -673,9 +684,9 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
       {adding && (
         <div style={{ border: "1.5px solid var(--sc-blue)", borderRadius: 8, padding: 10, marginTop: items.length > 0 ? 0 : 8 }}>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-            {[["stock","From Stock"],["free","Free Text"]].map(([val,lab]) => (
+            {[["stock","From Stock"],["free","From Supplier"]].map(([val,lab]) => (
               <button key={val} type="button"
-                onClick={() => { setFromStock(val==="stock"); setSelectedPartId(""); setNewItem({ itemName:"", quantity:"1", unitCost:"" }); setErr(""); }}
+                onClick={() => { setFromStock(val==="stock"); setSelectedPartId(""); setNewItem({ itemName:"", quantity:"1", unitCost:"", supplierVendorId:"", supplierLocation:"" }); setErr(""); }}
                 style={{ flex:1, padding:"6px 0", fontSize:11.5, fontWeight:600, borderRadius:6, cursor:"pointer", fontFamily:"inherit",
                   border:`1.5px solid ${(val==="stock")===fromStock ? "var(--sc-blue)" : "var(--border)"}`,
                   background: (val==="stock")===fromStock ? "var(--blue-bg)" : "var(--surface)",
@@ -695,8 +706,13 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
               ))}
             </select>
           ) : (
-            <input style={{ ...S.input, marginBottom: 6 }} placeholder="Item name (e.g. Brake pads)" value={newItem.itemName}
-              onChange={e => setNewItem(n => ({ ...n, itemName: e.target.value }))} autoFocus />
+            <>
+              <SupplierPicker suppliers={suppliers} value={newItem.supplierVendorId} location={newItem.supplierLocation}
+                onChange={(id, loc) => setNewItem(n => ({ ...n, supplierVendorId: id, supplierLocation: loc }))}
+                onSupplierAdded={s => setSuppliers(list => [...list, s])} />
+              <input style={{ ...S.input, marginTop: 6, marginBottom: 6 }} placeholder="Item (e.g. Brake pads)" value={newItem.itemName}
+                onChange={e => setNewItem(n => ({ ...n, itemName: e.target.value }))} />
+            </>
           )}
 
           {fromStock && selectedPart && selectedPart.quantityOnHand <= selectedPart.reorderThreshold && selectedPart.reorderThreshold > 0 && (
@@ -723,6 +739,87 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
           <span>Total</span>
           <span style={{ color: "var(--sc-blue)" }}>TZS {fmtMoney(totalCost)}</span>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ── Supplier picker ───────────────────────────────────────────
+// Type-ahead search over real Suppliers (Vendors filtered to Parts
+// Supplier/Both), with an inline "+ New Supplier" add if one isn't on the
+// list yet. When the selected supplier has locations recorded (branches),
+// a second dropdown appears showing ONLY that supplier's locations —
+// nothing shows if the supplier has none. Shared by Job Card Items (both
+// Maintenance and Customer Jobs) and Fleet's External garage picker.
+export function SupplierPicker({ suppliers, value, location, onChange, onSupplierAdded }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [addingNew, setAddingNew] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const selected = suppliers.find(s => s.id === value);
+  const filtered = query.trim().length > 0
+    ? suppliers.filter(s => s.name.toLowerCase().includes(query.toLowerCase()))
+    : suppliers;
+
+  const handleAddNew = async () => {
+    if (!newName.trim()) return;
+    setSaving(true);
+    try {
+      const res = await api.addVendor({ name: newName.trim(), vendorType: "Parts Supplier" });
+      const newSupplier = { id: res.id, name: newName.trim(), vendorType: "Parts Supplier", locationList: [] };
+      onSupplierAdded(newSupplier);
+      onChange(newSupplier.id, "");
+      setNewName(""); setAddingNew(false); setQuery("");
+    } catch (e) { alert(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div>
+      {!addingNew ? (
+        <div style={{ position: "relative" }}>
+          <input style={{ ...S.input, background: selected ? "var(--blue-bg)" : "var(--surface)" }}
+            placeholder="Type to search suppliers…" autoComplete="off"
+            value={selected ? selected.name : query}
+            onChange={e => { setQuery(e.target.value); onChange("", ""); setOpen(true); }}
+            onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+          {open && (
+            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow)", zIndex: 50, maxHeight: 200, overflowY: "auto" }}>
+              {filtered.slice(0, 20).map(s => (
+                <div key={s.id} style={{ padding: "9px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid var(--border-light)" }}
+                  onMouseDown={() => { onChange(s.id, ""); setQuery(""); setOpen(false); }}>
+                  {s.name}
+                </div>
+              ))}
+              <div style={{ padding: "9px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--sc-blue)" }}
+                onMouseDown={() => { setAddingNew(true); setOpen(false); }}>
+                + New Supplier
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 6 }}>
+          <input style={{ ...S.input, flex: 1 }} placeholder="Supplier name" value={newName}
+            onChange={e => setNewName(e.target.value)} autoFocus />
+          <button type="button" disabled={saving} onClick={handleAddNew}
+            style={{ padding: "0 12px", fontSize: 12, fontWeight: 600, color: "#fff", background: "var(--sc-blue)", border: "none", borderRadius: 6, cursor: "pointer", opacity: saving ? 0.65 : 1 }}>
+            {saving ? "…" : "Add"}
+          </button>
+          <button type="button" onClick={() => { setAddingNew(false); setNewName(""); }}
+            style={{ padding: "0 10px", fontSize: 12, color: "var(--text-muted)", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 6, cursor: "pointer" }}>
+            ✕
+          </button>
+        </div>
+      )}
+
+      {selected && selected.locationList && selected.locationList.length > 0 && (
+        <select style={{ ...S.input, marginTop: 6 }} value={location || ""} onChange={e => onChange(value, e.target.value)}>
+          <option value="">Select {selected.name}'s location…</option>
+          {selected.locationList.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+        </select>
       )}
     </div>
   );

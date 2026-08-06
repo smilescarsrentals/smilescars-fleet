@@ -176,9 +176,9 @@ function PartModal({ staffName, vendors, part, onClose, onSaved }) {
           <div style={S.two}>
             <div style={S.field}><label style={S.label}>Category</label>
               <input style={S.input} value={form.category} onChange={e => set("category", e.target.value)} placeholder="e.g. Brakes" /></div>
-            <div style={S.field}><label style={S.label}>Vendor</label>
+            <div style={S.field}><label style={S.label}>Supplier</label>
               <select style={S.input} value={form.vendorId} onChange={e => set("vendorId", e.target.value)}>
-                <option value="">No vendor</option>
+                <option value="">No supplier</option>
                 {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select></div>
           </div>

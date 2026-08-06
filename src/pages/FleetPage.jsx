@@ -200,6 +200,7 @@ export default function FleetPage({ staffName, role }) {
         serviceLocationType: fields.serviceLocationType || "",
         internalLocation:    fields.internalLocation || "",
         externalVendorId:    fields.externalVendorId || "",
+        externalVendorLocation: fields.externalVendorLocation || "",
         remarks:       fields.remarks || "",
       });
       setReplaceCar(null);
@@ -598,6 +599,7 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
   const [serviceLocationType, setServiceLocationType] = useState("Internal");
   const [internalLocation,    setInternalLocation]    = useState("SmilesCars Garage");
   const [externalVendorId,    setExternalVendorId]    = useState("");
+  const [externalVendorLocation, setExternalVendorLocation] = useState("");
   const [remarks,      setRemarks]      = useState("");
   const [kmOut,        setKmOut]        = useState("");
   const [fuelOut,      setFuelOut]      = useState("");
@@ -625,6 +627,7 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
       serviceLocationType: originalAction === "garage" ? serviceLocationType : "",
       internalLocation: originalAction === "garage" ? internalLocation : "",
       externalVendorId: originalAction === "garage" ? externalVendorId : "",
+      externalVendorLocation: originalAction === "garage" ? externalVendorLocation : "",
       kmOut: originalAction === "garage" ? kmOut : "",
       fuelOut: originalAction === "garage" ? fuelOut : "",
       remarks,
@@ -691,9 +694,9 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
             {originalAction === "garage" && (
               <>
                 <GarageLocationPicker
-                  serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId}
-                  onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev }) => {
-                    setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev);
+                  serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId} externalVendorLocation={externalVendorLocation}
+                  onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev, externalVendorLocation: evl }) => {
+                    setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev); setExternalVendorLocation(evl || "");
                   }} />
                 <div style={{ display:"flex", gap:8, marginTop:8 }}>
                   <div style={{ flex:1 }}>
