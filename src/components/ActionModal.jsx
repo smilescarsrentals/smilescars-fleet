@@ -13,7 +13,7 @@ const ACTIONS = {
   markSold:       { title: "Mark Car as Sold",    color: "#dc2626", btnLabel: "Confirm Sale"       },
 };
 
-const FUEL_LEVELS      = ["Full", "3/4", "1/2", "1/4", "Empty"];
+export const FUEL_LEVELS = ["Full", "3/4", "1/2", "1/4", "Empty"];
 const CURRENCIES       = ["TZS", "USD", "EUR"];
 const PAYMENT_STATUSES = ["Paid", "Partial Paid", "Unpaid", "Long Term"];
 
@@ -186,6 +186,8 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
     if (isTransfer && !(addingDriver ? newDriver.trim() : driver)) { setErr("Driver Allocated is required for a Transfer."); return; }
     if ((needsClient && bookingType === "Rental") || isExtend) { if (!returnDate) { setErr("Return date is required."); return; } }
     if (isMaintenance && serviceLocationType === "External" && !externalVendorId) { setErr("Please select a garage."); return; }
+    if (isMaintenance && !kmOut.trim()) { setErr("Odometer (KM) is required."); return; }
+    if (isMaintenance && !fuelOut) { setErr("Fuel Level is required."); return; }
     if (needsClient && paymentStatus === "Partial Paid" && !amountPaid) { setErr("Please enter amount paid."); return; }
     if (isStaffUse && !assignedTo) { setErr("Please select a staff member."); return; }
     const loc = addingLoc    ? newLoc.trim()    : location;
@@ -463,6 +465,19 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                   {car.currentClient ? `${car.currentClient}'s booking stays intact` : "The client's booking stays intact"} — this car comes straight back to them once the service is done.
                 </p>
               )}
+            </div>
+          )}
+          {isMaintenance && (
+            <div style={S.two}>
+              <div style={S.field}><label style={S.label}>Odometer (KM) *</label>
+                <input style={S.input} type="text" inputMode="numeric" value={kmOut} onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" />
+              </div>
+              <div style={S.field}><label style={S.label}>Fuel Level *</label>
+                <select style={sel} value={fuelOut} onChange={e => setFuelOut(e.target.value)}>
+                  <option value="">— Select —</option>
+                  {FUEL_LEVELS.map(f => <option key={f}>{f}</option>)}
+                </select>
+              </div>
             </div>
           )}
 

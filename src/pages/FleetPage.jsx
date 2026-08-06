@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import { cache } from "../lib/cache";
 import { exportToExcel } from "../lib/exportExcel";
-import ActionModal, { GarageLocationPicker } from "../components/ActionModal";
+import ActionModal, { GarageLocationPicker, FUEL_LEVELS } from "../components/ActionModal";
 import MoveCarModal from "../components/MoveCarModal";
 import RentalAgreementModal from "../components/RentalAgreementModal";
 import AddCarModal from "../components/AddCarModal";
@@ -599,6 +599,8 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
   const [internalLocation,    setInternalLocation]    = useState("SmilesCars Garage");
   const [externalVendorId,    setExternalVendorId]    = useState("");
   const [remarks,      setRemarks]      = useState("");
+  const [kmOut,        setKmOut]        = useState("");
+  const [fuelOut,      setFuelOut]      = useState("");
   const [err,          setErr]          = useState("");
   const [query,        setQuery]        = useState("");
   const [open,         setOpen]         = useState(false);
@@ -614,6 +616,8 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
     const repCar = available.find(c => c.plate === replacePlate);
     if (!repCar) { setErr("Selected car not found in available fleet."); return; }
     if (originalAction === "garage" && serviceLocationType === "External" && !externalVendorId) { setErr("Please select a garage."); return; }
+    if (originalAction === "garage" && !kmOut.trim()) { setErr("Odometer (KM) is required."); return; }
+    if (originalAction === "garage" && !fuelOut) { setErr("Fuel Level is required."); return; }
     onConfirm({
       replacePlate,
       replaceType:    repCar.type,
@@ -621,6 +625,8 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
       serviceLocationType: originalAction === "garage" ? serviceLocationType : "",
       internalLocation: originalAction === "garage" ? internalLocation : "",
       externalVendorId: originalAction === "garage" ? externalVendorId : "",
+      kmOut: originalAction === "garage" ? kmOut : "",
+      fuelOut: originalAction === "garage" ? fuelOut : "",
       remarks,
     });
   };
@@ -683,11 +689,30 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
               ))}
             </div>
             {originalAction === "garage" && (
-              <GarageLocationPicker
-                serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId}
-                onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev }) => {
-                  setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev);
-                }} />
+              <>
+                <GarageLocationPicker
+                  serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId}
+                  onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev }) => {
+                    setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev);
+                  }} />
+                <div style={{ display:"flex", gap:8, marginTop:8 }}>
+                  <div style={{ flex:1 }}>
+                    <label style={{ fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:4 }}>Odometer (KM) *</label>
+                    <input style={{ width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,boxSizing:"border-box",fontFamily:"inherit" }}
+                      type="text" inputMode="numeric" value={kmOut}
+                      onChange={e => setKmOut(e.target.value.replace(/[^\d]/g,"").replace(/\B(?=(\d{3})+(?!\d))/g, ","))}
+                      placeholder="e.g. 45,000" />
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <label style={{ fontSize:12,fontWeight:500,color:"#555",display:"block",marginBottom:4 }}>Fuel Level *</label>
+                    <select style={{ width:"100%",padding:"9px 11px",fontSize:13,border:"1.5px solid #e5e7eb",borderRadius:7,boxSizing:"border-box",fontFamily:"inherit" }}
+                      value={fuelOut} onChange={e => setFuelOut(e.target.value)}>
+                      <option value="">— Select —</option>
+                      {FUEL_LEVELS.map(f => <option key={f}>{f}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </>
             )}
           </div>
 
