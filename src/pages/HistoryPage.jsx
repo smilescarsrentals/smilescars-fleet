@@ -56,6 +56,7 @@ export default function HistoryPage({ role }) {
   const [fTo,        setFTo]        = useState("");
   const [showExport, setShowExport] = useState(false);
   const [exPlate,    setExPlate]    = useState("");
+  const [exAction,   setExAction]   = useState("");
   const [exType,     setExType]     = useState("");
   const [exLocation, setExLocation] = useState("");
   const [exFrom,     setExFrom]     = useState("");
@@ -108,12 +109,13 @@ export default function HistoryPage({ role }) {
     return history.filter(h => {
       const ts = h.timestamp ? h.timestamp.split("T")[0] : "";
       return (!q || h.plate.toLowerCase().includes(q)) &&
+        (!exAction   || h.action   === exAction) &&
         (!exType     || h.type     === exType) &&
         (!exLocation || h.location === exLocation) &&
         (!exFrom     || ts >= exFrom) &&
         (!exTo       || ts <= exTo);
     });
-  }, [history, exPlate, exType, exLocation, exFrom, exTo]);
+  }, [history, exPlate, exAction, exType, exLocation, exFrom, exTo]);
 
   const handleExport = () => {
     const rows = exportRows.map(h => ({
@@ -127,6 +129,7 @@ export default function HistoryPage({ role }) {
     }));
     const label = exFrom || exTo ? `${exFrom||"start"}_to_${exTo||"now"}` :
                   exPlate ? exPlate.replace(/\s/g,"") :
+                  exAction ? exAction.replace(/\s/g,"") :
                   exLocation ? exLocation.replace(/\s/g,"") : "all";
     exportToExcel(`SmilesCars_History_${label}.xlsx`, [{ name: "History", rows }]);
     setShowExport(false);
@@ -148,8 +151,9 @@ export default function HistoryPage({ role }) {
       {showExport && canExport && (
         <div style={{ background:"var(--green-bg)",border:"1px solid var(--green-border)",borderRadius:10,padding:"1rem",marginBottom:"1.25rem" }}>
           <p style={{ fontSize:14,fontWeight:600,color:"var(--green)",marginBottom:10 }}>Export History to Excel</p>
-          <div className="sc-hist-export-grid" style={{ display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10 }}>
+          <div className="sc-hist-export-grid" style={{ display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10 }}>
             {[["Car (plate)",<input style={exportSel} placeholder="Search plate…" value={exPlate} onChange={e=>setExPlate(e.target.value)} />],
+              ["Action / Status",<select style={exportSel} value={exAction} onChange={e=>setExAction(e.target.value)}><option value="">All actions</option>{actions.map(a=><option key={a}>{a}</option>)}</select>],
               ["Type",<select style={exportSel} value={exType} onChange={e=>setExType(e.target.value)}><option value="">All types</option>{types.map(t=><option key={t}>{t}</option>)}</select>],
               ["Location",<select style={exportSel} value={exLocation} onChange={e=>setExLocation(e.target.value)}><option value="">All locations</option>{locations.map(l=><option key={l}>{l}</option>)}</select>],
             ].map(([label, input]) => (
