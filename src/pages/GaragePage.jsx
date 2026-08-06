@@ -5,9 +5,11 @@ import VendorsPage from "./VendorsPage";
 import PartsInventoryPage from "./PartsInventoryPage";
 import ServiceTemplatesPage from "./ServiceTemplatesPage";
 import ChecklistTemplatesPage from "./ChecklistTemplatesPage";
+import CustomerJobsPage from "./CustomerJobsPage";
 
 const TABS = [
   { key: "work-orders", label: "Work Orders" },
+  { key: "customer-jobs", label: "Customer Jobs" },
   { key: "analytics",   label: "Analytics" },
   { key: "templates",   label: "Service Templates" },
   { key: "checklists",  label: "Checklists" },
@@ -45,6 +47,7 @@ export default function GaragePage({ staffName, role }) {
       </div>
 
       {activeTab === "work-orders" && <MaintenancePage staffName={staffName} role={role} embedded />}
+      {activeTab === "customer-jobs" && <CustomerJobsPage staffName={staffName} role={role} />}
       {activeTab === "analytics"   && <MaintenanceAnalyticsPage embedded />}
       {activeTab === "templates"   && <ServiceTemplatesPage staffName={staffName} role={role} />}
       {activeTab === "checklists"  && <ChecklistTemplatesPage staffName={staffName} role={role} />}

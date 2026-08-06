@@ -722,3 +722,56 @@ INSERT INTO vendor_categories (id, name) VALUES
   ('VC-UPHOLSTERY','Upholstery / Interior'),
   ('VC-CARWASH',   'Car Wash / Detailing')
 ON CONFLICT (name) DO NOTHING;
+
+-- Customer Jobs: SmilesCars Garage servicing OUTSIDE customers' cars, a
+-- real business line separate from fleet maintenance. Not tied to any
+-- Fleet plate; kept fully separate from maintenance_log so fleet cost
+-- tracking and Analytics never mix with customer revenue.
+CREATE TABLE IF NOT EXISTS customer_jobs (
+  id                 text PRIMARY KEY,
+  ref_no             text UNIQUE,
+  customer_name      text NOT NULL,
+  customer_phone     text NOT NULL,
+  plate              text NOT NULL,
+  car_description    text,
+  assigned_mechanic  text,
+  issue_description  text,
+  status             text DEFAULT 'Queued',
+  odometer           text,
+  notes              text,
+  total_cost         numeric DEFAULT 0,
+  price_charged      numeric DEFAULT 0,
+  payment_status     text DEFAULT 'Unpaid',
+  amount_paid        numeric DEFAULT 0,
+  opened_by          text,
+  date_opened        timestamp DEFAULT now(),
+  date_closed        timestamp,
+  created_at         timestamp DEFAULT now(),
+  updated_at         timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_jobs_status ON customer_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_customer_jobs_plate ON customer_jobs(plate);
+
+CREATE TABLE IF NOT EXISTS customer_job_items (
+  id             text PRIMARY KEY,
+  job_id         text NOT NULL REFERENCES customer_jobs(id) ON DELETE CASCADE,
+  item_name      text NOT NULL,
+  quantity       numeric DEFAULT 1,
+  unit_cost      numeric DEFAULT 0,
+  line_total     numeric DEFAULT 0,
+  part_id        text REFERENCES parts(id) ON DELETE SET NULL,
+  created_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_job_items_job ON customer_job_items(job_id);
+
+CREATE TABLE IF NOT EXISTS customer_job_updates (
+  id             text PRIMARY KEY,
+  job_id         text NOT NULL REFERENCES customer_jobs(id) ON DELETE CASCADE,
+  author         text,
+  message        text NOT NULL,
+  created_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_job_updates_job ON customer_job_updates(job_id);
