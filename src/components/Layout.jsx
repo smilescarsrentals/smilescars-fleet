@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { pushSupported, pushPermission, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from "../lib/push";
 import AdminPanel from "./AdminPanel";
 
 // "2026-07-22" via new Date(str) parses as UTC midnight, not local midnight —
@@ -130,7 +131,46 @@ function NotificationBell({ staffName }) {
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
   const prevUnreadRef = useState({ current: null })[0]; // null = no baseline yet (first poll)
+
+  // Reflects THIS device's actual subscription state, not assumed — checks
+  // both the browser's own PushManager (source of truth for "is this
+  // device subscribed right now") and whether permission was ever denied.
+  useEffect(() => {
+    if (!pushSupported()) return;
+    getExistingSubscription().then(sub => setPushEnabled(!!sub)).catch(() => {});
+    // One-time prompt: only offer it if permission hasn't been decided yet
+    // AND the person hasn't dismissed it before on this device.
+    if (pushPermission() === "default" && !localStorage.getItem("sc_push_prompt_dismissed")) {
+      setShowPushPrompt(true);
+    }
+  }, []);
+
+  const handleTogglePush = async () => {
+    setPushBusy(true);
+    try {
+      if (pushEnabled) {
+        await unsubscribeFromPush();
+        setPushEnabled(false);
+      } else {
+        await subscribeToPush(staffName);
+        setPushEnabled(true);
+      }
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setPushBusy(false);
+      setShowPushPrompt(false);
+    }
+  };
+
+  const dismissPushPrompt = () => {
+    localStorage.setItem("sc_push_prompt_dismissed", "1");
+    setShowPushPrompt(false);
+  };
 
   useEffect(() => {
     if (!staffName) return;
@@ -231,6 +271,18 @@ function NotificationBell({ staffName }) {
                 </button>
               )}
             </div>
+            {pushSupported() && pushPermission() !== "denied" && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 14px", borderBottom: "1px solid var(--border-light)", background: "var(--bg)" }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Push on this device</span>
+                <button type="button" disabled={pushBusy} onClick={handleTogglePush}
+                  style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, cursor: "pointer", opacity: pushBusy ? 0.6 : 1,
+                    border: `1.5px solid ${pushEnabled ? "var(--green)" : "var(--border)"}`,
+                    background: pushEnabled ? "var(--green-bg, #eafaf0)" : "var(--surface)",
+                    color: pushEnabled ? "var(--green)" : "var(--text-muted)" }}>
+                  {pushBusy ? "…" : pushEnabled ? "On" : "Off"}
+                </button>
+              </div>
+            )}
             {items.length === 0 ? (
               <p style={{ fontSize: 13, color: "var(--text-faint)", fontStyle: "italic", padding: "24px 14px", textAlign: "center", margin: 0 }}>No notifications</p>
             ) : (
@@ -252,6 +304,21 @@ function NotificationBell({ staffName }) {
             )}
           </div>
         </>
+      )}
+
+      {showPushPrompt && !open && (
+        <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 260, background: "var(--surface)", border: "1.5px solid var(--sc-blue)", borderRadius: 12, boxShadow: "var(--shadow-lg)", zIndex: 91, padding: "14px" }}>
+          <p style={{ fontSize: 13, fontWeight: 700, margin: "0 0 4px" }}>Turn on notifications?</p>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px" }}>Get alerted here on this device — you can change this anytime from the bell.</p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={dismissPushPrompt} style={{ flex: 1, padding: "7px 0", fontSize: 12, color: "var(--text-muted)", background: "var(--bg)", border: "1.5px solid var(--border)", borderRadius: 7, cursor: "pointer" }}>
+              Not now
+            </button>
+            <button type="button" disabled={pushBusy} onClick={handleTogglePush} style={{ flex: 1, padding: "7px 0", fontSize: 12, fontWeight: 600, color: "#fff", background: "var(--sc-blue)", border: "none", borderRadius: 7, cursor: "pointer", opacity: pushBusy ? 0.65 : 1 }}>
+              {pushBusy ? "…" : "Enable"}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

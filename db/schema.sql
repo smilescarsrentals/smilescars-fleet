@@ -822,3 +822,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe ON notifications(dedu
 -- Per-staff setting: receive a reminder for EVERY reservation (not just
 -- their own) 24h before pickup.
 ALTER TABLE config ADD COLUMN IF NOT EXISTS receives_all_reservation_reminders text DEFAULT 'FALSE';
+
+-- Push subscriptions: one row per device a staff member has enabled push
+-- on (multi-device supported -- phone + desktop, etc.). endpoint is
+-- unique per browser/device.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id           text PRIMARY KEY,
+  staff_name   text NOT NULL,
+  endpoint     text NOT NULL UNIQUE,
+  p256dh       text NOT NULL,
+  auth         text NOT NULL,
+  user_agent   text,
+  created_at   timestamp DEFAULT now(),
+  last_used_at timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_staff ON push_subscriptions(staff_name);
