@@ -3,6 +3,7 @@
   "short_name": "SmilesCars",
   "description": "SmilesCars internal fleet management system",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f9fafb",
   "theme_color": "#16a34a",
