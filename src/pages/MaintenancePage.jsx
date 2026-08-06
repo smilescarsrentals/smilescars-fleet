@@ -465,7 +465,9 @@ function DetailModal({ log, staffName, canEdit, onClose, onUpdated }) {
       {showMarkAvailable && (
         <MarkAvailableModal
           log={log}
+          staffName={staffName}
           onClose={() => setShowMarkAvailable(false)}
+          onDone={() => { setShowMarkAvailable(false); onUpdated(); onClose(); }}
         />
       )}
     </div>
@@ -476,29 +478,42 @@ function DetailModal({ log, staffName, canEdit, onClose, onUpdated }) {
 // but does NOT yet write to Fleet. The real car-status/location update is
 // Phase 2c, built once the Fleet-sync edge cases (active reservations,
 // concurrent work orders) have been thought through properly.
-function MarkAvailableModal({ log, onClose }) {
+function MarkAvailableModal({ log, staffName, onClose, onDone }) {
   const [locations, setLocations] = useState([]);
+  const [outcome, setOutcome] = useState(""); // "client" | "available"
   const [location, setLocation] = useState("");
   const [currentKm, setCurrentKm] = useState("");
+  const [carClient, setCarClient] = useState("");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    api.getConfig().then(res => setLocations(res?.locations || [])).finally(() => setLoading(false));
+    Promise.all([api.getConfig(), api.getFleet()]).then(([configRes, fleetRes]) => {
+      setLocations(configRes?.locations || []);
+      const car = (fleetRes?.data || []).find(c => c.plate === log.plate);
+      setCarClient(car?.currentClient || "");
+    }).finally(() => setLoading(false));
   }, []);
 
-  const handleClose = () => {
-    // Nothing is saved yet — Mark Available is intentionally still a stub
-    // (see note below) — this just validates the fields exist before
-    // closing, so the form behaves like a real save even though it isn't one.
-    if (!location) { setErr("Select a location."); return; }
+  const handleSubmit = async () => {
     if (!currentKm.trim()) { setErr("Current KM is required."); return; }
-    onClose();
+    if (!outcome) { setErr("Select where this car is going."); return; }
+    if (outcome === "available" && !location) { setErr("Select a location."); return; }
+    setSaving(true); setErr("");
+    try {
+      await api.markCarAvailable({
+        plate: log.plate, staffName, currentKm, outcome,
+        location: outcome === "available" ? location : undefined,
+        workOrderRef: log.refNo || log.id,
+      });
+      onDone();
+    } catch (e) { setErr(e.message); setSaving(false); }
   };
 
   return (
     <div style={{ ...S.overlay, zIndex: 110 }} onClick={onClose}>
-      <div style={{ ...S.modal, width: 360 }} onClick={e => e.stopPropagation()}>
+      <div style={{ ...S.modal, width: 380 }} onClick={e => e.stopPropagation()}>
         <div style={{ ...S.mHead, background: "var(--green)" }}>
           <p style={S.mTitle}>Mark {log.plate} Available</p>
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
@@ -512,24 +527,47 @@ function MarkAvailableModal({ log, onClose }) {
           </div>
 
           <div style={S.field}>
-            <label style={S.label}>To which location? *</label>
+            <label style={S.label}>Where's this car going? *</label>
             {loading ? (
-              <p style={{ fontSize: 12, color: "var(--text-faint)" }}>Loading locations…</p>
+              <p style={{ fontSize: 12, color: "var(--text-faint)" }}>Loading…</p>
             ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {carClient && (
+                  <button type="button" onClick={() => setOutcome("client")}
+                    style={{ textAlign: "left", padding: "10px 12px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+                      border: `1.5px solid ${outcome === "client" ? "var(--green)" : "var(--border)"}`,
+                      background: outcome === "client" ? "var(--green-bg, #eafaf0)" : "var(--surface)" }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: outcome === "client" ? "var(--green)" : "var(--text)" }}>Return to Client</span>
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 0" }}>
+                      Back to <strong>{carClient}</strong> — was mid-rental, stays checked out
+                    </p>
+                  </button>
+                )}
+                <button type="button" onClick={() => setOutcome("available")}
+                  style={{ textAlign: "left", padding: "10px 12px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+                    border: `1.5px solid ${outcome === "available" ? "var(--sc-blue)" : "var(--border)"}`,
+                    background: outcome === "available" ? "var(--blue-bg)" : "var(--surface)" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: outcome === "available" ? "var(--sc-blue)" : "var(--text)" }}>Mark Available</span>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 0" }}>Goes into the available pool at a location</p>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {outcome === "available" && (
+            <div style={S.field}>
+              <label style={S.label}>Location *</label>
               <select style={S.input} value={location} onChange={e => setLocation(e.target.value)}>
                 <option value="">Select a location…</option>
                 <option value="At Garage (Ready for Pickup)">At Garage (Ready for Pickup)</option>
                 {locations.map(l => <option key={l} value={l}>{l}</option>)}
               </select>
-            )}
-          </div>
+            </div>
+          )}
 
           {err && <p style={S.err}>{err}</p>}
-          <p style={{ fontSize: 11.5, color: "var(--text-faint)", margin: "4px 0 10px" }}>
-            This will be wired up to update the car's Fleet status and location shortly.
-          </p>
-          <button type="button" className="btn btn-ghost" style={{ width: "100%" }} onClick={handleClose}>
-            Close
+          <button type="button" style={{ ...S.btn, background: "var(--green)", opacity: saving ? 0.65 : 1 }} onClick={handleSubmit} disabled={saving}>
+            {saving ? "Saving…" : "Confirm"}
           </button>
         </div>
       </div>

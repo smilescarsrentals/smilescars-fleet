@@ -126,6 +126,7 @@ const WRITES = {
   submitChecklist: writes.submitChecklist,
   editLead: writes.editLead,
   deleteLead: writes.deleteLead,
+  markCarAvailable: writes.markCarAvailable,
   setServiceSchedule: writes.setServiceSchedule,
   // Files, signatures, agreements — formerly Google Drive
   uploadBlacklistImage: files.uploadBlacklistImage,
