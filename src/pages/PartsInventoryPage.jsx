@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
+import { SupplierPicker } from "./MaintenancePage";
 
 function fmtMoney(n) {
   return Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -138,7 +139,7 @@ export default function PartsInventoryPage({ staffName, role }) {
         <PartModal staffName={staffName} vendors={vendors} part={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
       )}
       {showScan && (
-        <ScanInvoiceModal staffName={staffName} onClose={() => setShowScan(false)} />
+        <ScanInvoiceModal staffName={staffName} onClose={() => setShowScan(false)} onSaved={load} />
       )}
     </div>
   );
@@ -155,6 +156,12 @@ function PartModal({ staffName, vendors, part, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const [costHistory, setCostHistory] = useState(null);
+  useEffect(() => {
+    if (!isEdit) return;
+    api.getPartCostHistory(part.id).then(res => setCostHistory(res?.data || [])).catch(() => setCostHistory([]));
+  }, [isEdit, part?.id]);
 
   const handleSave = async () => {
     if (!form.name.trim()) { setErr("Part name is required."); return; }
@@ -208,6 +215,29 @@ function PartModal({ staffName, vendors, part, onClose, onSaved }) {
               Active
             </label>
           )}
+
+          {isEdit && costHistory && costHistory.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3, margin: "0 0 6px" }}>
+                Price History
+              </p>
+              <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden" }}>
+                {costHistory.map(h => (
+                  <div key={h.id} style={{ padding: "7px 10px", borderBottom: "1px solid var(--border-light)", fontSize: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span>
+                        {h.oldUnitCost != null ? `TZS ${h.oldUnitCost.toLocaleString()} → ` : ""}
+                        <strong>TZS {h.newUnitCost.toLocaleString()}</strong>
+                      </span>
+                      <span style={{ color: "var(--text-faint)" }}>{new Date(h.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    {h.supplierName && <p style={{ color: "var(--text-faint)", margin: "2px 0 0" }}>via {h.supplierName} (invoice scan)</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {err && <p style={S.err}>{err}</p>}
           <button type="button" style={{ ...S.btn, background: "var(--sc-blue)", opacity: saving ? 0.65 : 1 }} onClick={handleSave} disabled={saving}>
             {saving ? "Saving…" : isEdit ? "Save Changes" : "Add Part"}
@@ -223,11 +253,21 @@ function PartModal({ staffName, vendors, part, onClose, onSaved }) {
 // Suppliers/Inventory yet. That's Phase 2+, once supplier/part matching
 // logic exists. This phase proves the extraction itself is reliable
 // enough to build on.
-function ScanInvoiceModal({ staffName, onClose }) {
+function ScanInvoiceModal({ staffName, onClose, onSaved }) {
   const [photo, setPhoto] = useState(null); // { base64, mimeType, previewUrl }
   const [scanning, setScanning] = useState(false);
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState(null); // extracted data, plus supplierVendorId/each item's partId once matched
+  const [suppliers, setSuppliers] = useState([]);
+  const [parts, setParts] = useState([]);
+  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+
+  useEffect(() => {
+    Promise.all([api.getVendors(), api.getParts()]).then(([vRes, pRes]) => {
+      setSuppliers((vRes?.data || []).filter(v => v.active && (v.vendorType === "Parts Supplier" || v.vendorType === "Both")));
+      setParts((pRes?.data || []).filter(p => p.active));
+    }).catch(() => {});
+  }, []);
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -246,7 +286,19 @@ function ScanInvoiceModal({ staffName, onClose }) {
     setScanning(true); setErr("");
     try {
       const res = await api.scanInvoice({ imageBase64: photo.base64, mimeType: photo.mimeType, staffName });
-      setResult(res.data);
+      // Best-effort auto-match on the extracted supplier name — still shown
+      // in the picker for the reviewer to confirm or change, never silent.
+      const guess = res.data.supplierName
+        ? suppliers.find(s => s.name.trim().toLowerCase() === res.data.supplierName.trim().toLowerCase())
+        : null;
+      setResult({
+        ...res.data,
+        supplierVendorId: guess?.id || "",
+        items: res.data.items.map(it => {
+          const partGuess = it.itemName ? parts.find(p => p.name.trim().toLowerCase() === it.itemName.trim().toLowerCase()) : null;
+          return { ...it, partId: partGuess?.id || "" };
+        }),
+      });
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -258,18 +310,36 @@ function ScanInvoiceModal({ staffName, onClose }) {
     setResult(r => ({ ...r, items: r.items.map((it, idx) => idx === i ? { ...it, ...patch } : it) }));
   };
 
+  const handleConfirm = async () => {
+    if (!photo) { setErr("Photo is missing."); return; }
+    if (!result.supplierVendorId && !result.supplierName.trim()) { setErr("Enter or select a supplier."); return; }
+    const validItems = result.items.filter(it => it.itemName && it.itemName.trim());
+    if (validItems.length === 0) { setErr("At least one item is required."); return; }
+    setSaving(true); setErr("");
+    try {
+      await api.confirmInvoiceScan({
+        staffName, imageBase64: photo.base64, mimeType: photo.mimeType,
+        supplierVendorId: result.supplierVendorId || undefined, supplierName: result.supplierName,
+        invoiceDate: result.invoiceDate, totalAmount: result.totalAmount,
+        items: validItems,
+      });
+      onSaved?.();
+      onClose();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div style={S.overlay} onClick={onClose}>
-      <div style={{ ...S.modal, width: 520 }} onClick={e => e.stopPropagation()}>
+      <div style={{ ...S.modal, width: 560 }} onClick={e => e.stopPropagation()}>
         <div style={{ ...S.mHead, background: "var(--sc-blue)" }}>
           <p style={S.mTitle}>Scan Invoice</p>
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={S.mBody}>
-          <p style={{ fontSize: 12, color: "var(--text-faint)", margin: "0 0 12px" }}>
-            Phase 1 — this reads the invoice and shows you what it found. Nothing is saved to Suppliers or Inventory yet.
-          </p>
-
           <div style={S.field}>
             <label style={S.label}>Invoice Photo</label>
             <input type="file" accept="image/*" capture="environment" onChange={handleFile}
@@ -292,8 +362,18 @@ function ScanInvoiceModal({ staffName, onClose }) {
           {result && (
             <div style={{ marginTop: 8 }}>
               <div style={S.field}>
-                <label style={S.label}>Supplier</label>
-                <input style={S.input} value={result.supplierName} onChange={e => setResult(r => ({ ...r, supplierName: e.target.value }))} placeholder="Not detected — enter manually" />
+                <label style={S.label}>Supplier {result.supplierVendorId ? "" : "(new — will be created)"}</label>
+                <SupplierPicker suppliers={suppliers} value={result.supplierVendorId} location=""
+                  onChange={(id) => {
+                    const match = suppliers.find(s => s.id === id);
+                    setResult(r => ({ ...r, supplierVendorId: id, supplierName: match ? match.name : r.supplierName }));
+                  }}
+                  onSupplierAdded={s => setSuppliers(list => [...list, s])} />
+                {!result.supplierVendorId && (
+                  <input style={{ ...S.input, marginTop: 6 }} value={result.supplierName}
+                    onChange={e => setResult(r => ({ ...r, supplierName: e.target.value }))}
+                    placeholder="Supplier name (from scan — edit if needed)" />
+                )}
               </div>
               <div style={S.two}>
                 <div style={S.field}>
@@ -312,20 +392,29 @@ function ScanInvoiceModal({ staffName, onClose }) {
               {result.items.length === 0 ? (
                 <p style={{ fontSize: 12, color: "var(--text-faint)", fontStyle: "italic" }}>No items detected.</p>
               ) : (
-                <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {result.items.map((it, i) => (
-                    <div key={i} style={{ padding: "8px 10px", borderBottom: "1px solid var(--border-light)", display: "flex", gap: 6, alignItems: "center" }}>
-                      <input style={{ ...S.input, flex: 2 }} value={it.itemName} onChange={e => updateItem(i, { itemName: e.target.value })} placeholder="Item name" />
-                      <input style={{ ...S.input, width: 55 }} type="number" value={it.quantity} onChange={e => updateItem(i, { quantity: Number(e.target.value) || 0 })} title="Quantity" />
-                      <input style={{ ...S.input, width: 80 }} type="number" value={it.unitPrice ?? ""} onChange={e => updateItem(i, { unitPrice: e.target.value === "" ? null : Number(e.target.value) })} placeholder="Unit price" />
+                    <div key={i} style={{ border: "1px solid var(--border-light)", borderRadius: 8, padding: 8 }}>
+                      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                        <input style={{ ...S.input, flex: 2 }} value={it.itemName} onChange={e => updateItem(i, { itemName: e.target.value })} placeholder="Item name" />
+                        <input style={{ ...S.input, width: 55 }} type="number" value={it.quantity} onChange={e => updateItem(i, { quantity: Number(e.target.value) || 0 })} title="Quantity" />
+                        <input style={{ ...S.input, width: 80 }} type="number" value={it.unitPrice ?? ""} onChange={e => updateItem(i, { unitPrice: e.target.value === "" ? null : Number(e.target.value) })} placeholder="Unit price" />
+                      </div>
+                      <select style={{ ...S.input, fontSize: 12 }} value={it.partId} onChange={e => updateItem(i, { partId: e.target.value })}>
+                        <option value="">— New part (will be created) —</option>
+                        {parts.map(p => <option key={p.id} value={p.id}>{p.name} — {p.quantityOnHand} in stock, TZS {p.unitCost.toLocaleString()}</option>)}
+                      </select>
                     </div>
                   ))}
                 </div>
               )}
 
-              <p style={{ fontSize: 11.5, color: "var(--text-faint)", margin: "12px 0 0" }}>
-                Saving to Suppliers/Inventory isn't built yet — this is only a preview of what the scan extracted.
+              <p style={{ fontSize: 11.5, color: "var(--text-faint)", margin: "12px 0 10px" }}>
+                Confirming updates stock (and cost, if it changed) for matched parts, creates new parts/supplier as needed, and saves the invoice photo.
               </p>
+              <button type="button" style={{ ...S.btn, background: "var(--green)", opacity: saving ? 0.65 : 1 }} disabled={saving} onClick={handleConfirm}>
+                {saving ? "Saving…" : "Confirm & Save"}
+              </button>
             </div>
           )}
         </div>

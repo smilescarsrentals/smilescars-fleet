@@ -51,6 +51,7 @@ const READS = {
   getNotifications: reads.getNotifications,
   getUnreadNotificationCount: reads.getUnreadNotificationCount,
   getPushSubscriptions: reads.getPushSubscriptions,
+  getPartCostHistory: reads.getPartCostHistory,
   getNotificationTriggerSettings: reads.getNotificationTriggerSettings,
   getParts: reads.getParts,
   getServiceTemplates: reads.getServiceTemplates,
@@ -80,6 +81,7 @@ const WRITES = {
     const data = await extractInvoiceData({ imageBase64: body.imageBase64, mimeType: body.mimeType });
     return { success: true, data };
   },
+  confirmInvoiceScan: writes.confirmInvoiceScan,
   verifyStaff: writes.verifyStaff,
   checkOut: writes.checkOut,
   addCar: writes.addCar,

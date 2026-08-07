@@ -895,3 +895,17 @@ CREATE TABLE IF NOT EXISTS purchase_invoice_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_purchase_invoice_items_invoice ON purchase_invoice_items(invoice_id);
+
+-- Part cost history: logs every unit_cost change caused by confirming an
+-- invoice scan, so price movement over time stays traceable.
+CREATE TABLE IF NOT EXISTS part_cost_history (
+  id                text PRIMARY KEY,
+  part_id           text NOT NULL REFERENCES parts(id) ON DELETE CASCADE,
+  old_unit_cost     numeric,
+  new_unit_cost     numeric NOT NULL,
+  invoice_id        text REFERENCES purchase_invoices(id) ON DELETE SET NULL,
+  changed_by        text,
+  created_at        timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_part_cost_history_part ON part_cost_history(part_id, created_at DESC);
