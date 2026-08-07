@@ -253,10 +253,82 @@ function PartModal({ staffName, vendors, part, onClose, onSaved }) {
 // Suppliers/Inventory yet. That's Phase 2+, once supplier/part matching
 // logic exists. This phase proves the extraction itself is reliable
 // enough to build on.
+// Mutually-exclusive link to either a Work Order or a Customer Job, per
+// instruction — pick the type first, then search within it. Entirely
+// optional; the invoice saves fine with neither.
+function WorkOrderJobPicker({ value, onChange }) {
+  const [type, setType] = useState(value.workOrderId ? "wo" : value.customerJobId ? "cj" : "");
+  const [workOrders, setWorkOrders] = useState([]);
+  const [customerJobs, setCustomerJobs] = useState([]);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (type === "wo" && workOrders.length === 0) {
+      api.getMaintenanceLog().then(res => setWorkOrders(res?.data || [])).catch(() => {});
+    }
+    if (type === "cj" && customerJobs.length === 0) {
+      api.getCustomerJobs().then(res => setCustomerJobs(res?.data || [])).catch(() => {});
+    }
+  }, [type]);
+
+  const list = type === "wo" ? workOrders : customerJobs;
+  const label = (item) => type === "wo"
+    ? `${item.refNo || item.id} — ${item.plate}`
+    : `${item.refNo || item.id} — ${item.customerName} (${item.plate || "—"})`;
+  const filtered = query.trim().length > 0
+    ? list.filter(item => label(item).toLowerCase().includes(query.toLowerCase()))
+    : list;
+
+  const selectedId = type === "wo" ? value.workOrderId : type === "cj" ? value.customerJobId : "";
+  const selectedItem = list.find(item => item.id === selectedId);
+
+  return (
+    <div style={S.field}>
+      <label style={S.label}>Link to (optional)</label>
+      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+        {[["", "None"], ["wo", "Work Order"], ["cj", "Customer Job"]].map(([val, lab]) => (
+          <button key={val} type="button"
+            onClick={() => { setType(val); setQuery(""); onChange({ workOrderId: "", customerJobId: "" }); }}
+            style={{ flex: 1, padding: "6px 0", fontSize: 11.5, fontWeight: 600, borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
+              border: `1.5px solid ${type === val ? "var(--sc-blue)" : "var(--border)"}`,
+              background: type === val ? "var(--blue-bg)" : "var(--surface)",
+              color: type === val ? "var(--sc-blue)" : "var(--text-muted)" }}>
+            {lab}
+          </button>
+        ))}
+      </div>
+      {type && (
+        <div style={{ position: "relative" }}>
+          <input style={{ ...S.input, background: selectedItem ? "var(--blue-bg)" : "var(--surface)" }}
+            placeholder={type === "wo" ? "Search work orders…" : "Search customer jobs…"} autoComplete="off"
+            value={selectedItem ? label(selectedItem) : query}
+            onChange={e => { setQuery(e.target.value); onChange({ workOrderId: "", customerJobId: "" }); setOpen(true); }}
+            onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+          {open && filtered.length > 0 && (
+            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow)", zIndex: 50, maxHeight: 180, overflowY: "auto" }}>
+              {filtered.slice(0, 20).map(item => (
+                <div key={item.id} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12.5, borderBottom: "1px solid var(--border-light)" }}
+                  onMouseDown={() => {
+                    onChange(type === "wo" ? { workOrderId: item.id, customerJobId: "" } : { workOrderId: "", customerJobId: item.id });
+                    setQuery(""); setOpen(false);
+                  }}>
+                  {label(item)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ScanInvoiceModal({ staffName, onClose, onSaved }) {
   const [photo, setPhoto] = useState(null); // { base64, mimeType, previewUrl }
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState(null); // extracted data, plus supplierVendorId/each item's partId once matched
+  const [link, setLink] = useState({ workOrderId: "", customerJobId: "" });
   const [suppliers, setSuppliers] = useState([]);
   const [parts, setParts] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -322,6 +394,7 @@ function ScanInvoiceModal({ staffName, onClose, onSaved }) {
         supplierVendorId: result.supplierVendorId || undefined, supplierName: result.supplierName,
         invoiceDate: result.invoiceDate, totalAmount: result.totalAmount,
         items: validItems,
+        workOrderId: link.workOrderId || undefined, customerJobId: link.customerJobId || undefined,
       });
       onSaved?.();
       onClose();
@@ -408,6 +481,10 @@ function ScanInvoiceModal({ staffName, onClose, onSaved }) {
                   ))}
                 </div>
               )}
+
+              <div style={{ marginTop: 14 }}>
+                <WorkOrderJobPicker value={link} onChange={setLink} />
+              </div>
 
               <p style={{ fontSize: 11.5, color: "var(--text-faint)", margin: "12px 0 10px" }}>
                 Confirming updates stock (and cost, if it changed) for matched parts, creates new parts/supplier as needed, and saves the invoice photo.

@@ -52,6 +52,8 @@ const READS = {
   getUnreadNotificationCount: reads.getUnreadNotificationCount,
   getPushSubscriptions: reads.getPushSubscriptions,
   getPartCostHistory: reads.getPartCostHistory,
+  getPurchaseInvoices: reads.getPurchaseInvoices,
+  getPurchaseInvoiceItems: reads.getPurchaseInvoiceItems,
   getNotificationTriggerSettings: reads.getNotificationTriggerSettings,
   getParts: reads.getParts,
   getServiceTemplates: reads.getServiceTemplates,
