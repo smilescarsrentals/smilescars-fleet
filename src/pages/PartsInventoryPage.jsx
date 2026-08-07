@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../lib/api";
+import { compressImage } from "../lib/imageCompress";
 
 function fmtMoney(n) {
   return Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -14,6 +15,7 @@ export default function PartsInventoryPage({ staffName, role }) {
   const [search, setSearch] = useState("");
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [showScan, setShowScan] = useState(false);
   const [editing, setEditing] = useState(null);
 
   useEffect(() => { load(); }, []);
@@ -67,7 +69,12 @@ export default function PartsInventoryPage({ staffName, role }) {
             ⚠ Low Stock {lowStockCount > 0 && `(${lowStockCount})`}
           </button>
         </div>
-        {canEdit && <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ Add Part</button>}
+        {canEdit && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" className="btn btn-ghost" onClick={() => setShowScan(true)}>📷 Scan Invoice</button>
+            <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ Add Part</button>
+          </div>
+        )}
       </div>
 
       {err && <p style={{ color: "var(--red)", fontSize: 13 }}>{err}</p>}
@@ -129,6 +136,9 @@ export default function PartsInventoryPage({ staffName, role }) {
       )}
       {editing && (
         <PartModal staffName={staffName} vendors={vendors} part={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
+      )}
+      {showScan && (
+        <ScanInvoiceModal staffName={staffName} onClose={() => setShowScan(false)} />
       )}
     </div>
   );
@@ -202,6 +212,122 @@ function PartModal({ staffName, vendors, part, onClose, onSaved }) {
           <button type="button" style={{ ...S.btn, background: "var(--sc-blue)", opacity: saving ? 0.65 : 1 }} onClick={handleSave} disabled={saving}>
             {saving ? "Saving…" : isEdit ? "Save Changes" : "Add Part"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Scan Invoice (Phase 1) ──────────────────────────────────────────────
+// Photo in, extracted data shown for review — nothing is saved to
+// Suppliers/Inventory yet. That's Phase 2+, once supplier/part matching
+// logic exists. This phase proves the extraction itself is reliable
+// enough to build on.
+function ScanInvoiceModal({ staffName, onClose }) {
+  const [photo, setPhoto] = useState(null); // { base64, mimeType, previewUrl }
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState("");
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErr(""); setResult(null);
+    try {
+      const compressed = await compressImage(file);
+      setPhoto({ ...compressed, previewUrl: URL.createObjectURL(file) });
+    } catch (ex) {
+      setErr("Could not read that image — try a different photo.");
+    }
+  };
+
+  const handleScan = async () => {
+    if (!photo) { setErr("Take or choose a photo first."); return; }
+    setScanning(true); setErr("");
+    try {
+      const res = await api.scanInvoice({ imageBase64: photo.base64, mimeType: photo.mimeType, staffName });
+      setResult(res.data);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const updateItem = (i, patch) => {
+    setResult(r => ({ ...r, items: r.items.map((it, idx) => idx === i ? { ...it, ...patch } : it) }));
+  };
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modal, width: 520 }} onClick={e => e.stopPropagation()}>
+        <div style={{ ...S.mHead, background: "var(--sc-blue)" }}>
+          <p style={S.mTitle}>Scan Invoice</p>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={S.mBody}>
+          <p style={{ fontSize: 12, color: "var(--text-faint)", margin: "0 0 12px" }}>
+            Phase 1 — this reads the invoice and shows you what it found. Nothing is saved to Suppliers or Inventory yet.
+          </p>
+
+          <div style={S.field}>
+            <label style={S.label}>Invoice Photo</label>
+            <input type="file" accept="image/*" capture="environment" onChange={handleFile}
+              style={{ fontSize: 13, fontFamily: "inherit" }} />
+          </div>
+
+          {photo?.previewUrl && (
+            <img src={photo.previewUrl} alt="Invoice preview" style={{ width: "100%", maxHeight: 220, objectFit: "contain", borderRadius: 8, border: "1px solid var(--border)", marginBottom: 10 }} />
+          )}
+
+          {err && <p style={S.err}>{err}</p>}
+
+          {!result && (
+            <button type="button" style={{ ...S.btn, background: "var(--sc-blue)", opacity: scanning || !photo ? 0.65 : 1 }}
+              disabled={scanning || !photo} onClick={handleScan}>
+              {scanning ? "Reading invoice…" : "Scan"}
+            </button>
+          )}
+
+          {result && (
+            <div style={{ marginTop: 8 }}>
+              <div style={S.field}>
+                <label style={S.label}>Supplier</label>
+                <input style={S.input} value={result.supplierName} onChange={e => setResult(r => ({ ...r, supplierName: e.target.value }))} placeholder="Not detected — enter manually" />
+              </div>
+              <div style={S.two}>
+                <div style={S.field}>
+                  <label style={S.label}>Invoice Date</label>
+                  <input style={S.input} value={result.invoiceDate} onChange={e => setResult(r => ({ ...r, invoiceDate: e.target.value }))} placeholder="Not detected" />
+                </div>
+                <div style={S.field}>
+                  <label style={S.label}>Total Amount</label>
+                  <input style={S.input} type="number" value={result.totalAmount ?? ""} onChange={e => setResult(r => ({ ...r, totalAmount: e.target.value === "" ? null : Number(e.target.value) }))} placeholder="Not detected" />
+                </div>
+              </div>
+
+              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3, margin: "14px 0 8px" }}>
+                Items ({result.items.length})
+              </p>
+              {result.items.length === 0 ? (
+                <p style={{ fontSize: 12, color: "var(--text-faint)", fontStyle: "italic" }}>No items detected.</p>
+              ) : (
+                <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden" }}>
+                  {result.items.map((it, i) => (
+                    <div key={i} style={{ padding: "8px 10px", borderBottom: "1px solid var(--border-light)", display: "flex", gap: 6, alignItems: "center" }}>
+                      <input style={{ ...S.input, flex: 2 }} value={it.itemName} onChange={e => updateItem(i, { itemName: e.target.value })} placeholder="Item name" />
+                      <input style={{ ...S.input, width: 55 }} type="number" value={it.quantity} onChange={e => updateItem(i, { quantity: Number(e.target.value) || 0 })} title="Quantity" />
+                      <input style={{ ...S.input, width: 80 }} type="number" value={it.unitPrice ?? ""} onChange={e => updateItem(i, { unitPrice: e.target.value === "" ? null : Number(e.target.value) })} placeholder="Unit price" />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p style={{ fontSize: 11.5, color: "var(--text-faint)", margin: "12px 0 0" }}>
+                Saving to Suppliers/Inventory isn't built yet — this is only a preview of what the scan extracted.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

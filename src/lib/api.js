@@ -69,6 +69,7 @@ export const api = {
   getDrivers:             ()     => get("getDrivers"),
   setStaffActive:        (body)  => post({ action: "setStaffActive",         ...body }),
   addDriverWithPhone:     (body) => post({ action: "addDriverWithPhone",     ...body }),
+  scanInvoice:            (body) => post({ action: "scanInvoice",            ...body }),
   setStaffPhone:          (body) => post({ action: "setStaffPhone",          ...body }),
   getSettings:            ()     => get("getSettings"),
   updateSetting:         (body)  => post({ action: "updateSetting",          ...body }),

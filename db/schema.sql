@@ -861,3 +861,37 @@ ON CONFLICT (type) DO NOTHING;
 -- can print full name + contact for both the checkout staff member and
 -- any assigned driver.
 ALTER TABLE config ADD COLUMN IF NOT EXISTS phone text;
+
+-- Purchase Invoices (Garage invoice scanning, Phase 1 shell). Photo +
+-- extracted line items, kept separate from Parts/Vendors until matching
+-- logic exists (Phase 2+).
+CREATE TABLE IF NOT EXISTS purchase_invoices (
+  id                 text PRIMARY KEY,
+  supplier_name      text,
+  supplier_vendor_id text REFERENCES vendors(id) ON DELETE SET NULL,
+  invoice_date       text,
+  total_amount       numeric DEFAULT 0,
+  photo_file_id      text REFERENCES files(id) ON DELETE SET NULL,
+  work_order_id      text REFERENCES maintenance_log(id) ON DELETE SET NULL,
+  customer_job_id    text REFERENCES customer_jobs(id) ON DELETE SET NULL,
+  status             text DEFAULT 'Draft',
+  scanned_by         text,
+  created_at         timestamp DEFAULT now(),
+  updated_at         timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_invoices_status ON purchase_invoices(status);
+CREATE INDEX IF NOT EXISTS idx_purchase_invoices_vendor ON purchase_invoices(supplier_vendor_id);
+
+CREATE TABLE IF NOT EXISTS purchase_invoice_items (
+  id             text PRIMARY KEY,
+  invoice_id     text NOT NULL REFERENCES purchase_invoices(id) ON DELETE CASCADE,
+  item_name      text NOT NULL,
+  part_id        text REFERENCES parts(id) ON DELETE SET NULL,
+  quantity       numeric DEFAULT 1,
+  unit_price     numeric DEFAULT 0,
+  line_total     numeric DEFAULT 0,
+  created_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_invoice_items_invoice ON purchase_invoice_items(invoice_id);

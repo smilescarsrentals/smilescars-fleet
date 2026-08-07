@@ -14,6 +14,8 @@ import * as reads from "../lib/reads.js";
 import * as writes from "../lib/writes.js";
 import * as files from "../lib/files.js";
 import { health } from "../lib/health.js";
+import { extractInvoiceData } from "../lib/invoiceScan.js";
+import { requireMaintenanceEditAccess } from "../lib/core.js";
 
 // Optional. Only used for actions this API doesn't implement — leave it unset
 // once the Apps Script is retired.
@@ -70,6 +72,14 @@ const READS = {
 
 // POST action -> handler(body).
 const WRITES = {
+  // Phase 1: extraction only, doesn't write to the database — kept in
+  // WRITES (not READS) since it's a POST carrying image data, and the
+  // access-gating (Garage staff only) matches everything else here.
+  scanInvoice: async (body) => {
+    await requireMaintenanceEditAccess(body.staffName);
+    const data = await extractInvoiceData({ imageBase64: body.imageBase64, mimeType: body.mimeType });
+    return { success: true, data };
+  },
   verifyStaff: writes.verifyStaff,
   checkOut: writes.checkOut,
   addCar: writes.addCar,
