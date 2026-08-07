@@ -43,6 +43,92 @@ function FineInput({ value, onChange, label }) {
 // rather than picked from a giant dropdown. No "add new" escape hatch here
 // on purpose — vendors are managed in Garage -> Vendors now, so this stays
 // a single source of truth instead of drifting back into free text.
+// Type-ahead over real Drivers (name + phone), with an always-visible
+// "Add new driver" option — not buried at the bottom of a dropdown you
+// have to scroll to discover, per instruction. Phone is required when
+// adding a new driver inline, so every driver in the system genuinely
+// has one for the rental agreement to print.
+function DriverPicker({ drivers, value, onChange, onDriverAdded }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [addingNew, setAddingNew] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const selected = drivers.find(d => d.name === value);
+  const filtered = query.trim().length > 0
+    ? drivers.filter(d => d.name.toLowerCase().includes(query.toLowerCase()))
+    : drivers;
+
+  const handleAddNew = async () => {
+    if (!newName.trim()) { setErr("Driver name is required."); return; }
+    if (!newPhone.trim()) { setErr("Phone number is required."); return; }
+    setSaving(true); setErr("");
+    try {
+      await api.addDriverWithPhone({ name: newName.trim(), phone: newPhone.trim() });
+      const added = { name: newName.trim(), phone: newPhone.trim() };
+      onDriverAdded(added);
+      onChange(added.name);
+      setNewName(""); setNewPhone(""); setAddingNew(false); setQuery("");
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div>
+      {!addingNew ? (
+        <div style={{ position: "relative" }}>
+          <input style={{ width: "100%", padding: "9px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, boxSizing: "border-box", fontFamily: "inherit", background: selected ? "var(--blue-bg)" : "#fff" }}
+            placeholder="Type to search drivers…" autoComplete="off"
+            value={selected ? `${selected.name}${selected.phone ? " — " + selected.phone : ""}` : query}
+            onChange={e => { setQuery(e.target.value); onChange(""); setOpen(true); }}
+            onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+          {open && (
+            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", zIndex: 50, maxHeight: 200, overflowY: "auto" }}>
+              <div style={{ padding: "9px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #f3f4f6", color: "#888" }}
+                onMouseDown={() => { onChange(""); setQuery(""); setOpen(false); }}>
+                — No driver —
+              </div>
+              {filtered.slice(0, 20).map(d => (
+                <div key={d.name} style={{ padding: "9px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #f3f4f6" }}
+                  onMouseDown={() => { onChange(d.name); setQuery(""); setOpen(false); }}>
+                  {d.name}{d.phone && <span style={{ color: "#999", fontSize: 12 }}> — {d.phone}</span>}
+                </div>
+              ))}
+              <div style={{ padding: "9px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--sc-blue, #04519B)" }}
+                onMouseDown={() => { setAddingNew(true); setOpen(false); }}>
+                + Add new driver
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          <div style={{ display: "flex", gap: 6, marginBottom: err ? 6 : 0 }}>
+            <input style={{ flex: 1, padding: "9px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, fontFamily: "inherit" }}
+              placeholder="Driver name" value={newName} onChange={e => setNewName(e.target.value)} onBlur={e => setNewName(toTitleCase(e.target.value))} autoFocus />
+            <input style={{ flex: 1, padding: "9px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, fontFamily: "inherit" }}
+              placeholder="Phone number" value={newPhone} onChange={e => setNewPhone(e.target.value)} />
+          </div>
+          {err && <p style={{ color: "#dc2626", fontSize: 12, margin: "0 0 6px" }}>{err}</p>}
+          <div style={{ display: "flex", gap: 6 }}>
+            <button type="button" onClick={() => { setAddingNew(false); setNewName(""); setNewPhone(""); setErr(""); }}
+              style={{ padding: "0 10px", fontSize: 12, color: "#666", background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 6, cursor: "pointer" }}>
+              Cancel
+            </button>
+            <button type="button" disabled={saving} onClick={handleAddNew}
+              style={{ flex: 1, padding: "8px 0", fontSize: 12, fontWeight: 600, color: "#fff", background: "var(--sc-blue, #04519B)", border: "none", borderRadius: 6, cursor: "pointer", opacity: saving ? 0.65 : 1 }}>
+              {saving ? "Adding…" : "Add Driver"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GarageLocationPicker({ serviceLocationType, internalLocation, externalVendorId, externalVendorLocation, onChange }) {
   const [vendors, setVendors] = useState([]);
   const [query, setQuery] = useState("");
@@ -127,6 +213,14 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const today = new Date().toISOString().split("T")[0];
   const canAddLocGarage = role === "Admin" || role === "Manager";
 
+  // Richer than the drivers prop (plain strings from config.drivers) — this
+  // is what DriverPicker actually needs (name + phone) for the type-ahead
+  // and the rental agreement print-out.
+  const [richDrivers, setRichDrivers] = useState([]);
+  useEffect(() => {
+    api.getDrivers().then(res => setRichDrivers(res?.data || [])).catch(() => {});
+  }, []);
+
   const [client,        setClient]       = useState(car.currentClient || "");
   const [clientPhone,   setClientPhone]  = useState(car.clientPhone || "");
   const [bookedFrom,    setBookedFrom]   = useState(today);
@@ -145,8 +239,6 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const [paymentStatus, setPaymentStatus]= useState("Unpaid");
   const [amountPaid,    setAmountPaid]   = useState("");
   const [driver,        setDriver]       = useState(car.driver || "");
-  const [newDriver,     setNewDriver]    = useState("");
-  const [addingDriver,  setAddingDriver] = useState(false);
   const [newLoc,        setNewLoc]       = useState("");
   const [addingLoc,     setAddingLoc]    = useState(false);
   const [serviceLocationType, setServiceLocationType] = useState("Internal");
@@ -170,7 +262,6 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   // destabilize this component's identity mid-render and reset its state.
   const uniq = (arr) => Array.from(new Set((arr || []).filter(Boolean)));
   const locationsList = uniq(locations);
-  const driversList   = uniq(drivers);
   const staffList     = uniq(staff);
 
   const needsClient   = action === "checkOut";
@@ -194,7 +285,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
     if (isTransfer && !bookedFrom)   { setErr("Transfer date is required."); return; }
     if (isTransfer && !pickupFrom.trim()) { setErr("Pick-up location is required."); return; }
     if (isTransfer && !dropoffTo.trim())  { setErr("Drop-off location is required."); return; }
-    if (isTransfer && !(addingDriver ? newDriver.trim() : driver)) { setErr("Driver Allocated is required for a Transfer."); return; }
+    if (isTransfer && !driver) { setErr("Driver Allocated is required for a Transfer."); return; }
     if ((needsClient && bookingType === "Rental") || isExtend) { if (!returnDate) { setErr("Return date is required."); return; } }
     if (isMaintenance && serviceLocationType === "External" && !externalVendorId) { setErr("Please select a garage."); return; }
     if (isMaintenance && !kmOut.trim()) { setErr("Odometer (KM) is required."); return; }
@@ -202,7 +293,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
     if (needsClient && paymentStatus === "Partial Paid" && !amountPaid) { setErr("Please enter amount paid."); return; }
     if (isStaffUse && !assignedTo) { setErr("Please select a staff member."); return; }
     const loc = addingLoc    ? newLoc.trim()    : location;
-    const drv = addingDriver ? newDriver.trim() : driver;
+    const driverPhone = richDrivers.find(d => d.name === driver)?.phone || "";
     onConfirm({
       client, clientPhone,
       bookedFrom, returnDate: isTransfer ? bookedFrom : returnDate, actualReturn,
@@ -210,9 +301,8 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
       amount: unformat(amount), currency,
       policeFine: unformat(policeFine), parkingFine: unformat(parkingFine),
       paymentStatus, amountPaid: unformat(amountPaid),
-      serviceLocationType, internalLocation, externalVendorId, externalVendorLocation, driver: drv, assignedTo,
+      serviceLocationType, internalLocation, externalVendorId, externalVendorLocation, driver, driverPhone, assignedTo,
       newLocation: addingLoc    ? loc : null,
-      newDriver:   addingDriver ? drv : null,
       bookingType: needsClient ? bookingType : undefined,
       pickupFrom: isTransfer ? pickupFrom.trim() : undefined,
       dropoffTo:  isTransfer ? dropoffTo.trim()  : undefined,
@@ -320,18 +410,8 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 </div>
               </div>
               <div style={S.field}><label style={S.label}>Driver (optional)</label>
-                {!addingDriver ? (
-                  <select style={sel} value={driver} onChange={e => { if (e.target.value === "__new__") setAddingDriver(true); else setDriver(e.target.value); }}>
-                    <option value="">— No driver —</option>
-                    {driversList.map(d => <option key={d} value={d}>{d}</option>)}
-                    <option value="__new__">+ Add new driver</option>
-                  </select>
-                ) : (
-                  <div style={{ display:"flex", gap:6 }}>
-                    <input style={{ ...S.input, flex:1 }} placeholder="Driver name" value={newDriver} onChange={e => setNewDriver(e.target.value)} onBlur={e => setNewDriver(toTitleCase(e.target.value))} autoFocus />
-                    <button type="button" style={S.cancelSmall} onClick={() => setAddingDriver(false)}>✕</button>
-                  </div>
-                )}
+                <DriverPicker drivers={richDrivers} value={driver} onChange={setDriver}
+                  onDriverAdded={d => setRichDrivers(list => [...list, d])} />
               </div>
               <div style={S.three}>
                 {locationField}
@@ -359,18 +439,8 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
               <div style={S.field}><label style={S.label}>Transfer Date *</label>
                 <input style={S.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} /></div>
               <div style={S.field}><label style={S.label}>Driver Allocated *</label>
-                {!addingDriver ? (
-                  <select style={sel} value={driver} onChange={e => { if (e.target.value === "__new__") setAddingDriver(true); else setDriver(e.target.value); }}>
-                    <option value="">— Select —</option>
-                    {driversList.map(d => <option key={d} value={d}>{d}</option>)}
-                    <option value="__new__">+ Add new driver</option>
-                  </select>
-                ) : (
-                  <div style={{ display:"flex", gap:6 }}>
-                    <input style={{ ...S.input, flex:1 }} placeholder="Driver name" value={newDriver} onChange={e => setNewDriver(e.target.value)} onBlur={e => setNewDriver(toTitleCase(e.target.value))} autoFocus />
-                    <button type="button" style={S.cancelSmall} onClick={() => setAddingDriver(false)}>✕</button>
-                  </div>
-                )}
+                <DriverPicker drivers={richDrivers} value={driver} onChange={setDriver}
+                  onDriverAdded={d => setRichDrivers(list => [...list, d])} />
               </div>
               <div style={S.two}>
                 <div style={S.field}><label style={S.label}>Amount Charged</label>

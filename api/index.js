@@ -57,6 +57,7 @@ const READS = {
   getChecklistInstances: reads.getChecklistInstances,
   getSettings: reads.getSettings,
   getStaffList: reads.getStaffList,
+  getDrivers: reads.getDrivers,
   // Files, signatures, agreements — formerly Google Drive
   getSignature: files.getSignature,
   getStaffSignature: files.getStaffSignature,
@@ -83,6 +84,8 @@ const WRITES = {
   markSold: writes.markSold,
   addStaff: writes.addStaff,
   setStaffActive: writes.setStaffActive,
+  addDriverWithPhone: writes.addDriverWithPhone,
+  setStaffPhone: writes.setStaffPhone,
   addLocation: (b) => writes.addConfigItem("Location", b.name),
   addGarage: (b) => writes.addConfigItem("Garage", b.name),
   addDriver: (b) => writes.addConfigItem("Driver", b.name),

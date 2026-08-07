@@ -282,6 +282,22 @@ export default function RentalAgreementModal({ car, checkout, staffName, onClose
   const [sigStatus, setSigStatus] = useState(""); // "" | "waiting" | "received"
   const pollRef = useRef(null);
 
+  // ── Staff phone: fetched once per agreement, printed alongside the name ──
+  const [staffPhone, setStaffPhone] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await get("getStaffList");
+        if (!cancelled && res.success) {
+          const match = (res.staff || []).find(s => s.name === staffName);
+          if (match) setStaffPhone(match.phone || "");
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [staffName]);
+
   // ── Staff signature: fetched once, reused automatically on every agreement ──
   // Stored server-side as a Drive image (see Code.gs) — only a URL comes back here,
   // so we convert it to a data URL once, ready for both <img> display and jsPDF embedding.
@@ -436,7 +452,7 @@ export default function RentalAgreementModal({ car, checkout, staffName, onClose
       doc.setFont(bodyFont,"normal"); doc.setFontSize(8);
       doc.text(`Ref: ${currentRef}`, ml, y);
       doc.text(`Date: ${fmtD(todayDate())}`, W/2, y, { align:"center" });
-      doc.text(`Staff: ${staffName}`, W-mr, y, { align:"right" });
+      doc.text(`Staff: ${staffName}${staffPhone ? " (" + staffPhone + ")" : ""}`, W-mr, y, { align:"right" });
       y += 5;
 
       // ── Vehicle Details | Renter Details ──
@@ -462,6 +478,7 @@ export default function RentalAgreementModal({ car, checkout, staffName, onClose
         [["Pickup Loc.", checkout.location], ["No. of Days", String(days)]],
         [["Daily Rate", dailyRate?`${checkout.currency||"TZS"} ${fmtNum(dailyRate)}`:"—"], ["Payment Status", checkout.paymentStatus]],
         [["Total Amount", totalAmount?`${checkout.currency||"TZS"} ${fmtNum(totalAmount)}`:checkout.amount?`${checkout.currency||"TZS"} ${fmtNum(checkout.amount)}`:"—"], ["Deposit", deposit?`${checkout.currency||"TZS"} ${fmtNum(deposit)}`:"—"]],
+        ...(checkout.driver ? [[["Driver", checkout.driver], ["Driver Phone", checkout.driverPhone || "—"]]] : []),
       ]);
       y+=2;
 

@@ -856,3 +856,8 @@ INSERT INTO notification_trigger_settings (type, label) VALUES
   ('reservation_reminder',   '24h Reservation Reminder'),
   ('unpaid_customer_job',    'Customer Job Unpaid 3+ Days')
 ON CONFLICT (type) DO NOTHING;
+
+-- Phone number for Staff and Driver config rows, so the rental agreement
+-- can print full name + contact for both the checkout staff member and
+-- any assigned driver.
+ALTER TABLE config ADD COLUMN IF NOT EXISTS phone text;

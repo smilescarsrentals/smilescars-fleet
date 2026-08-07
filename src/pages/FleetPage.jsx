@@ -167,7 +167,6 @@ export default function FleetPage({ staffName, role }) {
       if (action === "markSold")       await api.markSold(payload);
       if (fields.newLocation) await api.addLocation(fields.newLocation);
       if (fields.newGarage)   await api.addGarage(fields.newGarage);
-      if (fields.newDriver)   await api.addDriver(fields.newDriver);
       setModal(null);
       showToast("✅ Saved successfully");
       cache.clear();
