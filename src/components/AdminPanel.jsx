@@ -6,6 +6,7 @@ import { toTitleCase } from "../lib/textFormat";
 const TABS = [
   { key: "fleet",    label: "Fleet"    },
   { key: "staff",    label: "Staff"    },
+  { key: "notifications", label: "Notifications" },
   { key: "features", label: "Features" },
   { key: "system",   label: "System"   },
 ];
@@ -39,6 +40,7 @@ export default function AdminPanel({ onClose }) {
         <div style={S.body}>
           {tab === "fleet"    && <FleetTab    config={config} onConfigChanged={loadConfig} />}
           {tab === "staff"    && <StaffTab />}
+          {tab === "notifications" && <NotificationsTab />}
           {tab === "features" && <FeaturesTab />}
           {tab === "system"   && <SystemTab />}
         </div>
@@ -232,6 +234,64 @@ function AddStaffModal({ onClose, onSaved }) {
 }
 
 // ── Features tab: Rental Agreement + Dropbox sync toggles ──────────────────
+// ── Notifications tab: per-trigger on/off + who gets ALL reservation
+// reminders (not just their own) ────────────────────────────────────────
+function NotificationsTab() {
+  const [triggers, setTriggers] = useState(null);
+  const [staff, setStaff] = useState(null);
+  const [busyKey, setBusyKey] = useState(null); // which row is mid-save, so only that row shows busy
+
+  const load = () => {
+    api.getNotificationTriggerSettings().then(res => setTriggers(res.data)).catch(() => {});
+    api.getStaffList().then(res => setStaff(res.staff)).catch(() => {});
+  };
+  useEffect(load, []);
+
+  const toggleTrigger = async (t) => {
+    setBusyKey(t.type);
+    try {
+      await api.setNotificationTriggerEnabled({ type: t.type, enabled: !t.enabled });
+      setTriggers(list => list.map(x => x.type === t.type ? { ...x, enabled: !x.enabled } : x));
+    } catch (e) { alert(e.message); }
+    finally { setBusyKey(null); }
+  };
+
+  const toggleReminders = async (s) => {
+    setBusyKey(s.name);
+    try {
+      await api.setReceivesAllReservationReminders({ name: s.name, enabled: !s.receivesAllReservationReminders });
+      setStaff(list => list.map(x => x.name === s.name ? { ...x, receivesAllReservationReminders: !x.receivesAllReservationReminders } : x));
+    } catch (e) { alert(e.message); }
+    finally { setBusyKey(null); }
+  };
+
+  if (!triggers || !staff) return <p style={{ fontSize: 13, color: "#888" }}>Loading…</p>;
+
+  return (
+    <div>
+      <p style={{ fontSize: 12, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 0.3, margin: "0 0 8px" }}>
+        Triggers
+      </p>
+      <p style={{ fontSize: 12, color: "#888", margin: "0 0 12px" }}>
+        Turning a trigger off silences it everywhere — the bell AND push — for everyone. Use this if one becomes noisy rather than deactivating individual staff.
+      </p>
+      {triggers.map(t => (
+        <ToggleRow key={t.type} label={t.label} sub="" on={t.enabled} busy={busyKey === t.type} onToggle={() => toggleTrigger(t)} />
+      ))}
+
+      <p style={{ fontSize: 12, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 0.3, margin: "20px 0 8px" }}>
+        Reservation Reminders
+      </p>
+      <p style={{ fontSize: 12, color: "#888", margin: "0 0 12px" }}>
+        Everyone gets a reminder for their own reservations 24h before pickup automatically. Turn this on for someone who should also see EVERY reservation, not just their own.
+      </p>
+      {staff.filter(s => s.active).map(s => (
+        <ToggleRow key={s.name} label={s.name} sub={s.role} on={s.receivesAllReservationReminders} busy={busyKey === s.name} onToggle={() => toggleReminders(s)} />
+      ))}
+    </div>
+  );
+}
+
 function FeaturesTab() {
   const [settings, setSettings]   = useState(null);
   const [syncOn,   setSyncOn]     = useState(null);

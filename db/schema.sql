@@ -838,3 +838,21 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_staff ON push_subscriptions(staff_name);
+
+-- Per-trigger notification on/off, so a specific trigger (in-app AND
+-- push) can be muted from Admin Panel without a code change.
+CREATE TABLE IF NOT EXISTS notification_trigger_settings (
+  type         text PRIMARY KEY,
+  label        text NOT NULL,
+  enabled      text DEFAULT 'TRUE',
+  updated_at   timestamp DEFAULT now()
+);
+
+INSERT INTO notification_trigger_settings (type, label) VALUES
+  ('fleet_to_garage',        'Fleet to Garage'),
+  ('low_stock',              'Low Stock'),
+  ('car_out_for_service',    'Mid-Rental Car Sent to Garage'),
+  ('car_back_from_service',  'Car Back from Garage'),
+  ('reservation_reminder',   '24h Reservation Reminder'),
+  ('unpaid_customer_job',    'Customer Job Unpaid 3+ Days')
+ON CONFLICT (type) DO NOTHING;
