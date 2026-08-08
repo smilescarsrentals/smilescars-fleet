@@ -1,22 +1,30 @@
 // src/App.jsx
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import StaffGate from "./components/StaffGate";
 import Layout from "./components/Layout";
 import DashboardPage from "./pages/DashboardPage";
-import FleetPage from "./pages/FleetPage";
-import HistoryPage from "./pages/HistoryPage";
-import SoldPage from "./pages/SoldPage";
-import SubHirePage from "./pages/SubHirePage";
-import ClientsPage from "./pages/ClientsPage";
-import CarProfilePage from "./pages/CarProfilePage";
-import FuelPage from "./pages/FuelPage";
-import ReservationsPage from "./pages/ReservationsPage";
-import LeadsPage from "./pages/LeadsPage";
-import GaragePage from "./pages/GaragePage";
-import BlacklistPage from "./pages/BlacklistPage";
 import SignaturePage from "./pages/SignaturePage";
 import logo from "./assets/logo.js";
+
+// Lazy-loaded: each becomes its own chunk, fetched only when that route is
+// actually visited, instead of everyone downloading the whole app (Garage's
+// 7 sub-tabs, Blacklist, Sold, etc.) on first login regardless of which
+// pages they'll ever open. Dashboard and SignaturePage stay eager — they're
+// the very first thing most people see (Dashboard) or an external,
+// unauthenticated signer sees (SignaturePage), so lazy-loading them would
+// only add a loading flash with no real benefit.
+const FleetPage        = lazy(() => import("./pages/FleetPage"));
+const HistoryPage      = lazy(() => import("./pages/HistoryPage"));
+const SoldPage         = lazy(() => import("./pages/SoldPage"));
+const SubHirePage      = lazy(() => import("./pages/SubHirePage"));
+const ClientsPage      = lazy(() => import("./pages/ClientsPage"));
+const CarProfilePage   = lazy(() => import("./pages/CarProfilePage"));
+const FuelPage         = lazy(() => import("./pages/FuelPage"));
+const ReservationsPage = lazy(() => import("./pages/ReservationsPage"));
+const LeadsPage        = lazy(() => import("./pages/LeadsPage"));
+const GaragePage       = lazy(() => import("./pages/GaragePage"));
+const BlacklistPage    = lazy(() => import("./pages/BlacklistPage"));
 
 export default function App() {
   const [staffName, setStaffName] = useState(
@@ -58,23 +66,25 @@ export default function App() {
   return (
     <BrowserRouter>
       <Layout staffName={staffName} role={role} onSignOut={handleSignOut} logo={logo}>
-        <Routes>
-          <Route path="/"           element={role === "Garage Manager" ? <Navigate to="/garage" /> : <DashboardPage staffName={staffName} role={role} />} />
-          <Route path="/fleet"      element={<FleetPage staffName={staffName} role={role} />} />
-          <Route path="/history"    element={<HistoryPage role={role} />} />
-          <Route path="/clients"    element={<ClientsPage />} />
-          <Route path="/car/:plate" element={<CarProfilePage staffName={staffName} role={role} />} />
-          <Route path="/sub-hire"   element={<SubHirePage staffName={staffName} />} />
-          <Route path="/fuel"         element={<FuelPage staffName={staffName} role={role} fuelAccess={fuelAccess} />} />
-          <Route path="/reservations" element={<ReservationsPage staffName={staffName} role={role} />} />
-          <Route path="/leads"        element={<LeadsPage staffName={staffName} role={role} />} />
-          <Route path="/garage"       element={<GaragePage staffName={staffName} role={role} />} />
-          <Route path="/garage/:tab"  element={<GaragePage staffName={staffName} role={role} />} />
-          <Route path="/sold"         element={<SoldPage />} />
-          <Route path="/blacklist"    element={<BlacklistPage staffName={staffName} role={role} />} />
-          <Route path="/sign/:token"  element={<SignaturePage />} />
-          <Route path="*"           element={<Navigate to={role === "Garage Manager" ? "/garage" : "/"} />} />
-        </Routes>
+        <Suspense fallback={<div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted, #888)", fontSize: 14 }}>Loading…</div>}>
+          <Routes>
+            <Route path="/"           element={role === "Garage Manager" ? <Navigate to="/garage" /> : <DashboardPage staffName={staffName} role={role} />} />
+            <Route path="/fleet"      element={<FleetPage staffName={staffName} role={role} />} />
+            <Route path="/history"    element={<HistoryPage role={role} />} />
+            <Route path="/clients"    element={<ClientsPage />} />
+            <Route path="/car/:plate" element={<CarProfilePage staffName={staffName} role={role} />} />
+            <Route path="/sub-hire"   element={<SubHirePage staffName={staffName} />} />
+            <Route path="/fuel"         element={<FuelPage staffName={staffName} role={role} fuelAccess={fuelAccess} />} />
+            <Route path="/reservations" element={<ReservationsPage staffName={staffName} role={role} />} />
+            <Route path="/leads"        element={<LeadsPage staffName={staffName} role={role} />} />
+            <Route path="/garage"       element={<GaragePage staffName={staffName} role={role} />} />
+            <Route path="/garage/:tab"  element={<GaragePage staffName={staffName} role={role} />} />
+            <Route path="/sold"         element={<SoldPage />} />
+            <Route path="/blacklist"    element={<BlacklistPage staffName={staffName} role={role} />} />
+            <Route path="/sign/:token"  element={<SignaturePage />} />
+            <Route path="*"           element={<Navigate to={role === "Garage Manager" ? "/garage" : "/"} />} />
+          </Routes>
+        </Suspense>
       </Layout>
     </BrowserRouter>
   );
