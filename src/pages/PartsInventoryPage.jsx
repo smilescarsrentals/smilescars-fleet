@@ -324,6 +324,22 @@ function WorkOrderJobPicker({ value, onChange }) {
   );
 }
 
+// Small inline flag for a field Claude wasn't confident reading — not
+// alarming (low confidence isn't necessarily wrong), just a nudge to look
+// twice before confirming. #3 on the risk list: extraction accuracy is
+// never guaranteed, so surfacing uncertainty is the real safeguard on top
+// of the review screen that already exists.
+function LowConfidenceBadge() {
+  return (
+    <span title="Claude wasn't fully confident reading this — double-check it" style={{
+      display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 700,
+      color: "#d97706", background: "#fef3c7", borderRadius: 20, padding: "1px 7px", marginLeft: 6,
+    }}>
+      ⚠ check this
+    </span>
+  );
+}
+
 function ScanInvoiceModal({ staffName, onClose, onSaved }) {
   const [photo, setPhoto] = useState(null); // { base64, mimeType, previewUrl }
   const [scanning, setScanning] = useState(false);
@@ -435,7 +451,10 @@ function ScanInvoiceModal({ staffName, onClose, onSaved }) {
           {result && (
             <div style={{ marginTop: 8 }}>
               <div style={S.field}>
-                <label style={S.label}>Supplier {result.supplierVendorId ? "" : "(new — will be created)"}</label>
+                <label style={S.label}>
+                  Supplier {result.supplierVendorId ? "" : "(new — will be created)"}
+                  {result.supplierNameConfidence === "low" && <LowConfidenceBadge />}
+                </label>
                 <SupplierPicker suppliers={suppliers} value={result.supplierVendorId} location=""
                   onChange={(id) => {
                     const match = suppliers.find(s => s.id === id);
@@ -450,11 +469,11 @@ function ScanInvoiceModal({ staffName, onClose, onSaved }) {
               </div>
               <div style={S.two}>
                 <div style={S.field}>
-                  <label style={S.label}>Invoice Date</label>
+                  <label style={S.label}>Invoice Date{result.invoiceDateConfidence === "low" && <LowConfidenceBadge />}</label>
                   <input style={S.input} value={result.invoiceDate} onChange={e => setResult(r => ({ ...r, invoiceDate: e.target.value }))} placeholder="Not detected" />
                 </div>
                 <div style={S.field}>
-                  <label style={S.label}>Total Amount</label>
+                  <label style={S.label}>Total Amount{result.totalAmountConfidence === "low" && <LowConfidenceBadge />}</label>
                   <input style={S.input} type="number" value={result.totalAmount ?? ""} onChange={e => setResult(r => ({ ...r, totalAmount: e.target.value === "" ? null : Number(e.target.value) }))} placeholder="Not detected" />
                 </div>
               </div>
@@ -467,11 +486,16 @@ function ScanInvoiceModal({ staffName, onClose, onSaved }) {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {result.items.map((it, i) => (
-                    <div key={i} style={{ border: "1px solid var(--border-light)", borderRadius: 8, padding: 8 }}>
-                      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                    <div key={i} style={{
+                      border: it.confidence === "low" ? "1.5px solid #f59e0b" : "1px solid var(--border-light)",
+                      background: it.confidence === "low" ? "#fffbeb" : "transparent",
+                      borderRadius: 8, padding: 8,
+                    }}>
+                      <div style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
                         <input style={{ ...S.input, flex: 2 }} value={it.itemName} onChange={e => updateItem(i, { itemName: e.target.value })} placeholder="Item name" />
                         <input style={{ ...S.input, width: 55 }} type="number" value={it.quantity} onChange={e => updateItem(i, { quantity: Number(e.target.value) || 0 })} title="Quantity" />
                         <input style={{ ...S.input, width: 80 }} type="number" value={it.unitPrice ?? ""} onChange={e => updateItem(i, { unitPrice: e.target.value === "" ? null : Number(e.target.value) })} placeholder="Unit price" />
+                        {it.confidence === "low" && <LowConfidenceBadge />}
                       </div>
                       <select style={{ ...S.input, fontSize: 12 }} value={it.partId} onChange={e => updateItem(i, { partId: e.target.value })}>
                         <option value="">— New part (will be created) —</option>
