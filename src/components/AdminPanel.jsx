@@ -276,7 +276,9 @@ function NotificationsTab() {
         Turning a trigger off silences it everywhere — the bell AND push — for everyone. Use this if one becomes noisy rather than deactivating individual staff.
       </p>
       {triggers.map(t => (
-        <ToggleRow key={t.type} label={t.label} sub="" on={t.enabled} busy={busyKey === t.type} onToggle={() => toggleTrigger(t)} />
+        <ToggleRow key={t.type} label={t.label}
+          sub={t.updatedBy ? `Last changed by ${t.updatedBy} on ${new Date(t.updatedAt).toLocaleDateString()}` : ""}
+          on={t.enabled} busy={busyKey === t.type} onToggle={() => toggleTrigger(t)} />
       ))}
 
       <p style={{ fontSize: 12, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 0.3, margin: "20px 0 8px" }}>
@@ -362,9 +364,11 @@ function SystemTab() {
   const [status,   setStatus]   = useState(null);
   const [backing,  setBacking]  = useState(false);
   const [backupUrl, setBackupUrl] = useState(null);
+  const [health, setHealth] = useState(null);
 
   useEffect(() => {
     api.getDropboxSyncStatus().then(res => setStatus(res)).catch(() => {});
+    api.getSystemHealth().then(res => setHealth(res)).catch(() => {});
   }, []);
 
   const runBackup = async () => {
@@ -374,8 +378,47 @@ function SystemTab() {
     finally { setBacking(false); }
   };
 
+  // "Stale" if the last successful run is more than ~10 hours old — the
+  // cron fires 3x/day (roughly every 5-6h during the day), so anything
+  // beyond that gap means at least one run was missed.
+  const lastRunAgeHours = health?.lastCronRun
+    ? (Date.now() - new Date(health.lastCronRun.createdAt).getTime()) / 3600000
+    : null;
+  const cronStale = lastRunAgeHours != null && lastRunAgeHours > 10;
+  const storagePct = health ? Math.min(100, (health.storageMB / 500) * 100) : 0;
+
   return (
     <div>
+      {health && (
+        <div style={S.section}>
+          <p style={S.sectionTitle}>Systems Health</p>
+          <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.8 }}>
+            <div>
+              Scheduled notifications:{" "}
+              {health.lastCronRun ? (
+                <strong style={{ color: health.lastCronRun.status === "success" && !cronStale ? "#16a34a" : "#dc2626" }}>
+                  {health.lastCronRun.status === "success" && !cronStale ? "Running normally" : cronStale ? "No recent run — check Vercel Cron" : "Last run failed"}
+                </strong>
+              ) : (
+                <strong style={{ color: "#888" }}>No runs recorded yet</strong>
+              )}
+            </div>
+            {health.lastCronRun && (
+              <div style={{ fontSize: 11.5, color: "#888" }}>
+                Last run: {new Date(health.lastCronRun.createdAt).toLocaleString("en-TZ")}
+                {health.lastCronRun.detail ? ` — ${health.lastCronRun.detail}` : ""}
+              </div>
+            )}
+            <div style={{ marginTop: 8 }}>
+              Database storage: <strong>{health.storageMB.toFixed(0)} MB</strong> / 500 MB (free tier)
+            </div>
+            <div style={{ width: "100%", height: 6, background: "#e5e7eb", borderRadius: 3, marginTop: 4, overflow: "hidden" }}>
+              <div style={{ width: `${storagePct}%`, height: "100%", background: storagePct > 70 ? "#dc2626" : storagePct > 50 ? "#d97706" : "#16a34a" }} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {status && status.available !== false && (
       <div style={S.section}>
         <p style={S.sectionTitle}>Dropbox Sync Status</p>

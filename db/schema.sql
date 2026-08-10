@@ -909,3 +909,19 @@ CREATE TABLE IF NOT EXISTS part_cost_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_part_cost_history_part ON part_cost_history(part_id, created_at DESC);
+
+-- System health log: every periodic check (cron run, storage threshold,
+-- etc.) logs itself here, success or failure.
+CREATE TABLE IF NOT EXISTS system_health_log (
+  id          text PRIMARY KEY,
+  job_name    text NOT NULL,
+  status      text NOT NULL,
+  detail      text,
+  created_at  timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_system_health_log_job ON system_health_log(job_name, created_at DESC);
+
+-- Audit trail for notification trigger toggles: who last changed it, not
+-- just when.
+ALTER TABLE notification_trigger_settings ADD COLUMN IF NOT EXISTS updated_by text;

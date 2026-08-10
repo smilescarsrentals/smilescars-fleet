@@ -74,6 +74,7 @@ export const api = {
   getPartCostHistory:     (partId) => get("getPartCostHistory", { partId }),
   getPurchaseInvoices:    ()     => get("getPurchaseInvoices"),
   getPurchaseInvoiceItems: (invoiceId) => get("getPurchaseInvoiceItems", { invoiceId }),
+  getSystemHealth:        ()     => get("getSystemHealth"),
   setStaffPhone:          (body) => post({ action: "setStaffPhone",          ...body }),
   getSettings:            ()     => get("getSettings"),
   updateSetting:         (body)  => post({ action: "updateSetting",          ...body }),

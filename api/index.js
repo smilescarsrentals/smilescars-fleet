@@ -54,6 +54,7 @@ const READS = {
   getPartCostHistory: reads.getPartCostHistory,
   getPurchaseInvoices: reads.getPurchaseInvoices,
   getPurchaseInvoiceItems: reads.getPurchaseInvoiceItems,
+  getSystemHealth: reads.getSystemHealth,
   getNotificationTriggerSettings: reads.getNotificationTriggerSettings,
   getParts: reads.getParts,
   getServiceTemplates: reads.getServiceTemplates,
