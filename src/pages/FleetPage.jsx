@@ -200,6 +200,8 @@ export default function FleetPage({ staffName, role }) {
         internalLocation:    fields.internalLocation || "",
         externalVendorId:    fields.externalVendorId || "",
         externalVendorLocation: fields.externalVendorLocation || "",
+        kmOut:         fields.kmOut || "",
+        fuelOut:       fields.fuelOut || "",
         remarks:       fields.remarks || "",
       });
       setReplaceCar(null);
