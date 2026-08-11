@@ -26,6 +26,7 @@ const STATUS_COLORS = {
   Rented:      { bg: "#fef9c3", color: "#854d0e" },
   Maintenance: { bg: "#ffedd5", color: "#c2410c" },
   "Staff Use": { bg: "#eff6ff", color: "#1d4ed8" },
+  Sold:        { bg: "#fee2e2", color: "#b91c1c" },
 };
 const ACTION_COLORS = {
   "Checked Out":          { bg: "#fef9c3", color: "#854d0e" },
