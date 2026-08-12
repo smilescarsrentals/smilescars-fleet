@@ -131,16 +131,36 @@ function DriverCard({ driver, onClick }) {
 
 function AddDriverModal({ staffName, onClose, onSaved }) {
   const [form, setForm] = useState({ name: "", phone: "", licenseNumber: "", nationalId: "", address: "", notes: "" });
+  const [photo, setPhoto] = useState(null); // { base64, mimeType, filename, previewUrl }
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      setPhoto({ ...compressed, previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null });
+    } catch { setErr("Could not read that file."); }
+  };
 
   const handleSave = async () => {
     if (!form.name.trim()) { setErr("Driver name is required."); return; }
     if (!form.phone.trim()) { setErr("Phone number is required."); return; }
     setSaving(true); setErr("");
     try {
-      await api.addDriverV2({ ...form, staffName });
+      const res = await api.addDriverV2({ ...form, staffName });
+      // License document is optional — attach it after the driver exists,
+      // since addDriverV2 only creates the driver record itself. A failure
+      // here shouldn't block the driver from being saved (it already was),
+      // so this is best-effort rather than part of the same transaction.
+      if (photo && res.id) {
+        await api.addDriverDocument({
+          driverId: res.id, docType: "License", staffName,
+          imageBase64: photo.base64, mimeType: photo.mimeType, filename: photo.filename,
+        }).catch(() => {});
+      }
       onSaved();
     } catch (e) { setErr(e.message); }
     finally { setSaving(false); }
@@ -154,6 +174,29 @@ function AddDriverModal({ staffName, onClose, onSaved }) {
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={S.mBody}>
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={S.label}>License Document (optional)</label>
+            <div style={{ border: "2px dashed var(--border)", borderRadius: 10, overflow: "hidden", cursor: "pointer", position: "relative", background: "var(--bg)", minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}
+              onClick={() => document.getElementById("driver-license-input").click()}>
+              {photo?.previewUrl ? (
+                <img src={photo.previewUrl} alt="Preview" style={{ width: "100%", maxHeight: 200, objectFit: "cover" }} />
+              ) : photo ? (
+                <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "1.5rem" }}>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{photo.filename}</div>
+                </div>
+              ) : (
+                <div style={{ textAlign: "center", color: "var(--text-faint)", padding: "1.5rem" }}>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>📷</div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>Click to upload license</div>
+                  <div style={{ fontSize: 11, marginTop: 4 }}>JPG, PNG, PDF</div>
+                </div>
+              )}
+              <input id="driver-license-input" type="file" accept="image/*,application/pdf"
+                style={{ display: "none" }} onChange={handleFile} />
+            </div>
+          </div>
+
           <div style={S.two}>
             <div style={S.field}><label style={S.label}>Name *</label>
               <input style={S.input} value={form.name} onChange={e => set("name", e.target.value)} autoFocus /></div>
@@ -298,8 +341,8 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
     if (!file) return;
     try {
       const compressed = await compressImage(file);
-      setPhoto(compressed);
-    } catch { setErr("Could not read that image."); }
+      setPhoto({ ...compressed, previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null });
+    } catch { setErr("Could not read that file."); }
   };
 
   const handleAdd = async () => {
@@ -373,11 +416,29 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
           </div>
           <div style={S.field}>
             <label style={S.label}>Photo/Scan (optional)</label>
-            <input type="file" accept="image/*,application/pdf" onChange={handleFile} style={{ fontSize: 12, fontFamily: "inherit" }} />
+            <div style={{ border: "2px dashed var(--border)", borderRadius: 10, overflow: "hidden", cursor: "pointer", position: "relative", background: "var(--bg)", minHeight: 140, display: "flex", alignItems: "center", justifyContent: "center" }}
+              onClick={() => document.getElementById("driver-doc-input").click()}>
+              {photo?.previewUrl ? (
+                <img src={photo.previewUrl} alt="Preview" style={{ width: "100%", maxHeight: 180, objectFit: "cover" }} />
+              ) : photo ? (
+                <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "1.25rem" }}>
+                  <div style={{ fontSize: 32, marginBottom: 6 }}>📄</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 500 }}>{photo.filename}</div>
+                </div>
+              ) : (
+                <div style={{ textAlign: "center", color: "var(--text-faint)", padding: "1.25rem" }}>
+                  <div style={{ fontSize: 32, marginBottom: 6 }}>📷</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 500 }}>Click to upload document</div>
+                  <div style={{ fontSize: 10.5, marginTop: 3 }}>JPG, PNG, PDF</div>
+                </div>
+              )}
+              <input id="driver-doc-input" type="file" accept="image/*,application/pdf"
+                style={{ display: "none" }} onChange={handleFile} />
+            </div>
           </div>
           {err && <p style={S.err}>{err}</p>}
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-            <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: "6px 0", fontSize: 12 }} onClick={() => { setAddingDoc(false); setErr(""); }}>Cancel</button>
+            <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: "6px 0", fontSize: 12 }} onClick={() => { setAddingDoc(false); setErr(""); setPhoto(null); setNewDoc({ docType: "License", label: "", expiryDate: "", notes: "" }); }}>Cancel</button>
             <button type="button" disabled={saving} style={{ flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 600, color: "#fff", background: "var(--sc-blue)", border: "none", borderRadius: 6, cursor: "pointer", opacity: saving ? 0.65 : 1 }} onClick={handleAdd}>
               {saving ? "Saving…" : "Add"}
             </button>
