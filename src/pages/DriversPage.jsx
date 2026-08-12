@@ -25,17 +25,14 @@ function expiryStyle(dateStr) {
 }
 
 export default function DriversPage({ staffName, role }) {
-  // Admin always can; everyone else needs canManageDrivers explicitly
-  // granted in Admin Panel — role alone (Manager/Garage Manager) is
-  // deliberately NOT sufficient here, matching the backend's
-  // requireDriverManageAccess check.
   const [canEdit, setCanEdit] = useState(role === "Admin");
   const [drivers, setDrivers] = useState([]);
+  const [docsByDriver, setDocsByDriver] = useState({});
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
-  const [selected, setSelected] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
 
   useEffect(() => {
     load();
@@ -50,8 +47,13 @@ export default function DriversPage({ staffName, role }) {
   async function load() {
     setLoading(true); setErr("");
     try {
-      const res = await api.getDriversV2();
-      setDrivers(res?.data || []);
+      const [driversRes, docsRes] = await Promise.all([api.getDriversV2(), api.getAllDriverDocuments()]);
+      setDrivers(driversRes?.data || []);
+      const grouped = {};
+      (docsRes?.data || []).forEach(doc => {
+        (grouped[doc.driverId] ||= []).push(doc);
+      });
+      setDocsByDriver(grouped);
     } catch (e) {
       setErr(e.message || "Could not load drivers.");
     } finally {
@@ -62,6 +64,8 @@ export default function DriversPage({ staffName, role }) {
   const filtered = drivers.filter(d =>
     !search.trim() || d.name.toLowerCase().includes(search.toLowerCase()) || (d.phone || "").includes(search)
   );
+
+  const selectedDriver = selectedId ? drivers.find(d => d.id === selectedId) : null;
 
   return (
     <div style={{ padding: "1rem 1.5rem 1.5rem" }}>
@@ -81,59 +85,49 @@ export default function DriversPage({ staffName, role }) {
         </p>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 10 }}>
-          {filtered.map(d => (
-            <DriverCard key={d.id} driver={d} onClick={() => setSelected(d)} />
-          ))}
+          {filtered.map(d => {
+            const docs = docsByDriver[d.id] || [];
+            const worstExpiry = docs.filter(doc => doc.expiryDate).sort((a, b) => daysUntil(a.expiryDate) - daysUntil(b.expiryDate))[0];
+            const flag = worstExpiry ? expiryStyle(worstExpiry.expiryDate) : null;
+            const isUrgent = flag && (flag.label.startsWith("Expired") || flag.label.match(/in [1-7]d/));
+            return (
+              <button key={d.id} type="button" onClick={() => setSelectedId(d.id)} style={{
+                background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
+                padding: "12px 14px", cursor: "pointer", boxShadow: "var(--shadow-sm)",
+                textAlign: "left", display: "block", width: "100%", fontFamily: "inherit",
+                appearance: "none", WebkitAppearance: "none",
+              }}>
+                <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>
+                  {d.name}{!d.active && <span style={{ color: "var(--text-faint)", fontWeight: 500 }}> (inactive)</span>}
+                </p>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "3px 0 0" }}>{d.phone || "No phone on file"}</p>
+                {docs.length === 0 ? (
+                  <p style={{ fontSize: 11, color: "var(--text-faint)", fontStyle: "italic", margin: "6px 0 0" }}>No documents on file</p>
+                ) : isUrgent ? (
+                  <p style={{ fontSize: 11, fontWeight: 700, color: flag.color, margin: "6px 0 0" }}>⚠ {flag.label}</p>
+                ) : (
+                  <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "6px 0 0" }}>{docs.length} document{docs.length !== 1 ? "s" : ""} on file</p>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
       {showAdd && (
         <AddDriverModal staffName={staffName} onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />
       )}
-      {selected && (
-        <DriverDetailModal driverId={selected.id} staffName={staffName} canEdit={canEdit}
-          onClose={() => setSelected(null)} onChanged={load} />
+      {selectedDriver && (
+        <DriverDetailModal driver={selectedDriver} docs={docsByDriver[selectedDriver.id] || []} staffName={staffName} canEdit={canEdit}
+          onClose={() => setSelectedId(null)} onChanged={load} />
       )}
     </div>
   );
 }
 
-function DriverCard({ driver, onClick }) {
-  const [docs, setDocs] = useState(null);
-  useEffect(() => {
-    api.getDriverDocuments(driver.id).then(res => setDocs(res?.data || [])).catch(() => setDocs([]));
-  }, [driver.id]);
-
-  const worstExpiry = docs && docs.length > 0
-    ? docs.filter(d => d.expiryDate).sort((a, b) => daysUntil(a.expiryDate) - daysUntil(b.expiryDate))[0]
-    : null;
-  const flag = worstExpiry ? expiryStyle(worstExpiry.expiryDate) : null;
-
-  return (
-    <button type="button" onClick={onClick} style={{
-      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
-      padding: "12px 14px", cursor: "pointer", boxShadow: "var(--shadow-sm)",
-      textAlign: "left", display: "block", width: "100%", fontFamily: "inherit",
-      appearance: "none", WebkitAppearance: "none", minHeight: 84,
-    }}>
-      <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>{driver.name}{!driver.active && <span style={{ color: "var(--text-faint)", fontWeight: 500 }}> (inactive)</span>}</p>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "3px 0 0" }}>{driver.phone || "No phone on file"}</p>
-      {docs === null ? (
-        <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "6px 0 0" }}>Loading documents…</p>
-      ) : docs.length === 0 ? (
-        <p style={{ fontSize: 11, color: "var(--text-faint)", fontStyle: "italic", margin: "6px 0 0" }}>No documents on file</p>
-      ) : flag && (flag.label.startsWith("Expired") || flag.label.includes("in 7") || flag.label.match(/in [1-7]d/)) ? (
-        <p style={{ fontSize: 11, fontWeight: 700, color: flag.color, margin: "6px 0 0" }}>⚠ {flag.label}</p>
-      ) : (
-        <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "6px 0 0" }}>{docs.length} document{docs.length !== 1 ? "s" : ""} on file</p>
-      )}
-    </button>
-  );
-}
-
 function AddDriverModal({ staffName, onClose, onSaved }) {
   const [form, setForm] = useState({ name: "", phone: "", licenseNumber: "", nationalId: "", address: "", notes: "" });
-  const [photo, setPhoto] = useState(null); // { base64, mimeType, filename, previewUrl }
+  const [photo, setPhoto] = useState(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -153,10 +147,6 @@ function AddDriverModal({ staffName, onClose, onSaved }) {
     setSaving(true); setErr("");
     try {
       const res = await api.addDriverV2({ ...form, staffName });
-      // License document is optional — attach it after the driver exists,
-      // since addDriverV2 only creates the driver record itself. A failure
-      // here shouldn't block the driver from being saved (it already was),
-      // so this is best-effort rather than part of the same transaction.
       if (photo && res.id) {
         await api.addDriverDocument({
           driverId: res.id, docType: "License", staffName,
@@ -170,47 +160,43 @@ function AddDriverModal({ staffName, onClose, onSaved }) {
 
   return (
     <div style={S.overlay} onClick={onClose}>
-      <div style={S.modal} onClick={e => e.stopPropagation()}>
+      <div style={{ ...S.modal, width: 480 }} onClick={e => e.stopPropagation()}>
         <div style={{ ...S.mHead, background: "var(--sc-blue)" }}>
-          <p style={S.mTitle}>New Driver</p>
+          <p style={S.mTitle}>Add Driver</p>
           <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={S.mBody}>
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={S.label}>License Document (optional)</label>
-            <div style={{ border: "2px dashed var(--border)", borderRadius: 10, overflow: "hidden", cursor: "pointer", position: "relative", background: "var(--bg)", minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}
-              onClick={() => document.getElementById("driver-license-input").click()}>
+          <div style={S.field}>
+            <label style={S.label}>License Photo/Scan (optional)</label>
+            <div style={{ border: "2px dashed var(--border)", borderRadius: 10, overflow: "hidden", cursor: "pointer", position: "relative", background: "var(--bg)", minHeight: 140, display: "flex", alignItems: "center", justifyContent: "center" }}
+              onClick={() => document.getElementById("add-driver-doc-input").click()}>
               {photo?.previewUrl ? (
-                <img src={photo.previewUrl} alt="Preview" style={{ width: "100%", maxHeight: 200, objectFit: "cover" }} />
+                <img src={photo.previewUrl} alt="Preview" style={{ width: "100%", maxHeight: 180, objectFit: "cover" }} />
               ) : photo ? (
-                <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "1.5rem" }}>
-                  <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{photo.filename}</div>
+                <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "1.25rem" }}>
+                  <div style={{ fontSize: 32, marginBottom: 6 }}>📄</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 500 }}>{photo.filename}</div>
                 </div>
               ) : (
-                <div style={{ textAlign: "center", color: "var(--text-faint)", padding: "1.5rem" }}>
-                  <div style={{ fontSize: 36, marginBottom: 8 }}>📷</div>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>Click to upload license</div>
-                  <div style={{ fontSize: 11, marginTop: 4 }}>JPG, PNG, PDF</div>
+                <div style={{ textAlign: "center", color: "var(--text-faint)", padding: "1.25rem" }}>
+                  <div style={{ fontSize: 32, marginBottom: 6 }}>📷</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 500 }}>Click to upload license image</div>
+                  <div style={{ fontSize: 10.5, marginTop: 3 }}>JPG, PNG, PDF</div>
                 </div>
               )}
-              <input id="driver-license-input" type="file" accept="image/*,application/pdf"
+              <input id="add-driver-doc-input" type="file" accept="image/*,application/pdf"
                 style={{ display: "none" }} onChange={handleFile} />
             </div>
           </div>
 
-          <div style={S.two}>
-            <div style={S.field}><label style={S.label}>Name *</label>
-              <input style={S.input} value={form.name} onChange={e => set("name", e.target.value)} autoFocus /></div>
-            <div style={S.field}><label style={S.label}>Phone *</label>
-              <input style={S.input} value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+255…" /></div>
-          </div>
-          <div style={S.two}>
-            <div style={S.field}><label style={S.label}>License Number</label>
-              <input style={S.input} value={form.licenseNumber} onChange={e => set("licenseNumber", e.target.value)} /></div>
-            <div style={S.field}><label style={S.label}>National ID</label>
-              <input style={S.input} value={form.nationalId} onChange={e => set("nationalId", e.target.value)} /></div>
-          </div>
+          <div style={S.field}><label style={S.label}>Full Name *</label>
+            <input style={S.input} value={form.name} onChange={e => set("name", e.target.value)} placeholder="As on driving license" autoFocus /></div>
+          <div style={S.field}><label style={S.label}>Phone Number *</label>
+            <input style={S.input} value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+255…" /></div>
+          <div style={S.field}><label style={S.label}>License Number</label>
+            <input style={S.input} value={form.licenseNumber} onChange={e => set("licenseNumber", e.target.value)} placeholder="Driving license number" /></div>
+          <div style={S.field}><label style={S.label}>National ID</label>
+            <input style={S.input} value={form.nationalId} onChange={e => set("nationalId", e.target.value)} /></div>
           <div style={S.field}><label style={S.label}>Address</label>
             <input style={S.input} value={form.address} onChange={e => set("address", e.target.value)} /></div>
           <div style={S.field}><label style={S.label}>Notes</label>
@@ -226,37 +212,23 @@ function AddDriverModal({ staffName, onClose, onSaved }) {
   );
 }
 
-function DriverDetailModal({ driverId, staffName, canEdit, onClose, onChanged }) {
-  const [driver, setDriver] = useState(null);
-  const [docs, setDocs] = useState(null);
+function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChanged }) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState(null);
+  const [form, setForm] = useState(driver);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [addingDoc, setAddingDoc] = useState(false);
-
-  const load = () => {
-    api.getDriverById(driverId).then(res => {
-      if (res.success) { setDriver(res.data); setForm(res.data); }
-    }).catch(() => {});
-    api.getDriverDocuments(driverId).then(res => setDocs(res?.data || [])).catch(() => setDocs([]));
-  };
-  useEffect(load, [driverId]);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
     setSaving(true); setErr("");
     try {
-      await api.editDriver({ id: driverId, ...form, staffName });
+      await api.editDriver({ id: driver.id, ...form, staffName });
       onChanged();
-      load();
       setEditing(false);
     } catch (e) { setErr(e.message); }
     finally { setSaving(false); }
   };
-
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  if (!driver) return null;
 
   return (
     <div style={S.overlay} onClick={onClose}>
@@ -291,8 +263,8 @@ function DriverDetailModal({ driverId, staffName, canEdit, onClose, onChanged })
                 </button>
               )}
 
-              <DriverDocuments driverId={driverId} docs={docs} canEdit={canEdit} staffName={staffName}
-                addingDoc={addingDoc} setAddingDoc={setAddingDoc} onChanged={load} />
+              <DriverDocuments driverId={driver.id} docs={docs} canEdit={canEdit} staffName={staffName}
+                addingDoc={addingDoc} setAddingDoc={setAddingDoc} onChanged={onChanged} />
             </>
           ) : (
             <>
@@ -348,13 +320,12 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
   };
 
   const handleAdd = async () => {
-    if (newDoc.docType === "Other" && !newDoc.label.trim()) { setErr("Please describe this document."); return; }
+    if (!newDoc.docType) { setErr("Document type is required."); return; }
     setSaving(true); setErr("");
     try {
       await api.addDriverDocument({
-        driverId, docType: newDoc.docType, label: newDoc.label, expiryDate: newDoc.expiryDate || undefined,
-        notes: newDoc.notes, staffName,
-        imageBase64: photo?.base64, mimeType: photo?.mimeType, filename: photo?.filename,
+        driverId, docType: newDoc.docType, label: newDoc.label, expiryDate: newDoc.expiryDate, notes: newDoc.notes,
+        staffName, imageBase64: photo?.base64, mimeType: photo?.mimeType, filename: photo?.filename,
       });
       setNewDoc({ docType: "License", label: "", expiryDate: "", notes: "" });
       setPhoto(null);
@@ -366,7 +337,7 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
 
   const handleDelete = async (id) => {
     try { await api.deleteDriverDocument({ id, staffName }); onChanged(); }
-    catch (e) { alert(e.message); }
+    catch (e) { setErr(e.message); }
   };
 
   return (
@@ -376,26 +347,21 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
         {!addingDoc && canEdit && <button type="button" onClick={() => setAddingDoc(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>+ Add Document</button>}
       </div>
 
-      {docs === null ? (
-        <p style={{ fontSize: 12, color: "var(--text-faint)" }}>Loading…</p>
-      ) : docs.length === 0 && !addingDoc ? (
-        <p style={{ fontSize: 12, color: "var(--text-faint)", fontStyle: "italic" }}>No documents yet</p>
+      {docs.length === 0 && !addingDoc ? (
+        <p style={{ fontSize: 12, color: "var(--text-faint)", fontStyle: "italic" }}>No documents on file</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {docs.map(doc => {
             const flag = expiryStyle(doc.expiryDate);
             return (
-              <div key={doc.id} style={{ border: "1px solid var(--border-light)", borderRadius: 8, padding: 10, display: "flex", gap: 10 }}>
-                {doc.fileId && (
-                  <img src={photoUrl(doc.fileId)} alt="" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{doc.docType === "Other" && doc.label ? doc.label : doc.docType}</p>
-                  <p style={{ fontSize: 11.5, color: flag.color, fontWeight: 600, margin: "2px 0 0" }}>{flag.label}</p>
-                  {doc.notes && <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "2px 0 0" }}>{doc.notes}</p>}
+              <div key={doc.id} style={{ border: "1px solid var(--border-light)", borderRadius: 8, padding: "8px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <p style={{ fontSize: 12.5, fontWeight: 600, margin: 0 }}>{doc.docType === "Other" && doc.label ? doc.label : doc.docType}</p>
+                  {doc.expiryDate && <p style={{ fontSize: 11, color: flag.color, margin: "2px 0 0" }}>{flag.label}</p>}
+                  {doc.fileId && <a href={photoUrl(doc.fileId)} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "var(--sc-blue)" }}>View file</a>}
                 </div>
                 {canEdit && (
-                  <button type="button" onClick={() => handleDelete(doc.id)} style={{ background: "none", border: "none", color: "var(--red)", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>✕</button>
+                  <button type="button" onClick={() => handleDelete(doc.id)} style={{ background: "none", border: "none", color: "var(--red)", cursor: "pointer", fontSize: 14 }}>✕</button>
                 )}
               </div>
             );
@@ -405,17 +371,19 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
 
       {addingDoc && (
         <div style={{ border: "1.5px solid var(--sc-blue)", borderRadius: 8, padding: 10, marginTop: 8 }}>
-          <select style={{ ...S.input, marginBottom: 6 }} value={newDoc.docType} onChange={e => setNewDoc(d => ({ ...d, docType: e.target.value }))}>
-            {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          {newDoc.docType === "Other" && (
-            <input style={{ ...S.input, marginBottom: 6 }} placeholder="What is this document?" value={newDoc.label}
-              onChange={e => setNewDoc(d => ({ ...d, label: e.target.value }))} />
-          )}
           <div style={S.field}>
-            <label style={S.label}>Expiry Date (optional)</label>
-            <input style={S.input} type="date" value={newDoc.expiryDate} onChange={e => setNewDoc(d => ({ ...d, expiryDate: e.target.value }))} />
+            <label style={S.label}>Type</label>
+            <select style={S.input} value={newDoc.docType} onChange={e => setNewDoc(n => ({ ...n, docType: e.target.value }))}>
+              {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
+          {newDoc.docType === "Other" && (
+            <div style={S.field}><label style={S.label}>Label</label>
+              <input style={S.input} value={newDoc.label} onChange={e => setNewDoc(n => ({ ...n, label: e.target.value }))} placeholder="e.g. First Aid Certificate" /></div>
+          )}
+          <div style={S.field}><label style={S.label}>Expiry Date (optional)</label>
+            <input style={S.input} type="date" value={newDoc.expiryDate} onChange={e => setNewDoc(n => ({ ...n, expiryDate: e.target.value }))} /></div>
+
           <div style={S.field}>
             <label style={S.label}>Photo/Scan (optional)</label>
             <div style={{ border: "2px dashed var(--border)", borderRadius: 10, overflow: "hidden", cursor: "pointer", position: "relative", background: "var(--bg)", minHeight: 140, display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -438,9 +406,11 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
                 style={{ display: "none" }} onChange={handleFile} />
             </div>
           </div>
+
           {err && <p style={S.err}>{err}</p>}
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-            <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: "6px 0", fontSize: 12 }} onClick={() => { setAddingDoc(false); setErr(""); setPhoto(null); setNewDoc({ docType: "License", label: "", expiryDate: "", notes: "" }); }}>Cancel</button>
+            <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: "6px 0", fontSize: 12 }}
+              onClick={() => { setAddingDoc(false); setErr(""); setPhoto(null); setNewDoc({ docType: "License", label: "", expiryDate: "", notes: "" }); }}>Cancel</button>
             <button type="button" disabled={saving} style={{ flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 600, color: "#fff", background: "var(--sc-blue)", border: "none", borderRadius: 6, cursor: "pointer", opacity: saving ? 0.65 : 1 }} onClick={handleAdd}>
               {saving ? "Saving…" : "Add"}
             </button>
