@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
 import { parseDriverCsv } from "../lib/driverImport";
+import { parseDriverZip } from "../lib/driverZipImport";
 
 const DOC_TYPES = ["Driving License", "National ID (NIDA)", "TIN Certificate", "Defensive Driving Cert", "Others"];
 const photoUrl = (fileId) => `/api?action=file&id=${encodeURIComponent(fileId)}`;
@@ -34,6 +35,7 @@ export default function DriversPage({ staffName, role }) {
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showZipImport, setShowZipImport] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
 
   useEffect(() => {
@@ -77,6 +79,7 @@ export default function DriversPage({ staffName, role }) {
         {canEdit && (
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" className="btn btn-ghost" onClick={() => setShowImport(true)}>⬆ Import CSV</button>
+            <button type="button" className="btn btn-ghost" onClick={() => setShowZipImport(true)}>📎 Import Documents (ZIP)</button>
             <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ Add Driver</button>
           </div>
         )}
@@ -126,6 +129,9 @@ export default function DriversPage({ staffName, role }) {
       )}
       {showImport && (
         <ImportCsvModal staffName={staffName} onClose={() => setShowImport(false)} onSaved={() => { setShowImport(false); load(); }} />
+      )}
+      {showZipImport && (
+        <ImportZipModal staffName={staffName} drivers={drivers} onClose={() => setShowZipImport(false)} onSaved={() => { setShowZipImport(false); load(); }} />
       )}
       {selectedDriver && (
         <DriverDetailModal driver={selectedDriver} docs={docsByDriver[selectedDriver.id] || []} staffName={staffName} canEdit={canEdit}
@@ -351,6 +357,145 @@ function ImportCsvModal({ staffName, onClose, onSaved }) {
                 <button type="button" style={{ ...S.btn, flex: 1, marginTop: 0, background: "var(--sc-blue)", opacity: saving || rows.length === 0 ? 0.65 : 1 }}
                   disabled={saving || rows.length === 0} onClick={handleConfirm}>
                   {saving ? "Importing…" : `Import ${rows.length} Driver${rows.length !== 1 ? "s" : ""}`}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ZIP document import: parse -> review (matched entries grouped by driver,
+// unmatched shown separately with the reason, per instruction) -> confirm
+// -> bulk upload. Matching happens entirely client-side against the
+// already-loaded driver list, so the backend only ever receives
+// confirmed, already-matched entries.
+function ImportZipModal({ staffName, drivers, onClose, onSaved }) {
+  const [matched, setMatched] = useState(null); // null = no file parsed yet
+  const [unmatched, setUnmatched] = useState([]);
+  const [parsing, setParsing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [result, setResult] = useState(null);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setParsing(true); setErr(""); setResult(null);
+    try {
+      const parsed = await parseDriverZip(file, drivers);
+      setMatched(parsed.matched);
+      setUnmatched(parsed.unmatched);
+    } catch (ex) {
+      setErr("Could not read that file — make sure it's a valid ZIP.");
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const removeEntry = (i) => {
+    setMatched(list => list.filter((_, idx) => idx !== i));
+  };
+
+  const handleConfirm = async () => {
+    setSaving(true); setErr("");
+    try {
+      const entries = matched.map(m => ({
+        driverId: m.driverId, driverName: m.driverName, docType: m.docType,
+        filename: m.filename, imageBase64: m.base64, mimeType: m.mimeType,
+      }));
+      const res = await api.bulkAddDriverDocuments({ entries, staffName });
+      setResult(res);
+      if (res.failed.length === 0) onSaved();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modal, width: 600 }} onClick={e => e.stopPropagation()}>
+        <div style={{ ...S.mHead, background: "var(--sc-blue)" }}>
+          <p style={S.mTitle}>Import Documents from ZIP</p>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={S.mBody}>
+          {matched === null ? (
+            <>
+              <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: "0 0 12px" }}>
+                Each file inside the ZIP should be named <strong>"Name - Document Type.ext"</strong> — e.g.
+                "John Mwangi - Driving License.pdf". The name must match an existing driver exactly.
+                Accepted files: PDF, JPG, PNG.
+              </p>
+              <input type="file" accept=".zip" onChange={handleFile} disabled={parsing}
+                style={{ fontSize: 13, fontFamily: "inherit" }} />
+              {parsing && <p style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 8 }}>Reading ZIP…</p>}
+              {err && <p style={S.err}>{err}</p>}
+            </>
+          ) : result ? (
+            <>
+              <p style={{ fontSize: 14, fontWeight: 700, color: "var(--green)", margin: "0 0 8px" }}>
+                ✓ Uploaded {result.uploaded.length} document{result.uploaded.length !== 1 ? "s" : ""}
+              </p>
+              {result.failed.length > 0 && (
+                <>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--red)", margin: "12px 0 6px" }}>
+                    {result.failed.length} failed
+                  </p>
+                  <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden" }}>
+                    {result.failed.map((f, i) => (
+                      <div key={i} style={{ padding: "6px 10px", borderBottom: "1px solid var(--border-light)", fontSize: 12 }}>
+                        {f.filename} ({f.driverName}): {f.reason}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              <button type="button" style={{ ...S.btn, background: "var(--sc-blue)" }} onClick={onSaved}>Done</button>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: 13, fontWeight: 700, margin: "0 0 4px" }}>
+                {matched.length} document{matched.length !== 1 ? "s" : ""} matched and ready to upload
+              </p>
+              {unmatched.length > 0 && (
+                <p style={{ fontSize: 12, color: "var(--red)", margin: "0 0 10px" }}>
+                  {unmatched.length} file{unmatched.length !== 1 ? "s" : ""} couldn't be matched — see below, these won't be uploaded.
+                </p>
+              )}
+
+              {matched.length > 0 && (
+                <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, maxHeight: 240, overflowY: "auto", marginBottom: 10 }}>
+                  {matched.map((m, i) => (
+                    <div key={i} style={{ padding: "8px 10px", borderBottom: "1px solid var(--border-light)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontSize: 12.5, fontWeight: 600, margin: 0 }}>{m.driverName}</p>
+                        <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "2px 0 0" }}>{m.docType} — {m.filename}</p>
+                      </div>
+                      <button type="button" onClick={() => removeEntry(i)} style={{ background: "none", border: "none", color: "var(--red)", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {unmatched.length > 0 && (
+                <div style={{ border: "1px solid #fecaca", background: "#fef2f2", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
+                  {unmatched.map((u, i) => (
+                    <p key={i} style={{ fontSize: 11.5, color: "var(--red)", margin: "2px 0" }}>{u.filename}: {u.reason}</p>
+                  ))}
+                </div>
+              )}
+
+              {err && <p style={S.err}>{err}</p>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { setMatched(null); setUnmatched([]); }}>Choose Different File</button>
+                <button type="button" style={{ ...S.btn, flex: 1, marginTop: 0, background: "var(--sc-blue)", opacity: saving || matched.length === 0 ? 0.65 : 1 }}
+                  disabled={saving || matched.length === 0} onClick={handleConfirm}>
+                  {saving ? "Uploading…" : `Upload ${matched.length} Document${matched.length !== 1 ? "s" : ""}`}
                 </button>
               </div>
             </>

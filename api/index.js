@@ -151,6 +151,7 @@ const WRITES = {
   setCanManageDrivers: writes.setCanManageDrivers,
   addDriverV2: writes.addDriverV2,
   bulkAddDrivers: writes.bulkAddDrivers,
+  bulkAddDriverDocuments: writes.bulkAddDriverDocuments,
   editDriver: writes.editDriver,
   addDriverDocument: writes.addDriverDocument,
   editDriverDocument: writes.editDriverDocument,

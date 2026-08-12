@@ -81,6 +81,7 @@ export const api = {
   setCanManageDrivers:    (body) => post({ action: "setCanManageDrivers",    ...body }),
   addDriverV2:            (body) => post({ action: "addDriverV2",            ...body }),
   bulkAddDrivers:         (body) => post({ action: "bulkAddDrivers",         ...body }),
+  bulkAddDriverDocuments: (body) => post({ action: "bulkAddDriverDocuments", ...body }),
   editDriver:              (body) => post({ action: "editDriver",             ...body }),
   addDriverDocument:       (body) => post({ action: "addDriverDocument",      ...body }),
   editDriverDocument:      (body) => post({ action: "editDriverDocument",     ...body }),
