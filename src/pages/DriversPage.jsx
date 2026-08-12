@@ -238,7 +238,17 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
             <p style={S.mTitle}>{driver.name}</p>
             <p style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", margin: "2px 0 0" }}>{driver.phone || "No phone on file"}</p>
           </div>
-          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+          <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+            {canEdit && !editing && (
+              <button type="button" onClick={() => setEditing(true)} style={{
+                background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 20,
+                padding: "5px 12px", cursor: "pointer", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit",
+              }}>
+                Edit Details
+              </button>
+            )}
+            <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+          </div>
         </div>
 
         <div style={S.mBody}>
@@ -257,14 +267,11 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
                   <span style={{ fontWeight: 600, textAlign: "right" }}>{val}</span>
                 </div>
               ))}
-              {canEdit && (
-                <button type="button" className="btn btn-ghost" style={{ width: "100%", marginTop: 10 }} onClick={() => setEditing(true)}>
-                  Edit Details
-                </button>
-              )}
 
               <DriverDocuments driverId={driver.id} docs={docs} canEdit={canEdit} staffName={staffName}
                 addingDoc={addingDoc} setAddingDoc={setAddingDoc} onChanged={onChanged} />
+
+              <DriverAssignmentLog driverName={driver.name} />
             </>
           ) : (
             <>
@@ -345,6 +352,10 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3 }}>Documents</span>
         {!addingDoc && canEdit && <button type="button" onClick={() => setAddingDoc(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>+ Add Document</button>}
+        {addingDoc && (
+          <button type="button" onClick={() => { setAddingDoc(false); setErr(""); setPhoto(null); setNewDoc({ docType: "License", label: "", expiryDate: "", notes: "" }); }}
+            style={{ fontSize: 13, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>✕</button>
+        )}
       </div>
 
       {docs.length === 0 && !addingDoc ? (
@@ -381,8 +392,8 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
             <div style={S.field}><label style={S.label}>Label</label>
               <input style={S.input} value={newDoc.label} onChange={e => setNewDoc(n => ({ ...n, label: e.target.value }))} placeholder="e.g. First Aid Certificate" /></div>
           )}
-          <div style={S.field}><label style={S.label}>Expiry Date (optional)</label>
-            <input style={S.input} type="date" value={newDoc.expiryDate} onChange={e => setNewDoc(n => ({ ...n, expiryDate: e.target.value }))} /></div>
+          <div style={S.field}><label style={S.label}>Select Date (optional)</label>
+            <input style={{ ...S.input, maxWidth: "100%", minWidth: 0 }} type="date" value={newDoc.expiryDate} onChange={e => setNewDoc(n => ({ ...n, expiryDate: e.target.value }))} /></div>
 
           <div style={S.field}>
             <label style={S.label}>Photo/Scan (optional)</label>
@@ -408,14 +419,64 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
           </div>
 
           {err && <p style={S.err}>{err}</p>}
-          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-            <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: "6px 0", fontSize: 12 }}
-              onClick={() => { setAddingDoc(false); setErr(""); setPhoto(null); setNewDoc({ docType: "License", label: "", expiryDate: "", notes: "" }); }}>Cancel</button>
-            <button type="button" disabled={saving} style={{ flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 600, color: "#fff", background: "var(--sc-blue)", border: "none", borderRadius: 6, cursor: "pointer", opacity: saving ? 0.65 : 1 }} onClick={handleAdd}>
-              {saving ? "Saving…" : "Add"}
-            </button>
-          </div>
+          <button type="button" disabled={saving} style={{ width: "100%", padding: "9px 0", fontSize: 12.5, fontWeight: 600, color: "#fff", background: "var(--sc-blue)", border: "none", borderRadius: 6, cursor: "pointer", opacity: saving ? 0.65 : 1, marginTop: 8, fontFamily: "inherit" }} onClick={handleAdd}>
+            {saving ? "Saving…" : "Add"}
+          </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+// Built entirely from existing checkout/transfer history — not a
+// separately maintained field, so it can never drift from what actually
+// happened and needs zero manual entry from staff.
+function DriverAssignmentLog({ driverName }) {
+  const [log, setLog] = useState(null);
+
+  useEffect(() => {
+    api.getDriverAssignmentLog(driverName).then(res => setLog(res?.data || [])).catch(() => setLog([]));
+  }, [driverName]);
+
+  const fmtDate = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return isNaN(d) ? "—" : d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+  };
+
+  const current = log && log.length > 0 ? log[0] : null;
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <p style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3, margin: "0 0 8px" }}>
+        Client Assignments
+      </p>
+
+      {log === null ? (
+        <p style={{ fontSize: 12, color: "var(--text-faint)" }}>Loading…</p>
+      ) : log.length === 0 ? (
+        <p style={{ fontSize: 12, color: "var(--text-faint)", fontStyle: "italic" }}>No assignment history yet — this fills in automatically after this driver is used on a checkout.</p>
+      ) : (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 10px", background: "var(--blue-bg, #eff6ff)", borderRadius: 8, marginBottom: 8, fontSize: 13 }}>
+            <span style={{ color: "var(--text-muted)" }}>Current / Most Recent</span>
+            <span style={{ fontWeight: 700 }}>{current.client || "—"}</span>
+          </div>
+
+          <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden", maxHeight: 220, overflowY: "auto" }}>
+            {log.map((entry, i) => (
+              <div key={i} style={{ padding: "7px 10px", borderBottom: "1px solid var(--border-light)", fontSize: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontWeight: 600 }}>{entry.client || "—"}</span>
+                  <span style={{ color: "var(--text-faint)" }}>{entry.plate}</span>
+                </div>
+                <p style={{ color: "var(--text-faint)", margin: "2px 0 0" }}>
+                  {fmtDate(entry.bookedFrom)} → {fmtDate(entry.returnDate)} · {entry.action}
+                </p>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

@@ -54,6 +54,7 @@ const READS = {
   getPartCostHistory: reads.getPartCostHistory,
   getDriversV2: reads.getDriversV2,
   getDriverById: reads.getDriverById,
+  getDriverAssignmentLog: reads.getDriverAssignmentLog,
   getDriverDocuments: reads.getDriverDocuments,
   getAllDriverDocuments: reads.getAllDriverDocuments,
   getPurchaseInvoices: reads.getPurchaseInvoices,

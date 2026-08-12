@@ -74,6 +74,7 @@ export const api = {
   getPartCostHistory:     (partId) => get("getPartCostHistory", { partId }),
   getDriversV2:           ()     => get("getDriversV2"),
   getDriverById:          (id)   => get("getDriverById", { id }),
+  getDriverAssignmentLog: (driverName) => get("getDriverAssignmentLog", { driverName }),
   getDriverDocuments:     (driverId) => get("getDriverDocuments", { driverId }),
   getAllDriverDocuments:  ()     => get("getAllDriverDocuments"),
   setReceivesDriverDocumentReminders: (body) => post({ action: "setReceivesDriverDocumentReminders", ...body }),
