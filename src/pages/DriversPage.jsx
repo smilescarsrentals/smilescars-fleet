@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
+import { parseDriverCsv } from "../lib/driverImport";
 
 const DOC_TYPES = ["Driving License", "National ID (NIDA)", "TIN Certificate", "Defensive Driving Cert", "Others"];
 const photoUrl = (fileId) => `/api?action=file&id=${encodeURIComponent(fileId)}`;
@@ -32,6 +33,7 @@ export default function DriversPage({ staffName, role }) {
   const [err, setErr] = useState("");
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
 
   useEffect(() => {
@@ -72,7 +74,12 @@ export default function DriversPage({ staffName, role }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
         <input type="text" placeholder="Search drivers…" value={search} onChange={e => setSearch(e.target.value)}
           style={{ padding: "8px 12px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, minWidth: 220, fontFamily: "inherit" }} />
-        {canEdit && <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ Add Driver</button>}
+        {canEdit && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" className="btn btn-ghost" onClick={() => setShowImport(true)}>⬆ Import CSV</button>
+            <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ Add Driver</button>
+          </div>
+        )}
       </div>
 
       {err && <p style={{ color: "var(--red)", fontSize: 13 }}>{err}</p>}
@@ -116,6 +123,9 @@ export default function DriversPage({ staffName, role }) {
 
       {showAdd && (
         <AddDriverModal staffName={staffName} onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />
+      )}
+      {showImport && (
+        <ImportCsvModal staffName={staffName} onClose={() => setShowImport(false)} onSaved={() => { setShowImport(false); load(); }} />
       )}
       {selectedDriver && (
         <DriverDetailModal driver={selectedDriver} docs={docsByDriver[selectedDriver.id] || []} staffName={staffName} canEdit={canEdit}
@@ -206,6 +216,145 @@ function AddDriverModal({ staffName, onClose, onSaved }) {
           <button type="button" style={{ ...S.btn, background: "var(--sc-blue)", opacity: saving ? 0.65 : 1 }} onClick={handleSave} disabled={saving}>
             {saving ? "Saving…" : "Add Driver"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// CSV import: parse -> review (valid rows shown editable, errors shown
+// separately and skipped, per instruction) -> confirm -> bulk create.
+// Nothing is saved until Confirm; parsing happens entirely client-side
+// (src/lib/driverImport.js), so the backend only ever receives clean,
+// already-reviewed row objects.
+function ImportCsvModal({ staffName, onClose, onSaved }) {
+  const [rows, setRows] = useState(null); // null = no file parsed yet
+  const [errors, setErrors] = useState([]);
+  const [parsing, setParsing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [result, setResult] = useState(null); // { created, failed } after confirm
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setParsing(true); setErr(""); setResult(null);
+    try {
+      const parsed = await parseDriverCsv(file);
+      setRows(parsed.rows);
+      setErrors(parsed.errors);
+    } catch (ex) {
+      setErr("Could not read that file — make sure it's a valid CSV.");
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const updateRow = (i, patch) => {
+    setRows(list => list.map((r, idx) => idx === i ? { ...r, ...patch } : r));
+  };
+
+  const removeRow = (i) => {
+    setRows(list => list.filter((_, idx) => idx !== i));
+  };
+
+  const handleConfirm = async () => {
+    setSaving(true); setErr("");
+    try {
+      const res = await api.bulkAddDrivers({ rows, staffName });
+      setResult(res);
+      if (res.failed.length === 0) {
+        onSaved();
+      }
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modal, width: 600 }} onClick={e => e.stopPropagation()}>
+        <div style={{ ...S.mHead, background: "var(--sc-blue)" }}>
+          <p style={S.mTitle}>Import Drivers from CSV</p>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={S.mBody}>
+          {rows === null ? (
+            <>
+              <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: "0 0 12px" }}>
+                CSV columns: <strong>Name, Phone</strong> (required), License Number, National ID, Address (optional).
+                Column names are matched flexibly — "Phone", "Phone Number", "Mobile" all work.
+              </p>
+              <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} disabled={parsing}
+                style={{ fontSize: 13, fontFamily: "inherit" }} />
+              {parsing && <p style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 8 }}>Reading file…</p>}
+              {err && <p style={S.err}>{err}</p>}
+            </>
+          ) : result ? (
+            <>
+              <p style={{ fontSize: 14, fontWeight: 700, color: "var(--green)", margin: "0 0 8px" }}>
+                ✓ Created {result.created.length} driver{result.created.length !== 1 ? "s" : ""}
+              </p>
+              {result.failed.length > 0 && (
+                <>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--red)", margin: "12px 0 6px" }}>
+                    {result.failed.length} row{result.failed.length !== 1 ? "s" : ""} failed
+                  </p>
+                  <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden" }}>
+                    {result.failed.map((f, i) => (
+                      <div key={i} style={{ padding: "6px 10px", borderBottom: "1px solid var(--border-light)", fontSize: 12 }}>
+                        Row {f.rowNum} ({f.name || "no name"}): {f.reason}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              <button type="button" style={{ ...S.btn, background: "var(--sc-blue)" }} onClick={onSaved}>Done</button>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: 13, fontWeight: 700, margin: "0 0 4px" }}>
+                {rows.length} row{rows.length !== 1 ? "s" : ""} ready to import
+              </p>
+              {errors.length > 0 && (
+                <p style={{ fontSize: 12, color: "var(--red)", margin: "0 0 10px" }}>
+                  {errors.length} row{errors.length !== 1 ? "s" : ""} skipped (missing name or phone) — these won't be imported.
+                </p>
+              )}
+
+              {rows.length > 0 && (
+                <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, maxHeight: 280, overflowY: "auto", marginBottom: 10 }}>
+                  {rows.map((r, i) => (
+                    <div key={i} style={{ padding: "8px 10px", borderBottom: "1px solid var(--border-light)", display: "flex", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 10.5, color: "var(--text-faint)", width: 24, flexShrink: 0 }}>#{r.rowNum}</span>
+                      <input style={{ ...S.input, flex: 1.3 }} value={r.name} onChange={e => updateRow(i, { name: e.target.value })} placeholder="Name" />
+                      <input style={{ ...S.input, flex: 1 }} value={r.phone} onChange={e => updateRow(i, { phone: e.target.value })} placeholder="Phone" />
+                      <button type="button" onClick={() => removeRow(i)} style={{ background: "none", border: "none", color: "var(--red)", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {errors.length > 0 && (
+                <div style={{ border: "1px solid #fecaca", background: "#fef2f2", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
+                  {errors.map((e, i) => (
+                    <p key={i} style={{ fontSize: 11.5, color: "var(--red)", margin: "2px 0" }}>Row {e.rowNum}: {e.reason}</p>
+                  ))}
+                </div>
+              )}
+
+              {err && <p style={S.err}>{err}</p>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { setRows(null); setErrors([]); }}>Choose Different File</button>
+                <button type="button" style={{ ...S.btn, flex: 1, marginTop: 0, background: "var(--sc-blue)", opacity: saving || rows.length === 0 ? 0.65 : 1 }}
+                  disabled={saving || rows.length === 0} onClick={handleConfirm}>
+                  {saving ? "Importing…" : `Import ${rows.length} Driver${rows.length !== 1 ? "s" : ""}`}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -80,6 +80,7 @@ export const api = {
   setReceivesDriverDocumentReminders: (body) => post({ action: "setReceivesDriverDocumentReminders", ...body }),
   setCanManageDrivers:    (body) => post({ action: "setCanManageDrivers",    ...body }),
   addDriverV2:            (body) => post({ action: "addDriverV2",            ...body }),
+  bulkAddDrivers:         (body) => post({ action: "bulkAddDrivers",         ...body }),
   editDriver:              (body) => post({ action: "editDriver",             ...body }),
   addDriverDocument:       (body) => post({ action: "addDriverDocument",      ...body }),
   editDriverDocument:      (body) => post({ action: "editDriverDocument",     ...body }),

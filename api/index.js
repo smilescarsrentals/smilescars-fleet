@@ -150,6 +150,7 @@ const WRITES = {
   setReceivesDriverDocumentReminders: writes.setReceivesDriverDocumentReminders,
   setCanManageDrivers: writes.setCanManageDrivers,
   addDriverV2: writes.addDriverV2,
+  bulkAddDrivers: writes.bulkAddDrivers,
   editDriver: writes.editDriver,
   addDriverDocument: writes.addDriverDocument,
   editDriverDocument: writes.editDriverDocument,
