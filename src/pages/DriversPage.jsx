@@ -392,8 +392,12 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
             <div style={S.field}><label style={S.label}>Label</label>
               <input style={S.input} value={newDoc.label} onChange={e => setNewDoc(n => ({ ...n, label: e.target.value }))} placeholder="e.g. First Aid Certificate" /></div>
           )}
-          <div style={S.field}><label style={S.label}>Select Date (optional)</label>
-            <input style={{ ...S.input, maxWidth: "100%", minWidth: 0 }} type="date" value={newDoc.expiryDate} onChange={e => setNewDoc(n => ({ ...n, expiryDate: e.target.value }))} /></div>
+          <div style={S.field}><label style={S.label}>Expiry Date (optional)</label>
+            <div style={{ overflow: "hidden", borderRadius: 7, width: "100%" }}>
+              <input style={{ ...S.input, display: "block", width: "100%", maxWidth: "100%", boxSizing: "border-box", fontSize: 16 }}
+                type="date" value={newDoc.expiryDate} onChange={e => setNewDoc(n => ({ ...n, expiryDate: e.target.value }))} />
+            </div>
+          </div>
 
           <div style={S.field}>
             <label style={S.label}>Photo/Scan (optional)</label>
