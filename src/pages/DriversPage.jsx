@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
 
-const DOC_TYPES = ["License", "National ID", "Defensive Driving Cert", "Other"];
+const DOC_TYPES = ["Driving License", "National ID (NIDA)", "TIN Certificate", "Defensive Driving Cert", "Others"];
 const photoUrl = (fileId) => `/api?action=file&id=${encodeURIComponent(fileId)}`;
 
 function daysUntil(dateStr) {
@@ -149,7 +149,7 @@ function AddDriverModal({ staffName, onClose, onSaved }) {
       const res = await api.addDriverV2({ ...form, staffName });
       if (photo && res.id) {
         await api.addDriverDocument({
-          driverId: res.id, docType: "License", staffName,
+          driverId: res.id, docType: "Driving License", staffName,
           imageBase64: photo.base64, mimeType: photo.mimeType, filename: photo.filename,
         }).catch(() => {});
       }
@@ -312,7 +312,7 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
 }
 
 function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAddingDoc, onChanged }) {
-  const [newDoc, setNewDoc] = useState({ docType: "License", label: "", expiryDate: "", notes: "" });
+  const [newDoc, setNewDoc] = useState({ docType: "Driving License", label: "", expiryDate: "", notes: "" });
   const [photo, setPhoto] = useState(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -334,7 +334,7 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
         driverId, docType: newDoc.docType, label: newDoc.label, expiryDate: newDoc.expiryDate, notes: newDoc.notes,
         staffName, imageBase64: photo?.base64, mimeType: photo?.mimeType, filename: photo?.filename,
       });
-      setNewDoc({ docType: "License", label: "", expiryDate: "", notes: "" });
+      setNewDoc({ docType: "Driving License", label: "", expiryDate: "", notes: "" });
       setPhoto(null);
       setAddingDoc(false);
       onChanged();
@@ -353,7 +353,7 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
         <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3 }}>Documents</span>
         {!addingDoc && canEdit && <button type="button" onClick={() => setAddingDoc(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>+ Add Document</button>}
         {addingDoc && (
-          <button type="button" onClick={() => { setAddingDoc(false); setErr(""); setPhoto(null); setNewDoc({ docType: "License", label: "", expiryDate: "", notes: "" }); }}
+          <button type="button" onClick={() => { setAddingDoc(false); setErr(""); setPhoto(null); setNewDoc({ docType: "Driving License", label: "", expiryDate: "", notes: "" }); }}
             style={{ fontSize: 13, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>✕</button>
         )}
       </div>
@@ -367,7 +367,7 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
             return (
               <div key={doc.id} style={{ border: "1px solid var(--border-light)", borderRadius: 8, padding: "8px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <p style={{ fontSize: 12.5, fontWeight: 600, margin: 0 }}>{doc.docType === "Other" && doc.label ? doc.label : doc.docType}</p>
+                  <p style={{ fontSize: 12.5, fontWeight: 600, margin: 0 }}>{doc.docType === "Others" && doc.label ? doc.label : doc.docType}</p>
                   {doc.expiryDate && <p style={{ fontSize: 11, color: flag.color, margin: "2px 0 0" }}>{flag.label}</p>}
                   {doc.fileId && <a href={photoUrl(doc.fileId)} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "var(--sc-blue)" }}>View file</a>}
                 </div>
@@ -388,7 +388,7 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
               {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-          {newDoc.docType === "Other" && (
+          {newDoc.docType === "Others" && (
             <div style={S.field}><label style={S.label}>Label</label>
               <input style={S.input} value={newDoc.label} onChange={e => setNewDoc(n => ({ ...n, label: e.target.value }))} placeholder="e.g. First Aid Certificate" /></div>
           )}
