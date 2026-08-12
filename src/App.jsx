@@ -25,6 +25,7 @@ const ReservationsPage = lazy(() => import("./pages/ReservationsPage"));
 const LeadsPage        = lazy(() => import("./pages/LeadsPage"));
 const GaragePage       = lazy(() => import("./pages/GaragePage"));
 const BlacklistPage    = lazy(() => import("./pages/BlacklistPage"));
+const DriversPage      = lazy(() => import("./pages/DriversPage"));
 
 export default function App() {
   const [staffName, setStaffName] = useState(
@@ -81,6 +82,7 @@ export default function App() {
             <Route path="/garage/:tab"  element={<GaragePage staffName={staffName} role={role} />} />
             <Route path="/sold"         element={<SoldPage />} />
             <Route path="/blacklist"    element={<BlacklistPage staffName={staffName} role={role} />} />
+            <Route path="/drivers"      element={<DriversPage staffName={staffName} role={role} />} />
             <Route path="/sign/:token"  element={<SignaturePage />} />
             <Route path="*"           element={<Navigate to={role === "Garage Manager" ? "/garage" : "/"} />} />
           </Routes>

@@ -48,7 +48,7 @@ function FineInput({ value, onChange, label }) {
 // have to scroll to discover, per instruction. Phone is required when
 // adding a new driver inline, so every driver in the system genuinely
 // has one for the rental agreement to print.
-function DriverPicker({ drivers, value, onChange, onDriverAdded }) {
+function DriverPicker({ drivers, value, onChange, onDriverAdded, staffName }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [addingNew, setAddingNew] = useState(false);
@@ -67,7 +67,7 @@ function DriverPicker({ drivers, value, onChange, onDriverAdded }) {
     if (!newPhone.trim()) { setErr("Phone number is required."); return; }
     setSaving(true); setErr("");
     try {
-      await api.addDriverWithPhone({ name: newName.trim(), phone: newPhone.trim() });
+      await api.addDriverV2({ name: newName.trim(), phone: newPhone.trim(), staffName });
       const added = { name: newName.trim(), phone: newPhone.trim() };
       onDriverAdded(added);
       onChange(added.name);
@@ -218,7 +218,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   // and the rental agreement print-out.
   const [richDrivers, setRichDrivers] = useState([]);
   useEffect(() => {
-    api.getDrivers().then(res => setRichDrivers(res?.data || [])).catch(() => {});
+    api.getDriversV2().then(res => setRichDrivers(res?.data || [])).catch(() => {});
   }, []);
 
   const [client,        setClient]       = useState(car.currentClient || "");
@@ -410,7 +410,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 </div>
               </div>
               <div style={S.field}><label style={S.label}>Driver (optional)</label>
-                <DriverPicker drivers={richDrivers} value={driver} onChange={setDriver}
+                <DriverPicker drivers={richDrivers} value={driver} onChange={setDriver} staffName={staffName}
                   onDriverAdded={d => setRichDrivers(list => [...list, d])} />
               </div>
               <div style={S.three}>
@@ -439,7 +439,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
               <div style={S.field}><label style={S.label}>Transfer Date *</label>
                 <input style={S.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} /></div>
               <div style={S.field}><label style={S.label}>Driver Allocated *</label>
-                <DriverPicker drivers={richDrivers} value={driver} onChange={setDriver}
+                <DriverPicker drivers={richDrivers} value={driver} onChange={setDriver} staffName={staffName}
                   onDriverAdded={d => setRichDrivers(list => [...list, d])} />
               </div>
               <div style={S.two}>

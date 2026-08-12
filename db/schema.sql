@@ -925,3 +925,81 @@ CREATE INDEX IF NOT EXISTS idx_system_health_log_job ON system_health_log(job_na
 -- Audit trail for notification trigger toggles: who last changed it, not
 -- just when.
 ALTER TABLE notification_trigger_settings ADD COLUMN IF NOT EXISTS updated_by text;
+
+-- Drivers: promoted out of config.type='Driver' into a real table so it
+-- can hold structured data (license/ID numbers, address) and documents
+-- with expiry tracking. See PROJECT_NOTES.md for the migration reasoning.
+CREATE TABLE IF NOT EXISTS drivers (
+  id             text PRIMARY KEY,
+  name           text NOT NULL,
+  phone          text,
+  license_number text,
+  national_id    text,
+  address        text,
+  notes          text,
+  active         text DEFAULT 'TRUE',
+  created_at     timestamp DEFAULT now(),
+  updated_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_drivers_active ON drivers(active);
+
+CREATE TABLE IF NOT EXISTS driver_documents (
+  id             text PRIMARY KEY,
+  driver_id      text NOT NULL REFERENCES drivers(id) ON DELETE CASCADE,
+  doc_type       text NOT NULL,
+  label          text,
+  file_id        text REFERENCES files(id) ON DELETE SET NULL,
+  expiry_date    text,
+  notes          text,
+  created_at     timestamp DEFAULT now(),
+  updated_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_driver_documents_driver ON driver_documents(driver_id);
+CREATE INDEX IF NOT EXISTS idx_driver_documents_expiry ON driver_documents(expiry_date) WHERE expiry_date IS NOT NULL;
+
+ALTER TABLE config ADD COLUMN IF NOT EXISTS receives_driver_document_reminders text DEFAULT 'FALSE';
+
+INSERT INTO notification_trigger_settings (type, label, enabled)
+VALUES ('driver_document_expiry', 'Driver Document Expiry', 'TRUE')
+ON CONFLICT (type) DO NOTHING;
+
+-- Drivers: own table (migrated off config.type='Driver' — see
+-- PROJECT_NOTES.md). driver_documents holds license/ID/certificates with
+-- optional expiry tracking, file stored via the existing files table.
+CREATE TABLE IF NOT EXISTS drivers (
+  id             text PRIMARY KEY,
+  name           text NOT NULL,
+  phone          text,
+  license_number text,
+  national_id    text,
+  address        text,
+  notes          text,
+  active         text DEFAULT 'TRUE',
+  created_at     timestamp DEFAULT now(),
+  updated_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_drivers_active ON drivers(active);
+
+CREATE TABLE IF NOT EXISTS driver_documents (
+  id             text PRIMARY KEY,
+  driver_id      text NOT NULL REFERENCES drivers(id) ON DELETE CASCADE,
+  doc_type       text NOT NULL,
+  label          text,
+  file_id        text REFERENCES files(id) ON DELETE SET NULL,
+  expiry_date    text,
+  notes          text,
+  created_at     timestamp DEFAULT now(),
+  updated_at     timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_driver_documents_driver ON driver_documents(driver_id);
+CREATE INDEX IF NOT EXISTS idx_driver_documents_expiry ON driver_documents(expiry_date) WHERE expiry_date IS NOT NULL;
+
+ALTER TABLE config ADD COLUMN IF NOT EXISTS receives_driver_document_reminders text DEFAULT 'FALSE';
+
+INSERT INTO notification_trigger_settings (type, label, enabled)
+VALUES ('driver_document_expiry', 'Driver Document Expiry', 'TRUE')
+ON CONFLICT (type) DO NOTHING;

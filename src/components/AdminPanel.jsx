@@ -265,6 +265,15 @@ function NotificationsTab() {
     finally { setBusyKey(null); }
   };
 
+  const toggleDriverDocReminders = async (s) => {
+    setBusyKey("dd-" + s.name);
+    try {
+      await api.setReceivesDriverDocumentReminders({ name: s.name, enabled: !s.receivesDriverDocumentReminders });
+      setStaff(list => list.map(x => x.name === s.name ? { ...x, receivesDriverDocumentReminders: !x.receivesDriverDocumentReminders } : x));
+    } catch (e) { alert(e.message); }
+    finally { setBusyKey(null); }
+  };
+
   if (!triggers || !staff) return <p style={{ fontSize: 13, color: "#888" }}>Loading…</p>;
 
   return (
@@ -289,6 +298,16 @@ function NotificationsTab() {
       </p>
       {staff.filter(s => s.active).map(s => (
         <ToggleRow key={s.name} label={s.name} sub={s.role} on={s.receivesAllReservationReminders} busy={busyKey === s.name} onToggle={() => toggleReminders(s)} />
+      ))}
+
+      <p style={{ fontSize: 12, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 0.3, margin: "20px 0 8px" }}>
+        Driver Document Reminders
+      </p>
+      <p style={{ fontSize: 12, color: "#888", margin: "0 0 12px" }}>
+        Turn this on for whoever should be notified when a driver's license, ID, or certificate is expiring (30 and 7 days before).
+      </p>
+      {staff.filter(s => s.active).map(s => (
+        <ToggleRow key={s.name} label={s.name} sub={s.role} on={s.receivesDriverDocumentReminders} busy={busyKey === "dd-" + s.name} onToggle={() => toggleDriverDocReminders(s)} />
       ))}
     </div>
   );
