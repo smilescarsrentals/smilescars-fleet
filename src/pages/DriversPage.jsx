@@ -110,9 +110,11 @@ function DriverCard({ driver, onClick }) {
   const flag = worstExpiry ? expiryStyle(worstExpiry.expiryDate) : null;
 
   return (
-    <div onClick={onClick} style={{
+    <button type="button" onClick={onClick} style={{
       background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
       padding: "12px 14px", cursor: "pointer", boxShadow: "var(--shadow-sm)",
+      textAlign: "left", display: "block", width: "100%", fontFamily: "inherit",
+      appearance: "none", WebkitAppearance: "none", minHeight: 84,
     }}>
       <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>{driver.name}{!driver.active && <span style={{ color: "var(--text-faint)", fontWeight: 500 }}> (inactive)</span>}</p>
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "3px 0 0" }}>{driver.phone || "No phone on file"}</p>
@@ -125,7 +127,7 @@ function DriverCard({ driver, onClick }) {
       ) : (
         <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "6px 0 0" }}>{docs.length} document{docs.length !== 1 ? "s" : ""} on file</p>
       )}
-    </div>
+    </button>
   );
 }
 
