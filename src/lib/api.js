@@ -76,6 +76,7 @@ export const api = {
   getDriverById:          (id)   => get("getDriverById", { id }),
   getDriverDocuments:     (driverId) => get("getDriverDocuments", { driverId }),
   setReceivesDriverDocumentReminders: (body) => post({ action: "setReceivesDriverDocumentReminders", ...body }),
+  setCanManageDrivers:    (body) => post({ action: "setCanManageDrivers",    ...body }),
   addDriverV2:            (body) => post({ action: "addDriverV2",            ...body }),
   editDriver:              (body) => post({ action: "editDriver",             ...body }),
   addDriverDocument:       (body) => post({ action: "addDriverDocument",      ...body }),

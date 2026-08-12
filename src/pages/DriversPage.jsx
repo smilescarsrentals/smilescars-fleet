@@ -25,7 +25,11 @@ function expiryStyle(dateStr) {
 }
 
 export default function DriversPage({ staffName, role }) {
-  const canEdit = role === "Admin" || role === "Manager" || role === "Garage Manager";
+  // Admin always can; everyone else needs canManageDrivers explicitly
+  // granted in Admin Panel — role alone (Manager/Garage Manager) is
+  // deliberately NOT sufficient here, matching the backend's
+  // requireDriverManageAccess check.
+  const [canEdit, setCanEdit] = useState(role === "Admin");
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -33,7 +37,15 @@ export default function DriversPage({ staffName, role }) {
   const [showAdd, setShowAdd] = useState(false);
   const [selected, setSelected] = useState(null);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    if (role !== "Admin") {
+      api.getStaffList().then(res => {
+        const me = (res?.staff || []).find(s => s.name === staffName);
+        if (me?.canManageDrivers) setCanEdit(true);
+      }).catch(() => {});
+    }
+  }, []);
 
   async function load() {
     setLoading(true); setErr("");
@@ -361,7 +373,7 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
           </div>
           <div style={S.field}>
             <label style={S.label}>Photo/Scan (optional)</label>
-            <input type="file" accept="image/*" onChange={handleFile} style={{ fontSize: 12, fontFamily: "inherit" }} />
+            <input type="file" accept="image/*,application/pdf" onChange={handleFile} style={{ fontSize: 12, fontFamily: "inherit" }} />
           </div>
           {err && <p style={S.err}>{err}</p>}
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>

@@ -146,6 +146,7 @@ const WRITES = {
   deletePushSubscription: writes.deletePushSubscription,
   setNotificationTriggerEnabled: writes.setNotificationTriggerEnabled,
   setReceivesDriverDocumentReminders: writes.setReceivesDriverDocumentReminders,
+  setCanManageDrivers: writes.setCanManageDrivers,
   addDriverV2: writes.addDriverV2,
   editDriver: writes.editDriver,
   addDriverDocument: writes.addDriverDocument,

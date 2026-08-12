@@ -58,7 +58,6 @@ function FleetTab({ config, onConfigChanged }) {
 
       <ConfigListEditor title="Locations" type="Location" values={config.locations || []} onChanged={onConfigChanged} />
       <ConfigListEditor title="Garages"   type="Garage"   values={config.garages   || []} onChanged={onConfigChanged} />
-      <ConfigListEditor title="Drivers"   type="Driver"   values={config.drivers   || []} onChanged={onConfigChanged} />
 
       {showAddCar && (
         <AddCarModal locations={config.locations}
@@ -274,6 +273,15 @@ function NotificationsTab() {
     finally { setBusyKey(null); }
   };
 
+  const toggleCanManageDrivers = async (s) => {
+    setBusyKey("cmd-" + s.name);
+    try {
+      await api.setCanManageDrivers({ name: s.name, enabled: !s.canManageDrivers });
+      setStaff(list => list.map(x => x.name === s.name ? { ...x, canManageDrivers: !x.canManageDrivers } : x));
+    } catch (e) { alert(e.message); }
+    finally { setBusyKey(null); }
+  };
+
   if (!triggers || !staff) return <p style={{ fontSize: 13, color: "#888" }}>Loading…</p>;
 
   return (
@@ -308,6 +316,16 @@ function NotificationsTab() {
       </p>
       {staff.filter(s => s.active).map(s => (
         <ToggleRow key={s.name} label={s.name} sub={s.role} on={s.receivesDriverDocumentReminders} busy={busyKey === "dd-" + s.name} onToggle={() => toggleDriverDocReminders(s)} />
+      ))}
+
+      <p style={{ fontSize: 12, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 0.3, margin: "20px 0 8px" }}>
+        Driver Record Management
+      </p>
+      <p style={{ fontSize: 12, color: "#888", margin: "0 0 12px" }}>
+        Admin can always edit driver records and documents. Turn this on for specific staff who should also be able to (add/edit drivers, upload/remove documents).
+      </p>
+      {staff.filter(s => s.active && s.role !== "Admin").map(s => (
+        <ToggleRow key={s.name} label={s.name} sub={s.role} on={s.canManageDrivers} busy={busyKey === "cmd-" + s.name} onToggle={() => toggleCanManageDrivers(s)} />
       ))}
     </div>
   );

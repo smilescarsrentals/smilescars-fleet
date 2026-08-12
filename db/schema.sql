@@ -1003,3 +1003,7 @@ ALTER TABLE config ADD COLUMN IF NOT EXISTS receives_driver_document_reminders t
 INSERT INTO notification_trigger_settings (type, label, enabled)
 VALUES ('driver_document_expiry', 'Driver Document Expiry', 'TRUE')
 ON CONFLICT (type) DO NOTHING;
+
+-- Per-staff permission to manage driver records/documents. Admin always
+-- can (checked in code); this grants it to specific non-Admin staff.
+ALTER TABLE config ADD COLUMN IF NOT EXISTS can_manage_drivers text DEFAULT 'FALSE';
