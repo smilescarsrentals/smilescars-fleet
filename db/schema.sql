@@ -1007,3 +1007,6 @@ ON CONFLICT (type) DO NOTHING;
 -- Per-staff permission to manage driver records/documents. Admin always
 -- can (checked in code); this grants it to specific non-Admin staff.
 ALTER TABLE config ADD COLUMN IF NOT EXISTS can_manage_drivers text DEFAULT 'FALSE';
+
+-- Driver profile photo (headshot), distinct from Documents.
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS photo_file_id text REFERENCES files(id) ON DELETE SET NULL;

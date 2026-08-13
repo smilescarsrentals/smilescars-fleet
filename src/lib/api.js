@@ -83,6 +83,7 @@ export const api = {
   bulkAddDrivers:         (body) => post({ action: "bulkAddDrivers",         ...body }),
   bulkAddDriverDocuments: (body) => post({ action: "bulkAddDriverDocuments", ...body }),
   editDriver:              (body) => post({ action: "editDriver",             ...body }),
+  setDriverPhoto:          (body) => post({ action: "setDriverPhoto",         ...body }),
   addDriverDocument:       (body) => post({ action: "addDriverDocument",      ...body }),
   editDriverDocument:      (body) => post({ action: "editDriverDocument",     ...body }),
   deleteDriverDocument:    (body) => post({ action: "deleteDriverDocument",   ...body }),

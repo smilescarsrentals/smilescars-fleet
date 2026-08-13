@@ -153,6 +153,7 @@ const WRITES = {
   bulkAddDrivers: writes.bulkAddDrivers,
   bulkAddDriverDocuments: writes.bulkAddDriverDocuments,
   editDriver: writes.editDriver,
+  setDriverPhoto: writes.setDriverPhoto,
   addDriverDocument: writes.addDriverDocument,
   editDriverDocument: writes.editDriverDocument,
   deleteDriverDocument: writes.deleteDriverDocument,

@@ -512,6 +512,7 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [addingDoc, setAddingDoc] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
@@ -522,6 +523,21 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
       setEditing(false);
     } catch (e) { setErr(e.message); }
     finally { setSaving(false); }
+  };
+
+  const handlePhotoFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true); setErr("");
+    try {
+      const compressed = await compressImage(file);
+      await api.setDriverPhoto({ driverId: driver.id, imageBase64: compressed.base64, mimeType: compressed.mimeType, filename: compressed.filename, staffName });
+      onChanged();
+    } catch (ex) {
+      setErr("Could not upload photo.");
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   return (
@@ -548,19 +564,41 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
         <div style={S.mBody}>
           {!editing ? (
             <>
-              {[
-                ["Phone", driver.phone || "—"],
-                ["License Number", driver.licenseNumber || "—"],
-                ["National ID", driver.nationalId || "—"],
-                ["Address", driver.address || "—"],
-                ["Notes", driver.notes || "—"],
-                ["Status", driver.active ? "Active" : "Inactive"],
-              ].map(([label, val]) => (
-                <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border-light)", fontSize: 13 }}>
-                  <span style={{ color: "var(--text-muted)" }}>{label}</span>
-                  <span style={{ fontWeight: 600, textAlign: "right" }}>{val}</span>
+              <div style={{ display: "flex", gap: 14, marginBottom: 4 }}>
+                <div style={{ flexShrink: 0 }}>
+                  <div onClick={() => canEdit && document.getElementById("driver-photo-input").click()} style={{
+                    width: 84, height: 84, borderRadius: 10, overflow: "hidden", background: "var(--bg)",
+                    border: "1.5px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: canEdit ? "pointer" : "default", position: "relative",
+                  }}>
+                    {driver.photoFileId ? (
+                      <img src={photoUrl(driver.photoFileId)} alt={driver.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : uploadingPhoto ? (
+                      <span style={{ fontSize: 11, color: "var(--text-faint)" }}>Uploading…</span>
+                    ) : (
+                      <span style={{ fontSize: 24, color: "var(--text-faint)" }}>📷</span>
+                    )}
+                  </div>
+                  {canEdit && (
+                    <input id="driver-photo-input" type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhotoFile} />
+                  )}
                 </div>
-              ))}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {[
+                    ["Phone", driver.phone || "—"],
+                    ["License Number", driver.licenseNumber || "—"],
+                    ["National ID", driver.nationalId || "—"],
+                    ["Address", driver.address || "—"],
+                    ["Notes", driver.notes || "—"],
+                    ["Status", driver.active ? "Active" : "Inactive"],
+                  ].map(([label, val]) => (
+                    <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border-light)", fontSize: 13 }}>
+                      <span style={{ color: "var(--text-muted)" }}>{label}</span>
+                      <span style={{ fontWeight: 600, textAlign: "right" }}>{val}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <DriverDocuments driverId={driver.id} docs={docs} canEdit={canEdit} staffName={staffName}
                 addingDoc={addingDoc} setAddingDoc={setAddingDoc} onChanged={onChanged} />
