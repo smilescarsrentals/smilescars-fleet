@@ -825,7 +825,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
         </div>
       </div>
 
-      {adminPanelOpen && <AdminPanel onClose={() => setAdminPanelOpen(false)} />}
+      {adminPanelOpen && <AdminPanel staffName={staffName} onClose={() => setAdminPanelOpen(false)} />}
     </div>
   );
 }

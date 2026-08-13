@@ -11,7 +11,7 @@ const TABS = [
   { key: "system",   label: "System"   },
 ];
 
-export default function AdminPanel({ onClose }) {
+export default function AdminPanel({ staffName, onClose }) {
   const [tab, setTab] = useState("fleet");
   const [config, setConfig] = useState({ locations: [], garages: [], drivers: [] });
 
@@ -40,7 +40,7 @@ export default function AdminPanel({ onClose }) {
         <div style={S.body}>
           {tab === "fleet"    && <FleetTab    config={config} onConfigChanged={loadConfig} />}
           {tab === "staff"    && <StaffTab />}
-          {tab === "notifications" && <NotificationsTab />}
+          {tab === "notifications" && <NotificationsTab staffName={staffName} />}
           {tab === "features" && <FeaturesTab />}
           {tab === "system"   && <SystemTab />}
         </div>
@@ -235,7 +235,7 @@ function AddStaffModal({ onClose, onSaved }) {
 // ── Features tab: Rental Agreement + Dropbox sync toggles ──────────────────
 // ── Notifications tab: per-trigger on/off + who gets ALL reservation
 // reminders (not just their own) ────────────────────────────────────────
-function NotificationsTab() {
+function NotificationsTab({ staffName }) {
   const [triggers, setTriggers] = useState(null);
   const [staff, setStaff] = useState(null);
   const [busyKey, setBusyKey] = useState(null); // which row is mid-save, so only that row shows busy
@@ -249,7 +249,7 @@ function NotificationsTab() {
   const toggleTrigger = async (t) => {
     setBusyKey(t.type);
     try {
-      await api.setNotificationTriggerEnabled({ type: t.type, enabled: !t.enabled });
+      await api.setNotificationTriggerEnabled({ type: t.type, enabled: !t.enabled, staffName });
       setTriggers(list => list.map(x => x.type === t.type ? { ...x, enabled: !x.enabled } : x));
     } catch (e) { alert(e.message); }
     finally { setBusyKey(null); }
@@ -258,7 +258,7 @@ function NotificationsTab() {
   const toggleReminders = async (s) => {
     setBusyKey(s.name);
     try {
-      await api.setReceivesAllReservationReminders({ name: s.name, enabled: !s.receivesAllReservationReminders });
+      await api.setReceivesAllReservationReminders({ name: s.name, enabled: !s.receivesAllReservationReminders, staffName });
       setStaff(list => list.map(x => x.name === s.name ? { ...x, receivesAllReservationReminders: !x.receivesAllReservationReminders } : x));
     } catch (e) { alert(e.message); }
     finally { setBusyKey(null); }
@@ -267,7 +267,7 @@ function NotificationsTab() {
   const toggleDriverDocReminders = async (s) => {
     setBusyKey("dd-" + s.name);
     try {
-      await api.setReceivesDriverDocumentReminders({ name: s.name, enabled: !s.receivesDriverDocumentReminders });
+      await api.setReceivesDriverDocumentReminders({ name: s.name, enabled: !s.receivesDriverDocumentReminders, staffName });
       setStaff(list => list.map(x => x.name === s.name ? { ...x, receivesDriverDocumentReminders: !x.receivesDriverDocumentReminders } : x));
     } catch (e) { alert(e.message); }
     finally { setBusyKey(null); }
@@ -276,7 +276,7 @@ function NotificationsTab() {
   const toggleCanManageDrivers = async (s) => {
     setBusyKey("cmd-" + s.name);
     try {
-      await api.setCanManageDrivers({ name: s.name, enabled: !s.canManageDrivers });
+      await api.setCanManageDrivers({ name: s.name, enabled: !s.canManageDrivers, staffName });
       setStaff(list => list.map(x => x.name === s.name ? { ...x, canManageDrivers: !x.canManageDrivers } : x));
     } catch (e) { alert(e.message); }
     finally { setBusyKey(null); }
