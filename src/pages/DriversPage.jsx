@@ -279,6 +279,26 @@ function ImportCsvModal({ staffName, onClose, onSaved }) {
     }
   };
 
+  // Plain client-side CSV generation — matches the exact headers
+  // parseDriverCsv's HEADER_ALIASES recognizes, with two example rows so
+  // the expected format (including how to leave optional fields blank)
+  // is obvious without needing separate written instructions.
+  const handleDownloadTemplate = () => {
+    const headers = ["Name", "Phone", "License Number", "National ID", "Address"];
+    const example = [
+      ["John Mwangi", "+255700111222", "DL12345", "NIDA9988", "Dar es Salaam"],
+      ["Jane Doe", "0700333444", "", "", ""],
+    ];
+    const escapeCell = (v) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const csv = [headers, ...example].map(row => row.map(escapeCell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "driver_import_template.csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={S.overlay} onClick={onClose}>
       <div style={{ ...S.modal, width: 600 }} onClick={e => e.stopPropagation()}>
@@ -293,6 +313,9 @@ function ImportCsvModal({ staffName, onClose, onSaved }) {
                 CSV columns: <strong>Name, Phone</strong> (required), License Number, National ID, Address (optional).
                 Column names are matched flexibly — "Phone", "Phone Number", "Mobile" all work.
               </p>
+              <button type="button" onClick={handleDownloadTemplate} style={{ fontSize: 12, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 12, display: "block" }}>
+                ⬇ Download CSV Template
+              </button>
               <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} disabled={parsing}
                 style={{ fontSize: 13, fontFamily: "inherit" }} />
               {parsing && <p style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 8 }}>Reading file…</p>}
@@ -403,7 +426,7 @@ function ImportZipModal({ staffName, drivers, onClose, onSaved }) {
     setSaving(true); setErr("");
     try {
       const entries = matched.map(m => ({
-        driverId: m.driverId, driverName: m.driverName, docType: m.docType,
+        driverId: m.driverId, driverName: m.driverName, docType: m.docType, label: m.label || "",
         filename: m.filename, imageBase64: m.base64, mimeType: m.mimeType,
       }));
       const res = await api.bulkAddDriverDocuments({ entries, staffName });
@@ -553,7 +576,7 @@ function SplitPdfModal({ driverId, driverName, staffName, onClose, onSaved }) {
       const { pageToUploadPayload } = await import("../lib/pdfSplit");
       const entries = await Promise.all(included.map(async (p, i) => {
         const upload = await pageToUploadPayload(p, driverName, i);
-        return { driverId, driverName, docType: p.docType, filename: upload.filename, imageBase64: upload.base64, mimeType: upload.mimeType };
+        return { driverId, driverName, docType: p.docType, label: p.label || "", filename: upload.filename, imageBase64: upload.base64, mimeType: upload.mimeType };
       }));
       const res = await api.bulkAddDriverDocuments({ entries, staffName });
       setResult(res);
@@ -618,6 +641,10 @@ function SplitPdfModal({ driverId, driverName, staffName, onClose, onSaved }) {
                       <select style={{ ...S.input, fontSize: 12 }} value={p.docType} disabled={!p.include} onChange={e => updatePage(i, { docType: e.target.value })}>
                         {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
+                      {p.docType === "Others" && (
+                        <input style={{ ...S.input, fontSize: 12, marginTop: 6 }} placeholder="What is this document?"
+                          value={p.label || ""} disabled={!p.include} onChange={e => updatePage(i, { label: e.target.value })} />
+                      )}
                     </div>
                   </div>
                 ))}
@@ -832,18 +859,34 @@ function DriverDocuments({ driverId, driverName, docs, canEdit, staffName, addin
       {docs.length === 0 && !addingDoc ? (
         <p style={{ fontSize: 12, color: "var(--text-faint)", fontStyle: "italic" }}>No documents on file</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {docs.map(doc => {
             const flag = expiryStyle(doc.expiryDate);
+            const isImage = doc.fileMimeType && doc.fileMimeType.startsWith("image/");
             return (
-              <div key={doc.id} style={{ border: "1px solid var(--border-light)", borderRadius: 8, padding: "8px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <p style={{ fontSize: 12.5, fontWeight: 600, margin: 0 }}>{doc.docType === "Others" && doc.label ? doc.label : doc.docType}</p>
-                  {doc.expiryDate && <p style={{ fontSize: 11, color: flag.color, margin: "2px 0 0" }}>{flag.label}</p>}
-                  {doc.fileId && <a href={photoUrl(doc.fileId)} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "var(--sc-blue)" }}>View file</a>}
+              <div key={doc.id} style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden", position: "relative" }}>
+                <a href={doc.fileId ? photoUrl(doc.fileId) : undefined} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+                  <div style={{ width: "100%", aspectRatio: "4/3", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    {doc.fileId && isImage ? (
+                      <img src={photoUrl(doc.fileId)} alt={doc.docType} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : doc.fileId ? (
+                      <span style={{ fontSize: 30 }}>📄</span>
+                    ) : (
+                      <span style={{ fontSize: 11, color: "var(--text-faint)" }}>No file</span>
+                    )}
+                  </div>
+                </a>
+                <div style={{ padding: "7px 8px" }}>
+                  <p style={{ fontSize: 11.5, fontWeight: 600, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {doc.docType === "Others" && doc.label ? doc.label : doc.docType}
+                  </p>
+                  {doc.expiryDate && <p style={{ fontSize: 10, color: flag.color, margin: "2px 0 0" }}>{flag.label}</p>}
                 </div>
                 {canEdit && (
-                  <button type="button" onClick={() => handleDelete(doc.id)} style={{ background: "none", border: "none", color: "var(--red)", cursor: "pointer", fontSize: 14 }}>✕</button>
+                  <button type="button" onClick={() => handleDelete(doc.id)} style={{
+                    position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.55)", border: "none", color: "#fff",
+                    borderRadius: "50%", width: 22, height: 22, cursor: "pointer", fontSize: 12, lineHeight: 1,
+                  }}>✕</button>
                 )}
               </div>
             );

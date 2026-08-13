@@ -83,9 +83,15 @@ export async function parseDriverZip(file, drivers) {
     }
 
     const base64 = await entry.async("base64");
+    const docType = matchDocType(parsed.docTypeRaw);
     matched.push({
       filename, driverId: driver.id, driverName: driver.name,
-      docType: matchDocType(parsed.docTypeRaw), base64, mimeType: extToMime(filename),
+      // If the filename's doc type didn't match one of the 5 real types
+      // and fell back to "Others", keep what was actually typed in the
+      // filename as the label — otherwise it'd be silently lost, showing
+      // just "Others" with no way to tell what it originally was.
+      docType, label: docType === "Others" ? parsed.docTypeRaw : "",
+      base64, mimeType: extToMime(filename),
     });
   }
 
