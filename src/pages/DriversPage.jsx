@@ -506,6 +506,139 @@ function ImportZipModal({ staffName, drivers, onClose, onSaved }) {
   );
 }
 
+// Splits a multi-page PDF into separate documents, one per page — per
+// instruction, since a single scanned PDF can contain a License on page
+// 1, a National ID on page 2, etc., and there's no way to know that
+// automatically. Staff picks the type for each rendered page before
+// anything saves. Reuses bulkAddDriverDocuments (built for ZIP import) --
+// its {driverId, docType, filename, imageBase64, mimeType} entry shape
+// is already generic enough for this, no backend change needed.
+function SplitPdfModal({ driverId, driverName, staffName, onClose, onSaved }) {
+  const [pages, setPages] = useState(null); // [{ pageNum, dataUrl, blob, docType, include }]
+  const [parsing, setParsing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [result, setResult] = useState(null);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setParsing(true); setErr(""); setResult(null);
+    try {
+      // Dynamic import — pdf.js is a genuinely large library (1MB+ worker
+      // included), so it should only load for the rare staff member who
+      // actually uses Split PDF, not bundled into everyone who opens
+      // Drivers. A static top-level import here previously pushed
+      // DriversPage to 614KB and re-triggered the chunk-size warning the
+      // earlier code-splitting work was specifically meant to avoid.
+      const { splitPdfIntoPages } = await import("../lib/pdfSplit");
+      const rendered = await splitPdfIntoPages(file);
+      setPages(rendered.map(p => ({ ...p, docType: "Driving License", include: true })));
+    } catch (ex) {
+      setErr(ex.message || "Could not read that PDF.");
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const updatePage = (i, patch) => {
+    setPages(list => list.map((p, idx) => idx === i ? { ...p, ...patch } : p));
+  };
+
+  const handleConfirm = async () => {
+    const included = pages.filter(p => p.include);
+    if (included.length === 0) { setErr("Select at least one page to save."); return; }
+    setSaving(true); setErr("");
+    try {
+      const { pageToUploadPayload } = await import("../lib/pdfSplit");
+      const entries = await Promise.all(included.map(async (p, i) => {
+        const upload = await pageToUploadPayload(p, driverName, i);
+        return { driverId, driverName, docType: p.docType, filename: upload.filename, imageBase64: upload.base64, mimeType: upload.mimeType };
+      }));
+      const res = await api.bulkAddDriverDocuments({ entries, staffName });
+      setResult(res);
+      if (res.failed.length === 0) onSaved();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modal, width: 560 }} onClick={e => e.stopPropagation()}>
+        <div style={{ ...S.mHead, background: "var(--sc-blue)" }}>
+          <p style={S.mTitle}>Split PDF into Documents</p>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={S.mBody}>
+          {pages === null ? (
+            <>
+              <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: "0 0 12px" }}>
+                If one PDF has several documents scanned together (e.g. License on page 1, National ID on page 2),
+                this splits each page into its own document — you'll pick the type for each page before saving.
+              </p>
+              <input type="file" accept=".pdf,application/pdf" onChange={handleFile} disabled={parsing}
+                style={{ fontSize: 13, fontFamily: "inherit" }} />
+              {parsing && <p style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 8 }}>Reading PDF…</p>}
+              {err && <p style={S.err}>{err}</p>}
+            </>
+          ) : result ? (
+            <>
+              <p style={{ fontSize: 14, fontWeight: 700, color: "var(--green)", margin: "0 0 8px" }}>
+                ✓ Saved {result.uploaded.length} document{result.uploaded.length !== 1 ? "s" : ""}
+              </p>
+              {result.failed.length > 0 && (
+                <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden", marginTop: 8 }}>
+                  {result.failed.map((f, i) => (
+                    <div key={i} style={{ padding: "6px 10px", borderBottom: "1px solid var(--border-light)", fontSize: 12 }}>
+                      {f.filename}: {f.reason}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button type="button" style={{ ...S.btn, background: "var(--sc-blue)" }} onClick={onSaved}>Done</button>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: 13, fontWeight: 700, margin: "0 0 10px" }}>
+                {pages.length} page{pages.length !== 1 ? "s" : ""} found — pick a type for each, uncheck any you don't need
+              </p>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 340, overflowY: "auto", marginBottom: 10 }}>
+                {pages.map((p, i) => (
+                  <div key={p.pageNum} style={{ border: "1px solid var(--border-light)", borderRadius: 8, padding: 8, display: "flex", gap: 10, opacity: p.include ? 1 : 0.5 }}>
+                    <img src={p.dataUrl} alt={`Page ${p.pageNum}`} style={{ width: 60, height: 78, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border-light)", flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, marginBottom: 6, cursor: "pointer" }}>
+                        <input type="checkbox" checked={p.include} onChange={e => updatePage(i, { include: e.target.checked })} style={{ width: 14, height: 14, cursor: "pointer" }} />
+                        Page {p.pageNum}
+                      </label>
+                      <select style={{ ...S.input, fontSize: 12 }} value={p.docType} disabled={!p.include} onChange={e => updatePage(i, { docType: e.target.value })}>
+                        {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {err && <p style={S.err}>{err}</p>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { setPages(null); setErr(""); }}>Choose Different File</button>
+                <button type="button" style={{ ...S.btn, flex: 1, marginTop: 0, background: "var(--sc-blue)", opacity: saving ? 0.65 : 1 }}
+                  disabled={saving} onClick={handleConfirm}>
+                  {saving ? "Saving…" : `Save ${pages.filter(p => p.include).length} Document${pages.filter(p => p.include).length !== 1 ? "s" : ""}`}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChanged }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(driver);
@@ -600,7 +733,7 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
                 </div>
               </div>
 
-              <DriverDocuments driverId={driver.id} docs={docs} canEdit={canEdit} staffName={staffName}
+              <DriverDocuments driverId={driver.id} driverName={driver.name} docs={docs} canEdit={canEdit} staffName={staffName}
                 addingDoc={addingDoc} setAddingDoc={setAddingDoc} onChanged={onChanged} />
 
               <DriverAssignmentLog driverName={driver.name} />
@@ -643,11 +776,12 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
   );
 }
 
-function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAddingDoc, onChanged }) {
+function DriverDocuments({ driverId, driverName, docs, canEdit, staffName, addingDoc, setAddingDoc, onChanged }) {
   const [newDoc, setNewDoc] = useState({ docType: "Driving License", label: "", expiryDate: "", notes: "" });
   const [photo, setPhoto] = useState(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [showSplitPdf, setShowSplitPdf] = useState(false);
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -683,7 +817,12 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3 }}>Documents</span>
-        {!addingDoc && canEdit && <button type="button" onClick={() => setAddingDoc(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>+ Add Document</button>}
+        {!addingDoc && canEdit && (
+          <div style={{ display: "flex", gap: 10 }}>
+            <button type="button" onClick={() => setShowSplitPdf(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>Split PDF</button>
+            <button type="button" onClick={() => setAddingDoc(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>+ Add Document</button>
+          </div>
+        )}
         {addingDoc && (
           <button type="button" onClick={() => { setAddingDoc(false); setErr(""); setPhoto(null); setNewDoc({ docType: "Driving License", label: "", expiryDate: "", notes: "" }); }}
             style={{ fontSize: 13, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>✕</button>
@@ -759,6 +898,11 @@ function DriverDocuments({ driverId, docs, canEdit, staffName, addingDoc, setAdd
             {saving ? "Saving…" : "Add"}
           </button>
         </div>
+      )}
+
+      {showSplitPdf && (
+        <SplitPdfModal driverId={driverId} driverName={driverName} staffName={staffName}
+          onClose={() => setShowSplitPdf(false)} onSaved={() => { setShowSplitPdf(false); onChanged(); }} />
       )}
     </div>
   );
