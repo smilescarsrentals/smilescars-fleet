@@ -30,6 +30,8 @@ export default function DriversPage({ staffName, role }) {
   const [canEdit, setCanEdit] = useState(role === "Admin");
   const [drivers, setDrivers] = useState([]);
   const [docsByDriver, setDocsByDriver] = useState({});
+  const [currentAssignments, setCurrentAssignments] = useState([]); // live Fleet "With Client" state
+  const [clientOptions, setClientOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [search, setSearch] = useState("");
@@ -37,6 +39,18 @@ export default function DriversPage({ staffName, role }) {
   const [showImport, setShowImport] = useState(false);
   const [showZipImport, setShowZipImport] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Filter state
+  const [availabilityFilter, setAvailabilityFilter] = useState(""); // "" | "Free" | "With Client"
+  const [activeFilter, setActiveFilter] = useState(""); // "" | "Active" | "Inactive"
+  const [expiryFilter, setExpiryFilter] = useState(""); // "" | "Expired" | "Expiring Soon" | "OK"
+  const [photoFilter, setPhotoFilter] = useState(""); // "" | "Has Photo" | "No Photo"
+  const [clientMode, setClientMode] = useState("current"); // "current" | "historical"
+  const [clientQuery, setClientQuery] = useState("");
+  const [clientFrom, setClientFrom] = useState("");
+  const [clientTo, setClientTo] = useState("");
+  const [historicalDrivers, setHistoricalDrivers] = useState(null); // null = not searched yet
 
   useEffect(() => {
     load();
@@ -51,13 +65,17 @@ export default function DriversPage({ staffName, role }) {
   async function load() {
     setLoading(true); setErr("");
     try {
-      const [driversRes, docsRes] = await Promise.all([api.getDriversV2(), api.getAllDriverDocuments()]);
+      const [driversRes, docsRes, assignRes, clientsRes] = await Promise.all([
+        api.getDriversV2(), api.getAllDriverDocuments(), api.getDriverCurrentAssignments(), api.getClients(),
+      ]);
       setDrivers(driversRes?.data || []);
       const grouped = {};
       (docsRes?.data || []).forEach(doc => {
         (grouped[doc.driverId] ||= []).push(doc);
       });
       setDocsByDriver(grouped);
+      setCurrentAssignments(assignRes?.data || []);
+      setClientOptions((clientsRes?.data || []).map(c => c.name).sort());
     } catch (e) {
       setErr(e.message || "Could not load drivers.");
     } finally {
@@ -65,17 +83,74 @@ export default function DriversPage({ staffName, role }) {
     }
   }
 
-  const filtered = drivers.filter(d =>
-    !search.trim() || d.name.toLowerCase().includes(search.toLowerCase()) || (d.phone || "").includes(search)
+  // Live "With Client" lookup — a Map from normalized driver name to their
+  // current assignment, since a driver only counts as with-client if
+  // Fleet shows an actively rented car against their name right now.
+  const currentAssignmentByName = new Map(
+    currentAssignments.map(a => [a.driverName.trim().toLowerCase(), a])
   );
+
+  const runHistoricalSearch = async () => {
+    if (!clientQuery.trim()) { setHistoricalDrivers(null); return; }
+    try {
+      const res = await api.getDriversByClientHistory({ clientName: clientQuery, fromDate: clientFrom || undefined, toDate: clientTo || undefined });
+      setHistoricalDrivers(res?.data || []);
+    } catch (e) {
+      setErr(e.message);
+    }
+  };
+
+  const activeFilterCount = [availabilityFilter, activeFilter, expiryFilter, photoFilter, clientMode === "current" && clientQuery, clientMode === "historical" && historicalDrivers].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setAvailabilityFilter(""); setActiveFilter(""); setExpiryFilter(""); setPhotoFilter("");
+    setClientQuery(""); setClientFrom(""); setClientTo(""); setHistoricalDrivers(null);
+  };
+
+  const filtered = drivers
+    .filter(d => !search.trim() || d.name.toLowerCase().includes(search.toLowerCase()) || (d.phone || "").includes(search))
+    .filter(d => {
+      if (!availabilityFilter) return true;
+      const isWithClient = currentAssignmentByName.has(d.name.trim().toLowerCase());
+      return availabilityFilter === "With Client" ? isWithClient : !isWithClient;
+    })
+    .filter(d => !activeFilter || (activeFilter === "Active" ? d.active : !d.active))
+    .filter(d => {
+      if (!expiryFilter) return true;
+      const docs = docsByDriver[d.id] || [];
+      const worst = docs.filter(doc => doc.expiryDate).sort((a, b) => daysUntil(a.expiryDate) - daysUntil(b.expiryDate))[0];
+      if (!worst) return false;
+      const days = daysUntil(worst.expiryDate);
+      if (expiryFilter === "Expired") return days < 0;
+      if (expiryFilter === "Expiring Soon") return days >= 0 && days <= 30;
+      return days > 30; // "OK"
+    })
+    .filter(d => !photoFilter || (photoFilter === "Has Photo" ? !!d.photoFileId : !d.photoFileId))
+    .filter(d => {
+      if (clientMode === "current" && clientQuery.trim()) {
+        const a = currentAssignmentByName.get(d.name.trim().toLowerCase());
+        return a && a.client.trim().toLowerCase().includes(clientQuery.trim().toLowerCase());
+      }
+      if (clientMode === "historical" && historicalDrivers !== null) {
+        return historicalDrivers.some(h => h.driverName.trim().toLowerCase() === d.name.trim().toLowerCase());
+      }
+      return true;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name)); // alphabetical, per instruction
 
   const selectedDriver = selectedId ? drivers.find(d => d.id === selectedId) : null;
 
   return (
     <div style={{ padding: "1rem 1.5rem 1.5rem" }}>
+      <h1 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 14px" }}>Driver Profile</h1>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
-        <input type="text" placeholder="Search drivers…" value={search} onChange={e => setSearch(e.target.value)}
-          style={{ padding: "8px 12px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, minWidth: 220, fontFamily: "inherit" }} />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input type="text" placeholder="Search drivers…" value={search} onChange={e => setSearch(e.target.value)}
+            style={{ padding: "8px 12px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, minWidth: 220, fontFamily: "inherit" }} />
+          <button type="button" className="btn btn-ghost" onClick={() => setShowFilters(v => !v)}>
+            ⚙ Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </button>
+        </div>
         {canEdit && (
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" className="btn btn-ghost" onClick={() => setShowImport(true)}>⬆ Import CSV</button>
@@ -84,6 +159,22 @@ export default function DriversPage({ staffName, role }) {
           </div>
         )}
       </div>
+
+      {showFilters && (
+        <DriverFilterPanel
+          availabilityFilter={availabilityFilter} setAvailabilityFilter={setAvailabilityFilter}
+          activeFilter={activeFilter} setActiveFilter={setActiveFilter}
+          expiryFilter={expiryFilter} setExpiryFilter={setExpiryFilter}
+          photoFilter={photoFilter} setPhotoFilter={setPhotoFilter}
+          clientMode={clientMode} setClientMode={setClientMode}
+          clientQuery={clientQuery} setClientQuery={setClientQuery}
+          clientFrom={clientFrom} setClientFrom={setClientFrom}
+          clientTo={clientTo} setClientTo={setClientTo}
+          clientOptions={clientOptions}
+          onRunHistoricalSearch={runHistoricalSearch}
+          onClear={clearFilters}
+        />
+      )}
 
       {err && <p style={{ color: "var(--red)", fontSize: 13 }}>{err}</p>}
 
@@ -137,6 +228,124 @@ export default function DriversPage({ staffName, role }) {
         <DriverDetailModal driver={selectedDriver} docs={docsByDriver[selectedDriver.id] || []} staffName={staffName} canEdit={canEdit}
           onClose={() => setSelectedId(null)} onChanged={load} />
       )}
+    </div>
+  );
+}
+
+function DriverFilterPanel({
+  availabilityFilter, setAvailabilityFilter, activeFilter, setActiveFilter,
+  expiryFilter, setExpiryFilter, photoFilter, setPhotoFilter,
+  clientMode, setClientMode, clientQuery, setClientQuery, clientFrom, setClientFrom, clientTo, setClientTo,
+  clientOptions, onRunHistoricalSearch, onClear,
+}) {
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const filteredClientOptions = clientQuery.trim()
+    ? clientOptions.filter(c => c.toLowerCase().includes(clientQuery.toLowerCase()))
+    : clientOptions;
+
+  const chip = (label, value, current, setter) => (
+    <button type="button" onClick={() => setter(current === value ? "" : value)} style={{
+      padding: "5px 11px", fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: "pointer", fontFamily: "inherit",
+      border: `1.5px solid ${current === value ? "var(--sc-blue)" : "var(--border)"}`,
+      background: current === value ? "var(--blue-bg, #eff6ff)" : "var(--surface)",
+      color: current === value ? "var(--sc-blue)" : "var(--text-muted)",
+    }}>
+      {label}
+    </button>
+  );
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 14, marginBottom: 14, background: "var(--surface)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3 }}>Filters</span>
+        <button type="button" onClick={onClear} style={{ fontSize: 12, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>Clear all</button>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-faint)", margin: "0 0 6px" }}>Availability</p>
+        <div style={{ display: "flex", gap: 6 }}>
+          {chip("Free", "Free", availabilityFilter, setAvailabilityFilter)}
+          {chip("With Client", "With Client", availabilityFilter, setAvailabilityFilter)}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-faint)", margin: "0 0 6px" }}>Status</p>
+        <div style={{ display: "flex", gap: 6 }}>
+          {chip("Active", "Active", activeFilter, setActiveFilter)}
+          {chip("Inactive", "Inactive", activeFilter, setActiveFilter)}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-faint)", margin: "0 0 6px" }}>Document Status</p>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {chip("Expired", "Expired", expiryFilter, setExpiryFilter)}
+          {chip("Expiring Soon", "Expiring Soon", expiryFilter, setExpiryFilter)}
+          {chip("OK", "OK", expiryFilter, setExpiryFilter)}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-faint)", margin: "0 0 6px" }}>Profile Photo</p>
+        <div style={{ display: "flex", gap: 6 }}>
+          {chip("Has Photo", "Has Photo", photoFilter, setPhotoFilter)}
+          {chip("No Photo", "No Photo", photoFilter, setPhotoFilter)}
+        </div>
+      </div>
+
+      <div>
+        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-faint)", margin: "0 0 6px" }}>Client</p>
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          <button type="button" onClick={() => setClientMode("current")} style={{
+            flex: 1, padding: "6px 0", fontSize: 11.5, fontWeight: 600, borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
+            border: `1.5px solid ${clientMode === "current" ? "var(--sc-blue)" : "var(--border)"}`,
+            background: clientMode === "current" ? "var(--blue-bg, #eff6ff)" : "var(--surface)",
+            color: clientMode === "current" ? "var(--sc-blue)" : "var(--text-muted)",
+          }}>Currently With</button>
+          <button type="button" onClick={() => setClientMode("historical")} style={{
+            flex: 1, padding: "6px 0", fontSize: 11.5, fontWeight: 600, borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
+            border: `1.5px solid ${clientMode === "historical" ? "var(--sc-blue)" : "var(--border)"}`,
+            background: clientMode === "historical" ? "var(--blue-bg, #eff6ff)" : "var(--surface)",
+            color: clientMode === "historical" ? "var(--sc-blue)" : "var(--text-muted)",
+          }}>Was With (Date Range)</button>
+        </div>
+
+        <div style={{ position: "relative" }}>
+          <input type="text" placeholder="Type to find a client…" value={clientQuery}
+            onChange={e => { setClientQuery(e.target.value); setClientDropdownOpen(true); }}
+            onFocus={() => setClientDropdownOpen(true)} onBlur={() => setTimeout(() => setClientDropdownOpen(false), 150)}
+            style={{ width: "100%", padding: "8px 10px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 7, boxSizing: "border-box", fontFamily: "inherit" }} />
+          {clientDropdownOpen && filteredClientOptions.length > 0 && (
+            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow)", zIndex: 20, maxHeight: 160, overflowY: "auto" }}>
+              {filteredClientOptions.slice(0, 25).map(c => (
+                <div key={c} style={{ padding: "7px 10px", cursor: "pointer", fontSize: 12.5, borderBottom: "1px solid var(--border-light)" }}
+                  onMouseDown={() => { setClientQuery(c); setClientDropdownOpen(false); if (clientMode === "historical") onRunHistoricalSearch(); }}>
+                  {c}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {clientMode === "historical" && (
+          <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 10.5, color: "var(--text-faint)", display: "block", marginBottom: 3 }}>From</label>
+              <input type="date" value={clientFrom} onChange={e => setClientFrom(e.target.value)}
+                style={{ width: "100%", padding: "7px 8px", fontSize: 12, border: "1.5px solid var(--border)", borderRadius: 6, boxSizing: "border-box", fontFamily: "inherit" }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 10.5, color: "var(--text-faint)", display: "block", marginBottom: 3 }}>To</label>
+              <input type="date" value={clientTo} onChange={e => setClientTo(e.target.value)}
+                style={{ width: "100%", padding: "7px 8px", fontSize: 12, border: "1.5px solid var(--border)", borderRadius: 6, boxSizing: "border-box", fontFamily: "inherit" }} />
+            </div>
+            <button type="button" onClick={onRunHistoricalSearch} style={{ padding: "8px 14px", fontSize: 12, fontWeight: 600, color: "#fff", background: "var(--sc-blue)", border: "none", borderRadius: 6, cursor: "pointer", fontFamily: "inherit" }}>
+              Search
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -673,6 +882,7 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
   const [err, setErr] = useState("");
   const [addingDoc, setAddingDoc] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [viewingPhoto, setViewingPhoto] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
@@ -726,10 +936,10 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
             <>
               <div style={{ display: "flex", gap: 14, marginBottom: 4 }}>
                 <div style={{ flexShrink: 0 }}>
-                  <div onClick={() => canEdit && document.getElementById("driver-photo-input").click()} style={{
+                  <div onClick={() => driver.photoFileId ? setViewingPhoto(true) : (canEdit && document.getElementById("driver-photo-input").click())} style={{
                     width: 84, height: 84, borderRadius: 10, overflow: "hidden", background: "var(--bg)",
                     border: "1.5px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: canEdit ? "pointer" : "default", position: "relative",
+                    cursor: (canEdit || driver.photoFileId) ? "pointer" : "default", position: "relative",
                   }}>
                     {driver.photoFileId ? (
                       <img src={photoUrl(driver.photoFileId)} alt={driver.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -739,6 +949,12 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
                       <span style={{ fontSize: 24, color: "var(--text-faint)" }}>📷</span>
                     )}
                   </div>
+                  {canEdit && driver.photoFileId && (
+                    <button type="button" onClick={() => document.getElementById("driver-photo-input").click()}
+                      style={{ fontSize: 10.5, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer", padding: "3px 0 0", display: "block" }}>
+                      Change photo
+                    </button>
+                  )}
                   {canEdit && (
                     <input id="driver-photo-input" type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhotoFile} />
                   )}
@@ -764,6 +980,13 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
                 addingDoc={addingDoc} setAddingDoc={setAddingDoc} onChanged={onChanged} />
 
               <DriverAssignmentLog driverName={driver.name} />
+
+              {viewingPhoto && driver.photoFileId && (
+                <DocumentViewerModal
+                  doc={{ fileId: driver.photoFileId, fileMimeType: "image/jpeg", docType: `${driver.name} — Profile Photo` }}
+                  onClose={() => setViewingPhoto(false)}
+                />
+              )}
             </>
           ) : (
             <>
