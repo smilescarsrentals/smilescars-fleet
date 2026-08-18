@@ -39,7 +39,6 @@ export default function DriversPage({ staffName, role }) {
   const [showImport, setShowImport] = useState(false);
   const [showZipImport, setShowZipImport] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
-  const [showFilters, setShowFilters] = useState(false);
 
   // Filter state
   const [availabilityFilter, setAvailabilityFilter] = useState(""); // "" | "Free" | "With Client"
@@ -90,10 +89,11 @@ export default function DriversPage({ staffName, role }) {
     currentAssignments.map(a => [a.driverName.trim().toLowerCase(), a])
   );
 
-  const runHistoricalSearch = async () => {
-    if (!clientQuery.trim()) { setHistoricalDrivers(null); return; }
+  const runHistoricalSearch = async (overrideName) => {
+    const name = overrideName ?? clientQuery;
+    if (!name.trim()) { setHistoricalDrivers(null); return; }
     try {
-      const res = await api.getDriversByClientHistory({ clientName: clientQuery, fromDate: clientFrom || undefined, toDate: clientTo || undefined });
+      const res = await api.getDriversByClientHistory({ clientName: name, fromDate: clientFrom || undefined, toDate: clientTo || undefined });
       setHistoricalDrivers(res?.data || []);
     } catch (e) {
       setErr(e.message);
@@ -143,38 +143,63 @@ export default function DriversPage({ staffName, role }) {
   return (
     <div style={{ padding: "1rem 1.5rem 1.5rem" }}>
       <h1 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 14px" }}>Driver Profile</h1>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input type="text" placeholder="Search drivers…" value={search} onChange={e => setSearch(e.target.value)}
-            style={{ padding: "8px 12px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 8, minWidth: 220, fontFamily: "inherit" }} />
-          <button type="button" className="btn btn-ghost" onClick={() => setShowFilters(v => !v)}>
-            ⚙ Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
-          </button>
-        </div>
+
+      <div className="sc-filter-row">
+        <input type="text" placeholder="Search drivers…" value={search} onChange={e => setSearch(e.target.value)}
+          className="sc-search" style={S.filterInput} />
+
+        <select value={availabilityFilter} onChange={e => setAvailabilityFilter(e.target.value)} style={S.filterInput}>
+          <option value="">All Availability</option>
+          <option value="Free">Free</option>
+          <option value="With Client">With Client</option>
+        </select>
+
+        <select value={activeFilter} onChange={e => setActiveFilter(e.target.value)} style={S.filterInput}>
+          <option value="">All Status</option>
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+
+        <select value={expiryFilter} onChange={e => setExpiryFilter(e.target.value)} style={S.filterInput}>
+          <option value="">All Documents</option>
+          <option value="Expired">Expired</option>
+          <option value="Expiring Soon">Expiring Soon</option>
+          <option value="OK">OK</option>
+        </select>
+
+        <select value={photoFilter} onChange={e => setPhotoFilter(e.target.value)} style={S.filterInput}>
+          <option value="">All Photos</option>
+          <option value="Has Photo">Has Photo</option>
+          <option value="No Photo">No Photo</option>
+        </select>
+
+        <select value={clientMode} onChange={e => setClientMode(e.target.value)} style={S.filterInput}>
+          <option value="current">Currently With…</option>
+          <option value="historical">Was With…</option>
+        </select>
+        <DriverClientTypeahead value={clientQuery} onChange={setClientQuery} options={clientOptions}
+          onPick={(name) => { setClientQuery(name); if (clientMode === "historical") runHistoricalSearch(name); }} />
+        {clientMode === "historical" && (
+          <>
+            <input type="date" value={clientFrom} onChange={e => setClientFrom(e.target.value)} style={S.filterInput} title="From date" />
+            <input type="date" value={clientTo} onChange={e => setClientTo(e.target.value)} style={S.filterInput} title="To date" />
+            <button type="button" className="btn btn-ghost" onClick={() => runHistoricalSearch()}>Search</button>
+          </>
+        )}
+
+        {activeFilterCount > 0 && (
+          <button type="button" className="btn btn-ghost" onClick={clearFilters}>✕ Clear Filters</button>
+        )}
+        <span className="result-count">{filtered.length} {filtered.length === 1 ? "driver" : "drivers"}</span>
+
         {canEdit && (
-          <div style={{ display: "flex", gap: 8 }}>
+          <>
             <button type="button" className="btn btn-ghost" onClick={() => setShowImport(true)}>⬆ Import CSV</button>
             <button type="button" className="btn btn-ghost" onClick={() => setShowZipImport(true)}>📎 Import Documents (ZIP)</button>
             <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ Add Driver</button>
-          </div>
+          </>
         )}
       </div>
-
-      {showFilters && (
-        <DriverFilterPanel
-          availabilityFilter={availabilityFilter} setAvailabilityFilter={setAvailabilityFilter}
-          activeFilter={activeFilter} setActiveFilter={setActiveFilter}
-          expiryFilter={expiryFilter} setExpiryFilter={setExpiryFilter}
-          photoFilter={photoFilter} setPhotoFilter={setPhotoFilter}
-          clientMode={clientMode} setClientMode={setClientMode}
-          clientQuery={clientQuery} setClientQuery={setClientQuery}
-          clientFrom={clientFrom} setClientFrom={setClientFrom}
-          clientTo={clientTo} setClientTo={setClientTo}
-          clientOptions={clientOptions}
-          onRunHistoricalSearch={runHistoricalSearch}
-          onClear={clearFilters}
-        />
-      )}
 
       {err && <p style={{ color: "var(--red)", fontSize: 13 }}>{err}</p>}
 
@@ -232,120 +257,30 @@ export default function DriversPage({ staffName, role }) {
   );
 }
 
-function DriverFilterPanel({
-  availabilityFilter, setAvailabilityFilter, activeFilter, setActiveFilter,
-  expiryFilter, setExpiryFilter, photoFilter, setPhotoFilter,
-  clientMode, setClientMode, clientQuery, setClientQuery, clientFrom, setClientFrom, clientTo, setClientTo,
-  clientOptions, onRunHistoricalSearch, onClear,
-}) {
-  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
-  const filteredClientOptions = clientQuery.trim()
-    ? clientOptions.filter(c => c.toLowerCase().includes(clientQuery.toLowerCase()))
-    : clientOptions;
-
-  const chip = (label, value, current, setter) => (
-    <button type="button" onClick={() => setter(current === value ? "" : value)} style={{
-      padding: "5px 11px", fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: "pointer", fontFamily: "inherit",
-      border: `1.5px solid ${current === value ? "var(--sc-blue)" : "var(--border)"}`,
-      background: current === value ? "var(--blue-bg, #eff6ff)" : "var(--surface)",
-      color: current === value ? "var(--sc-blue)" : "var(--text-muted)",
-    }}>
-      {label}
-    </button>
-  );
+// A plain text input with a type-ahead dropdown for picking a client name
+// — used inline in the sc-filter-row, styled to match the rest of the
+// app's filter controls (S.filterInput) rather than the earlier
+// standalone panel design.
+function DriverClientTypeahead({ value, onChange, options, onPick }) {
+  const [open, setOpen] = useState(false);
+  const filtered = value.trim() ? options.filter(c => c.toLowerCase().includes(value.toLowerCase())) : options;
 
   return (
-    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 14, marginBottom: 14, background: "var(--surface)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3 }}>Filters</span>
-        <button type="button" onClick={onClear} style={{ fontSize: 12, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>Clear all</button>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-faint)", margin: "0 0 6px" }}>Availability</p>
-        <div style={{ display: "flex", gap: 6 }}>
-          {chip("Free", "Free", availabilityFilter, setAvailabilityFilter)}
-          {chip("With Client", "With Client", availabilityFilter, setAvailabilityFilter)}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-faint)", margin: "0 0 6px" }}>Status</p>
-        <div style={{ display: "flex", gap: 6 }}>
-          {chip("Active", "Active", activeFilter, setActiveFilter)}
-          {chip("Inactive", "Inactive", activeFilter, setActiveFilter)}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-faint)", margin: "0 0 6px" }}>Document Status</p>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {chip("Expired", "Expired", expiryFilter, setExpiryFilter)}
-          {chip("Expiring Soon", "Expiring Soon", expiryFilter, setExpiryFilter)}
-          {chip("OK", "OK", expiryFilter, setExpiryFilter)}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 14 }}>
-        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-faint)", margin: "0 0 6px" }}>Profile Photo</p>
-        <div style={{ display: "flex", gap: 6 }}>
-          {chip("Has Photo", "Has Photo", photoFilter, setPhotoFilter)}
-          {chip("No Photo", "No Photo", photoFilter, setPhotoFilter)}
-        </div>
-      </div>
-
-      <div>
-        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-faint)", margin: "0 0 6px" }}>Client</p>
-        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-          <button type="button" onClick={() => setClientMode("current")} style={{
-            flex: 1, padding: "6px 0", fontSize: 11.5, fontWeight: 600, borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
-            border: `1.5px solid ${clientMode === "current" ? "var(--sc-blue)" : "var(--border)"}`,
-            background: clientMode === "current" ? "var(--blue-bg, #eff6ff)" : "var(--surface)",
-            color: clientMode === "current" ? "var(--sc-blue)" : "var(--text-muted)",
-          }}>Currently With</button>
-          <button type="button" onClick={() => setClientMode("historical")} style={{
-            flex: 1, padding: "6px 0", fontSize: 11.5, fontWeight: 600, borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
-            border: `1.5px solid ${clientMode === "historical" ? "var(--sc-blue)" : "var(--border)"}`,
-            background: clientMode === "historical" ? "var(--blue-bg, #eff6ff)" : "var(--surface)",
-            color: clientMode === "historical" ? "var(--sc-blue)" : "var(--text-muted)",
-          }}>Was With (Date Range)</button>
-        </div>
-
-        <div style={{ position: "relative" }}>
-          <input type="text" placeholder="Type to find a client…" value={clientQuery}
-            onChange={e => { setClientQuery(e.target.value); setClientDropdownOpen(true); }}
-            onFocus={() => setClientDropdownOpen(true)} onBlur={() => setTimeout(() => setClientDropdownOpen(false), 150)}
-            style={{ width: "100%", padding: "8px 10px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 7, boxSizing: "border-box", fontFamily: "inherit" }} />
-          {clientDropdownOpen && filteredClientOptions.length > 0 && (
-            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow)", zIndex: 20, maxHeight: 160, overflowY: "auto" }}>
-              {filteredClientOptions.slice(0, 25).map(c => (
-                <div key={c} style={{ padding: "7px 10px", cursor: "pointer", fontSize: 12.5, borderBottom: "1px solid var(--border-light)" }}
-                  onMouseDown={() => { setClientQuery(c); setClientDropdownOpen(false); if (clientMode === "historical") onRunHistoricalSearch(); }}>
-                  {c}
-                </div>
-              ))}
+    <div style={{ position: "relative" }}>
+      <input type="text" placeholder="Client name…" value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+        style={{ ...S.filterInput, minWidth: 160 }} />
+      {open && filtered.length > 0 && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: 200, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 7, boxShadow: "var(--shadow)", zIndex: 20, maxHeight: 160, overflowY: "auto" }}>
+          {filtered.slice(0, 25).map(c => (
+            <div key={c} style={{ padding: "7px 10px", cursor: "pointer", fontSize: 12.5, borderBottom: "1px solid var(--border-light)" }}
+              onMouseDown={() => { onPick(c); setOpen(false); }}>
+              {c}
             </div>
-          )}
+          ))}
         </div>
-
-        {clientMode === "historical" && (
-          <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "flex-end" }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 10.5, color: "var(--text-faint)", display: "block", marginBottom: 3 }}>From</label>
-              <input type="date" value={clientFrom} onChange={e => setClientFrom(e.target.value)}
-                style={{ width: "100%", padding: "7px 8px", fontSize: 12, border: "1.5px solid var(--border)", borderRadius: 6, boxSizing: "border-box", fontFamily: "inherit" }} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 10.5, color: "var(--text-faint)", display: "block", marginBottom: 3 }}>To</label>
-              <input type="date" value={clientTo} onChange={e => setClientTo(e.target.value)}
-                style={{ width: "100%", padding: "7px 8px", fontSize: 12, border: "1.5px solid var(--border)", borderRadius: 6, boxSizing: "border-box", fontFamily: "inherit" }} />
-            </div>
-            <button type="button" onClick={onRunHistoricalSearch} style={{ padding: "8px 14px", fontSize: 12, fontWeight: 600, color: "#fff", background: "var(--sc-blue)", border: "none", borderRadius: 6, cursor: "pointer", fontFamily: "inherit" }}>
-              Search
-            </button>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
@@ -1331,6 +1266,7 @@ function DocumentViewerModal({ doc, onClose }) {
 }
 
 const S = {
+  filterInput: { padding: "7px 10px", border: "1px solid var(--border)", borderRadius: 7, fontSize: 13, minWidth: 110 },
   overlay:  { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 },
   modal:    { background: "var(--surface)", borderRadius: 14, width: 460, maxWidth: "100%", maxHeight: "92vh", overflow: "auto", boxShadow: "var(--shadow-lg)" },
   mHead:    { padding: "1rem 1.25rem", borderRadius: "14px 14px 0 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
