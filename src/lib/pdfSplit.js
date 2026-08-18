@@ -50,6 +50,29 @@ export async function splitPdfIntoPages(file) {
   return pages;
 }
 
+// Renders just the FIRST page of a PDF as a small thumbnail (for the
+// document grid) — much lower resolution than splitPdfIntoPages, since
+// this is a preview, not the actual saved document. Takes a Blob directly
+// (the caller already fetched the file from storage) rather than a File,
+// since there's no <input> involved here.
+export async function renderPdfFirstPageThumbnail(blob) {
+  const buf = await blob.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const page = await pdf.getPage(1);
+  // scale 0.5 — this only needs to look like a recognizable thumbnail at
+  // grid-cell size, not be legible on its own; keeps rendering fast for
+  // documents that render automatically as soon as the list loads.
+  const viewport = page.getViewport({ scale: 0.5 });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext("2d");
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  return canvas.toDataURL("image/jpeg", 0.75);
+}
+
 // Converts a page's blob into the { base64, mimeType, filename } shape
 // the existing upload endpoints (addDriverDocument, bulkAddDriverDocuments)
 // already expect. Uses FileReader.readAsDataURL() — the same safe pattern

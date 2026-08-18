@@ -809,6 +809,7 @@ function DriverDocuments({ driverId, driverName, docs, canEdit, staffName, addin
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [showSplitPdf, setShowSplitPdf] = useState(false);
+  const [viewingDoc, setViewingDoc] = useState(null);
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -860,39 +861,13 @@ function DriverDocuments({ driverId, driverName, docs, canEdit, staffName, addin
         <p style={{ fontSize: 12, color: "var(--text-faint)", fontStyle: "italic" }}>No documents on file</p>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          {docs.map(doc => {
-            const flag = expiryStyle(doc.expiryDate);
-            const isImage = doc.fileMimeType && doc.fileMimeType.startsWith("image/");
-            return (
-              <div key={doc.id} style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden", position: "relative" }}>
-                <a href={doc.fileId ? photoUrl(doc.fileId) : undefined} target="_blank" rel="noreferrer" style={{ display: "block" }}>
-                  <div style={{ width: "100%", aspectRatio: "4/3", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                    {doc.fileId && isImage ? (
-                      <img src={photoUrl(doc.fileId)} alt={doc.docType} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : doc.fileId ? (
-                      <span style={{ fontSize: 30 }}>📄</span>
-                    ) : (
-                      <span style={{ fontSize: 11, color: "var(--text-faint)" }}>No file</span>
-                    )}
-                  </div>
-                </a>
-                <div style={{ padding: "7px 8px" }}>
-                  <p style={{ fontSize: 11.5, fontWeight: 600, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {doc.docType === "Others" && doc.label ? doc.label : doc.docType}
-                  </p>
-                  {doc.expiryDate && <p style={{ fontSize: 10, color: flag.color, margin: "2px 0 0" }}>{flag.label}</p>}
-                </div>
-                {canEdit && (
-                  <button type="button" onClick={() => handleDelete(doc.id)} style={{
-                    position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.55)", border: "none", color: "#fff",
-                    borderRadius: "50%", width: 22, height: 22, cursor: "pointer", fontSize: 12, lineHeight: 1,
-                  }}>✕</button>
-                )}
-              </div>
-            );
-          })}
+          {docs.map(doc => (
+            <DocumentThumbnail key={doc.id} doc={doc} canEdit={canEdit} onOpen={() => setViewingDoc(doc)} onDelete={() => handleDelete(doc.id)} />
+          ))}
         </div>
       )}
+
+      {viewingDoc && <DocumentViewerModal doc={viewingDoc} onClose={() => setViewingDoc(null)} />}
 
       {addingDoc && (
         <div style={{ border: "1.5px solid var(--sc-blue)", borderRadius: 8, padding: 10, marginTop: 8 }}>
@@ -1001,6 +976,133 @@ function DriverAssignmentLog({ driverName }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Popup viewer for a document — shown instead of just opening the raw
+// file in a new tab, per instruction. Download uses serveFile's existing
+// ?download=1 query param (already supported server-side via
+// Content-Disposition: attachment, just never used from the frontend
+// before this). Share uses the native Web Share API where the browser
+// supports it (mobile browsers, mainly) — falls back to copying the
+// link, since not every desktop browser implements navigator.share.
+// Real thumbnail for every document, including PDFs — per instruction.
+// Images just use a plain <img>. PDFs need their bytes actually fetched
+// and the first page rendered via pdf.js, which is dynamically imported
+// (same reasoning as SplitPdfModal: pdf.js is 1MB+ including its worker,
+// so it should only load for drivers who actually have a PDF document,
+// not bundled into everyone who opens Drivers).
+function DocumentThumbnail({ doc, canEdit, onOpen, onDelete }) {
+  const [pdfThumb, setPdfThumb] = useState(null); // data URL once rendered
+  const [pdfFailed, setPdfFailed] = useState(false);
+  const flag = expiryStyle(doc.expiryDate);
+  const isImage = doc.fileMimeType && doc.fileMimeType.startsWith("image/");
+  const isPdf = doc.fileMimeType === "application/pdf";
+
+  useEffect(() => {
+    if (!isPdf || !doc.fileId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { renderPdfFirstPageThumbnail } = await import("../lib/pdfSplit");
+        const res = await fetch(photoUrl(doc.fileId));
+        if (!res.ok) throw new Error("Could not fetch file");
+        const blob = await res.blob();
+        const dataUrl = await renderPdfFirstPageThumbnail(blob);
+        if (!cancelled) setPdfThumb(dataUrl);
+      } catch {
+        if (!cancelled) setPdfFailed(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isPdf, doc.fileId]);
+
+  return (
+    <div style={{ border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden", position: "relative" }}>
+      <button type="button" onClick={onOpen} disabled={!doc.fileId} style={{ display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: doc.fileId ? "pointer" : "default", fontFamily: "inherit" }}>
+        <div style={{ width: "100%", aspectRatio: "4/3", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+          {doc.fileId && isImage ? (
+            <img src={photoUrl(doc.fileId)} alt={doc.docType} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : doc.fileId && isPdf && pdfThumb ? (
+            <img src={pdfThumb} alt={doc.docType} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : doc.fileId && isPdf && !pdfFailed ? (
+            <span style={{ fontSize: 11, color: "var(--text-faint)" }}>Loading…</span>
+          ) : doc.fileId ? (
+            <span style={{ fontSize: 30 }}>📄</span>
+          ) : (
+            <span style={{ fontSize: 11, color: "var(--text-faint)" }}>No file</span>
+          )}
+        </div>
+      </button>
+      <div style={{ padding: "7px 8px" }}>
+        <p style={{ fontSize: 11.5, fontWeight: 600, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {doc.docType === "Others" && doc.label ? doc.label : doc.docType}
+        </p>
+        {doc.expiryDate && <p style={{ fontSize: 10, color: flag.color, margin: "2px 0 0" }}>{flag.label}</p>}
+      </div>
+      {canEdit && (
+        <button type="button" onClick={onDelete} style={{
+          position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.55)", border: "none", color: "#fff",
+          borderRadius: "50%", width: 22, height: 22, cursor: "pointer", fontSize: 12, lineHeight: 1,
+        }}>✕</button>
+      )}
+    </div>
+  );
+}
+
+function DocumentViewerModal({ doc, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const isImage = doc.fileMimeType && doc.fileMimeType.startsWith("image/");
+  const isPdf = doc.fileMimeType === "application/pdf";
+  const viewUrl = photoUrl(doc.fileId);
+  const downloadUrl = `${viewUrl}&download=1`;
+  const title = doc.docType === "Others" && doc.label ? doc.label : doc.docType;
+
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}${viewUrl}`;
+    if (navigator.share) {
+      try { await navigator.share({ title, url: shareUrl }); }
+      catch { /* user cancelled the native share sheet — not an error */ }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch { /* clipboard blocked — nothing more we can do here */ }
+    }
+  };
+
+  return (
+    <div style={{ ...S.overlay, zIndex: 200 }} onClick={onClose}>
+      <div style={{ ...S.modal, width: 520 }} onClick={e => e.stopPropagation()}>
+        <div style={{ ...S.mHead, background: "var(--sc-blue)" }}>
+          <p style={S.mTitle}>{title}</p>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={{ padding: "1rem 1.25rem" }}>
+          <div style={{ width: "100%", maxHeight: 420, background: "var(--bg)", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+            {isImage ? (
+              <img src={viewUrl} alt={title} style={{ width: "100%", maxHeight: 420, objectFit: "contain" }} />
+            ) : isPdf ? (
+              <embed src={viewUrl} type="application/pdf" style={{ width: "100%", height: 420 }} />
+            ) : (
+              <div style={{ padding: "3rem 0", textAlign: "center", color: "var(--text-faint)" }}>
+                <div style={{ fontSize: 40 }}>📄</div>
+                <p style={{ fontSize: 12, marginTop: 8 }}>Preview not available for this file type</p>
+              </div>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <a href={downloadUrl} style={{ ...S.btn, flex: 1, marginTop: 0, textAlign: "center", textDecoration: "none", background: "var(--sc-blue)", display: "block" }}>
+              ⬇ Download
+            </a>
+            <button type="button" onClick={handleShare} style={{ ...S.btn, flex: 1, marginTop: 0, background: "var(--green)" }}>
+              {copied ? "Link copied!" : "↗ Share"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
