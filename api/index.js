@@ -95,6 +95,7 @@ const WRITES = {
   verifyStaff: writes.verifyStaff,
   checkOut: writes.checkOut,
   addCar: writes.addCar,
+  renameFleetPlate: writes.renameFleetPlate,
   markReturned: writes.markReturned,
   extendBooking: writes.extendBooking,
   setMaintenance: writes.setMaintenance,

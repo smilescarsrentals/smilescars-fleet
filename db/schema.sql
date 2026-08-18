@@ -1010,3 +1010,18 @@ ALTER TABLE config ADD COLUMN IF NOT EXISTS can_manage_drivers text DEFAULT 'FAL
 
 -- Driver profile photo (headshot), distinct from Documents.
 ALTER TABLE drivers ADD COLUMN IF NOT EXISTS photo_file_id text REFERENCES files(id) ON DELETE SET NULL;
+
+-- Plate rename history: lets a car's full History/Maintenance be found
+-- under either its old or new plate. History rows keep their original
+-- plate text unchanged (accurate to what happened); this table is the
+-- resolution layer for cross-plate lookups.
+CREATE TABLE IF NOT EXISTS plate_history (
+  id          text PRIMARY KEY,
+  old_plate   text NOT NULL,
+  new_plate   text NOT NULL,
+  changed_at  timestamp DEFAULT now(),
+  changed_by  text
+);
+
+CREATE INDEX IF NOT EXISTS idx_plate_history_old ON plate_history(old_plate);
+CREATE INDEX IF NOT EXISTS idx_plate_history_new ON plate_history(new_plate);

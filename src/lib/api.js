@@ -64,6 +64,7 @@ export const api = {
   verifyStaff:           (body)  => post({ action: "verifyStaff",           ...body }),
   checkOut:              (body)  => post({ action: "checkOut",               ...body }),
   addCar:                (body)  => post({ action: "addCar",                 ...body }),
+  renameFleetPlate:      (body)  => post({ action: "renameFleetPlate",       ...body }),
   addStaff:              (body)  => post({ action: "addStaff",               ...body }),
   getStaffList:           ()     => get("getStaffList"),
   getDrivers:             ()     => get("getDrivers"),
