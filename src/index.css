@@ -1207,6 +1207,13 @@ tbody tr:hover td { background: #fafaf8; }
   .sc-fuel-table td[data-label="Authorised By"] { display: none; }
   .sc-fuel-table td[data-label="Date"]        { order: 8; flex: 1 1 auto; font-size: 11.5px; color: var(--text-faint); }
   .sc-fuel-table td[data-label="Actions"]     { order: 9; flex: 0 0 auto; margin-left: auto; }
+  /* Each cell's borderBottom is set as an inline style (FuelPage.jsx's
+     shared S.td object) so a regular class rule can't override it —
+     inline style specificity always wins. This is the correct, narrow
+     use of !important: removing the per-field divider lines on mobile
+     (desktop's real <table> still wants them; only the mobile card view
+     doesn't) without touching every call site that spreads ...S.td. */
+  .sc-fuel-table td { border-bottom: none !important; padding: 2px 0 !important; }
 
   /* ---- Filter row: stack vertically on mobile ---- */
   .sc-filter-row { flex-direction: column; align-items: stretch; }
