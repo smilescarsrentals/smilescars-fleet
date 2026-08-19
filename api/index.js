@@ -30,6 +30,7 @@ const READS = {
   getSubHire: reads.getSubHire,
   getClients: reads.getClients,
   getDashboard: reads.getDashboard,
+  getMonthlyRevenue: reads.getMonthlyRevenue,
   getCarByPlate: reads.getCarByPlate,
   getCarHistory: reads.getCarHistory,
   getHistoryByStaff: reads.getHistoryByStaff,

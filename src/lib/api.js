@@ -42,6 +42,7 @@ export async function post(body) {
 
 export const api = {
   getFleet:              ()      => get("getFleet"),
+  getMonthlyRevenue:     (params) => get("getMonthlyRevenue", params),
   getHistory:            ()      => get("getHistory"),
   getConfig:             ()      => get("getConfig"),
   getSold:               ()      => get("getSold"),

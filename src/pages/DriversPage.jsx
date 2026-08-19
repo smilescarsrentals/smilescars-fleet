@@ -286,7 +286,7 @@ function DriverClientTypeahead({ value, onChange, options, onPick }) {
 }
 
 function AddDriverModal({ staffName, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: "", phone: "", licenseNumber: "", nationalId: "", address: "", notes: "" });
+  const [form, setForm] = useState({ name: "", phone: "", licenseNumber: "", nationalId: "", tinNumber: "", address: "", notes: "" });
   const [photo, setPhoto] = useState(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -357,6 +357,8 @@ function AddDriverModal({ staffName, onClose, onSaved }) {
             <input style={S.input} value={form.licenseNumber} onChange={e => set("licenseNumber", e.target.value)} placeholder="Driving license number" /></div>
           <div style={S.field}><label style={S.label}>National ID</label>
             <input style={S.input} value={form.nationalId} onChange={e => set("nationalId", e.target.value)} /></div>
+          <div style={S.field}><label style={S.label}>TIN No.</label>
+            <input style={S.input} value={form.tinNumber} onChange={e => set("tinNumber", e.target.value)} /></div>
           <div style={S.field}><label style={S.label}>Address</label>
             <input style={S.input} value={form.address} onChange={e => set("address", e.target.value)} /></div>
           <div style={S.field}><label style={S.label}>Notes</label>
@@ -899,6 +901,7 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
                     ["Phone", driver.phone || "—"],
                     ["License Number", driver.licenseNumber || "—"],
                     ["National ID", driver.nationalId || "—"],
+                    ["TIN No.", driver.tinNumber || "—"],
                     ["Address", driver.address || "—"],
                     ["Notes", driver.notes || "—"],
                     ["Status", driver.active ? "Active" : "Inactive"],
@@ -937,6 +940,8 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
                 <div style={S.field}><label style={S.label}>National ID</label>
                   <input style={S.input} value={form.nationalId} onChange={e => set("nationalId", e.target.value)} /></div>
               </div>
+              <div style={S.field}><label style={S.label}>TIN No.</label>
+                <input style={S.input} value={form.tinNumber} onChange={e => set("tinNumber", e.target.value)} /></div>
               <div style={S.field}><label style={S.label}>Address</label>
                 <input style={S.input} value={form.address} onChange={e => set("address", e.target.value)} /></div>
               <div style={S.field}><label style={S.label}>Notes</label>

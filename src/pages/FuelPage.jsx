@@ -690,8 +690,8 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
     return true;
   });
 
-  const totalAmount = entries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  const totalLitres = entries.reduce((s, e) => s + (Number(e.litres) || 0), 0);
+  const totalAmount = filtered.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const totalLitres = filtered.reduce((s, e) => s + (Number(e.litres) || 0), 0);
 
   return (
     <div style={{ padding: "4px 0" }}>
@@ -704,15 +704,15 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
       {/* Stats */}
       <div className="sc-stat-grid sc-fuel-stats" style={{ gridTemplateColumns:"repeat(3,1fr)" }}>
         <div className="sc-stat-card tint-blue">
-          <div className="sc-stat-label">Total Entries</div>
-          <div className="sc-stat-value">{entries.length}</div>
+          <div className="sc-stat-label">{(filterFrom || filterTo) ? "Entries (filtered)" : "Total Entries"}</div>
+          <div className="sc-stat-value">{filtered.length}</div>
         </div>
         <div className="sc-stat-card tint-green">
-          <div className="sc-stat-label">Total Amount</div>
+          <div className="sc-stat-label">{(filterFrom || filterTo) ? "Amount (filtered)" : "Total Amount"}</div>
           <div className="sc-stat-value">TSH {fmtNum(totalAmount)}</div>
         </div>
         <div className="sc-stat-card tint-yellow">
-          <div className="sc-stat-label">Total Litres</div>
+          <div className="sc-stat-label">{(filterFrom || filterTo) ? "Litres (filtered)" : "Total Litres"}</div>
           <div className="sc-stat-value">{totalLitres > 0 ? `${fmtNum(totalLitres)} Ltrs` : "—"}</div>
         </div>
       </div>

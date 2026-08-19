@@ -1025,3 +1025,9 @@ CREATE TABLE IF NOT EXISTS plate_history (
 
 CREATE INDEX IF NOT EXISTS idx_plate_history_old ON plate_history(old_plate);
 CREATE INDEX IF NOT EXISTS idx_plate_history_new ON plate_history(new_plate);
+
+-- TIN No. field on driver profile.
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS tin_number text;
+
+-- Driver TIN number (plain profile field, no reminder tracking).
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS tin_number text;

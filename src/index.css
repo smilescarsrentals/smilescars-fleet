@@ -1170,16 +1170,24 @@ tbody tr:hover td { background: #fafaf8; }
     text-align: left;
   }
 
+  /* ---- History: tighter card density (uses the generic label:value
+     rows above, just with less padding/gap than the shared default —
+     scoped to this page so Blacklist/Sub-Hire/Clients etc. aren't
+     affected by a change requested specifically for History). ---- */
+  .sc-history-table.table-wrap tr { padding: 7px 11px; margin-bottom: 5px; }
+  .sc-history-table.table-wrap td { padding: 2px 0; }
+
   /* ---- Fleet: bespoke card layout (overrides the generic label:value rows above) ---- */
   .sc-fleet-table tr {
     display: flex;
     flex-wrap: wrap;
-    row-gap: 4px;
+    row-gap: 2px;
     column-gap: 8px;
   }
   .sc-fleet-table td {
     display: block;
     text-align: left;
+    padding: 1px 0 !important;
   }
   .sc-fleet-table td::before { content: none; }
   .sc-fleet-table td[data-label="Plate"]       { order: 1; flex: 1 1 60%; font-size: 13px; }

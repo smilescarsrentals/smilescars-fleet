@@ -179,6 +179,8 @@ export default function DashboardPage({ staffName, role }) {
         </div>
       </div>
 
+      <RevenueWidget />
+
       {/* Widgets */}
       <div className="sc-widget-grid">
         <div className="sc-widget">
@@ -249,6 +251,85 @@ export default function DashboardPage({ staffName, role }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+// Two totals per instruction: booking value (amount) and money actually
+// received (amount_paid) for bookings that STARTED in the selected
+// month, broken out per currency rather than combined. Real data caveat
+// surfaced directly in the UI (not hidden): amount/amount_paid are
+// frequently unrecorded in practice, so "X of Y bookings" makes clear
+// these totals are a floor, not the complete picture, until data entry
+// catches up.
+function RevenueWidget() {
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.getMonthlyRevenue({ month, year }).then(res => setData(res)).catch(() => setData(null)).finally(() => setLoading(false));
+  }, [month, year]);
+
+  const fmt = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const currencies = data ? Array.from(new Set([...Object.keys(data.bookingTotal || {}), ...Object.keys(data.paidTotal || {})])).sort() : [];
+
+  const changeMonth = (delta) => {
+    let m = month + delta, y = year;
+    if (m < 1) { m = 12; y -= 1; }
+    if (m > 12) { m = 1; y += 1; }
+    setMonth(m); setYear(y);
+  };
+
+  return (
+    <div className="sc-widget" style={{ marginTop: 16 }}>
+      <div className="sc-widget-header">
+        <div className="sc-widget-title">Revenue</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => changeMonth(-1)}>‹</button>
+          <select value={month} onChange={e => setMonth(Number(e.target.value))} style={{ padding: "5px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 6 }}>
+            {MONTH_NAMES.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
+          </select>
+          <select value={year} onChange={e => setYear(Number(e.target.value))} style={{ padding: "5px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 6 }}>
+            {[year - 1, year, year + 1].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => changeMonth(1)}>›</button>
+        </div>
+      </div>
+
+      {loading ? (
+        <p style={{ fontSize: 13, color: "var(--text-muted)", padding: "12px 0" }}>Loading…</p>
+      ) : !data || data.totalBookings === 0 ? (
+        <p style={{ fontSize: 13, color: "var(--text-faint)", fontStyle: "italic", padding: "12px 0" }}>No bookings started in {MONTH_NAMES[month - 1]} {year}.</p>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: "10px 0" }}>
+            <div>
+              <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3, margin: "0 0 6px" }}>Total Booked</p>
+              {currencies.length === 0 ? <p style={{ fontSize: 13, color: "var(--text-faint)" }}>—</p> : currencies.map(c => (
+                <p key={c} style={{ fontSize: 18, fontWeight: 700, margin: "0 0 2px" }}>
+                  {(data.bookingTotal[c] || 0) > 0 || data.bookingTotal[c] === 0 ? `${c} ${fmt(data.bookingTotal[c])}` : null}
+                </p>
+              ))}
+              <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "4px 0 0" }}>{data.bookingsWithAmount} of {data.totalBookings} bookings had an amount recorded</p>
+            </div>
+            <div>
+              <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3, margin: "0 0 6px" }}>Amount Paid</p>
+              {currencies.filter(c => data.paidTotal[c] !== undefined).length === 0 ? <p style={{ fontSize: 13, color: "var(--text-faint)" }}>—</p> : currencies.map(c => (
+                data.paidTotal[c] !== undefined && (
+                  <p key={c} style={{ fontSize: 18, fontWeight: 700, margin: "0 0 2px", color: "var(--green)" }}>{c} {fmt(data.paidTotal[c])}</p>
+                )
+              ))}
+              <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "4px 0 0" }}>{data.bookingsWithAmountPaid} of {data.totalBookings} bookings had a paid amount recorded</p>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
