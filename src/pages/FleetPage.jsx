@@ -150,7 +150,11 @@ export default function FleetPage({ staffName, role }) {
         }
         cache.clear();
         load(true).catch(() => {}); // refresh in the background, doesn't block opening the agreement
-        if (agreementEnabled) {
+        // A Transfer is moving a car between locations/staff, not a customer
+        // signing a rental contract — it should never trigger the rental
+        // agreement, regardless of the global on/off setting above, which
+        // only controls whether agreements happen for REAL rentals.
+        if (agreementEnabled && payload.bookingType !== "Transfer") {
           setAgreement({ car, checkout: payload });
         } else {
           showToast("✅ Checkout complete");
