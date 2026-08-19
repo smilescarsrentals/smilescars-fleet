@@ -372,18 +372,25 @@ export default function FleetPage({ staffName, role }) {
       <div className="sc-filter-row">
         <input style={sel} className="sc-search" placeholder="Search plate, type or client…"
           value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} />
-        <MultiSelect style={sel} label="All statuses" options={["Available","Rented","Staff Use","Maintenance"]} selected={fStatus} onChange={v=>{setFStatus(v);setPage(1);}} />
-        <MultiSelect style={sel} label="All locations" options={locations} selected={fLocation} onChange={v=>{setFLocation(v);setPage(1);}} />
-        <MultiSelect style={sel} label="All types" options={types} selected={fType} onChange={v=>{setFType(v);setPage(1);}} />
+
+        <div className="sc-hf-row3">
+          <MultiSelect style={sel} label="All statuses" options={["Available","Rented","Staff Use","Maintenance"]} selected={fStatus} onChange={v=>{setFStatus(v);setPage(1);}} />
+          <MultiSelect style={sel} label="All locations" options={locations} selected={fLocation} onChange={v=>{setFLocation(v);setPage(1);}} />
+          <MultiSelect style={sel} label="All types" options={types} selected={fType} onChange={v=>{setFType(v);setPage(1);}} />
+        </div>
+
         {(search||fStatus.length||fLocation.length||fType.length) && <button type="button" className="btn btn-ghost btn-sm" onClick={()=>{setSearch("");setFStatus([]);setFLocation([]);setFType([]);setPage(1);}}>Clear</button>}
         <span style={{ fontSize:12,color:"var(--text-muted)",marginLeft:"auto" }}>
           {(search||fStatus.length||fLocation.length||fType.length||view!=="all")
             ? `${filtered.length} ${[...fStatus,...fLocation,...fType,view==="expiring"?"Expiring/Expired":view==="unpaid"?"Unpaid":view==="staffuse"?"Staff Use":""].filter(Boolean).join(" · ")}`
             : `${fleet.length} cars total`}
         </span>
-        {canExportOrSell && <button type="button" className="btn btn-success btn-sm sc-export-btn" onClick={handleExport} title="Export" aria-label="Export"><span aria-hidden="true">⬇</span><span className="sc-export-label"> Export</span></button>}
-        {canExportOrSell && <button type="button" className="btn btn-primary btn-sm" onClick={()=>setShowAddCar(true)}>+ Add Car</button>}
-        <button type="button" className="btn btn-ghost btn-sm" onClick={()=>{cache.clear();load(true);}}>↻</button>
+
+        <div className="sc-hf-row4">
+          {canExportOrSell && <button type="button" className="btn btn-success btn-sm sc-export-btn" onClick={handleExport} title="Export" aria-label="Export"><span aria-hidden="true">⬇</span><span className="sc-export-label"> Export</span></button>}
+          {canExportOrSell && <button type="button" className="btn btn-primary btn-sm" onClick={()=>setShowAddCar(true)}>+ Add Car</button>}
+          <button type="button" className="btn btn-ghost btn-sm" onClick={()=>{cache.clear();load(true);}}>↻</button>
+        </div>
       </div>
 
       <div className="table-wrap sc-fleet-table">

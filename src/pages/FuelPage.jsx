@@ -732,9 +732,9 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
         </div>
         <div className="sc-hf-row3">
           <DateField label="To" style={S.filterInput} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
-          <span className="result-count">{filtered.length} {filtered.length === 1 ? "entry" : "entries"}</span>
+          <button type="button" className="btn btn-add" onClick={() => hasAccess ? setShowAdd(true) : setAccessDenied(true)}>＋ Add New</button>
         </div>
-        <button type="button" className="btn btn-add" onClick={() => hasAccess ? setShowAdd(true) : setAccessDenied(true)}>＋ Add New</button>
+        <span className="result-count">{filtered.length} {filtered.length === 1 ? "entry" : "entries"}</span>
       </div>
 
       {/* Table */}
