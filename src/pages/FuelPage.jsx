@@ -734,6 +734,9 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
           <DateField label="To" style={S.filterInput} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
           <button type="button" className="btn btn-add" onClick={() => hasAccess ? setShowAdd(true) : setAccessDenied(true)}>＋ Add New</button>
         </div>
+        {(filterPlate || filterProduct || filterFrom || filterTo) && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setFilterPlate(""); setFilterProduct(""); setFilterFrom(""); setFilterTo(""); }}>✕ Clear</button>
+        )}
         <span className="result-count">{filtered.length} {filtered.length === 1 ? "entry" : "entries"}</span>
       </div>
 

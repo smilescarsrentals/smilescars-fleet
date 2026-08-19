@@ -91,6 +91,7 @@ export default function SubHirePage({ staffName }) {
           <option value="Active">Active</option>
           <option value="Returned">Returned</option>
         </select>
+        {(search || fStatus) && <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSearch(""); setFStatus(""); }}>✕ Clear</button>}
         <span className="result-count">{filtered.length} bookings</span>
       </div>
 
