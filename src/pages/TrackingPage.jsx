@@ -111,8 +111,9 @@ export default function TrackingPage({ staffName }) {
         </p>
         {data && (
           <p style={{ fontSize: 12, color: "#94a3b8", margin: "4px 0 0" }}>
-            {data.totalDevices} trackers found on TrackSolid — compare against "All" on TrackSolid's own Monitor
+            {data.totalDevices} trackers found on TrackSolid — compare against "Total" on TrackSolid's own Monitor
             page if this ever looks off.
+            {data.dataAsOf && ` Data as of ${new Date(data.dataAsOf).toLocaleTimeString("en-TZ", { hour: "2-digit", minute: "2-digit" })}.`}
           </p>
         )}
       </div>

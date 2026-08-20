@@ -1074,3 +1074,16 @@ CREATE TABLE IF NOT EXISTS ignored_tracker_devices (
   ignored_by    text,
   ignored_at    timestamp DEFAULT now()
 );
+
+-- Short-lived cache of TrackSolid's full device list. Fetching it live
+-- means ~25+ signed API calls (root account + every client sub-account) —
+-- fine occasionally, but the Tracking page was hitting TrackSolid's rate
+-- limit ("request frequency too high") because every page reload repeated
+-- that whole burst from scratch. getDeviceList() now serves from here
+-- when the cache is fresh, and falls back to a stale cache (rather than
+-- erroring) if TrackSolid is rate-limiting a refresh attempt.
+CREATE TABLE IF NOT EXISTS tracksolid_device_cache (
+  id          text PRIMARY KEY DEFAULT 'devices',
+  payload     jsonb NOT NULL,
+  fetched_at  timestamp DEFAULT now()
+);
