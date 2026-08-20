@@ -23,7 +23,7 @@ export async function get(action, params = {}) {
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   const res  = await fetch(url.toString(), { method: "GET", redirect: "follow" });
   const text = await res.text();
-  const data = JSON.parse(text);
+  const data = parseJsonOrThrow(text, res.status, action);
   if (data.error) throw new Error(data.error);
   return data;
 }
@@ -35,9 +35,24 @@ export async function post(body) {
     body: JSON.stringify(body),
   });
   const text = await res.text();
-  const data = JSON.parse(text);
+  const data = parseJsonOrThrow(text, res.status, body.action);
   if (data.error) throw new Error(data.error);
   return data;
+}
+
+// A non-JSON response (Vercel's own timeout page, a proxy error, etc.)
+// used to surface as a raw, cryptic browser parser error ('Unexpected
+// identifier "An"...') with no indication of what actually happened or
+// which request it was. This gives a plain-English message instead.
+function parseJsonOrThrow(text, status, action) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      `The server didn't respond properly to "${action}" (HTTP ${status}). ` +
+      `This can happen if the request took too long — try again, or with a smaller batch of work.`
+    );
+  }
 }
 
 export const api = {
