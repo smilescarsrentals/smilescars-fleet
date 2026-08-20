@@ -23,6 +23,7 @@ export default function TrackingPage({ staffName }) {
   const [fStatus, setFStatus] = useState([]); // "Over 100km" | "No data yesterday"
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [sortByDistance, setSortByDistance] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -122,12 +123,21 @@ export default function TrackingPage({ staffName }) {
     }
     if (fStatus.includes("Over 100km")) r = r.filter((c) => c.overLimit);
     if (fStatus.includes("No data yesterday")) r = r.filter((c) => c.distanceKm == null);
+    if (fStatus.includes("Currently moving")) r = r.filter((c) => c.accOn === true);
+    if (sortByDistance) {
+      // nulls (no data) sink to the bottom regardless of direction
+      r = [...r].sort((a, b) => {
+        if (a.distanceKm == null) return 1;
+        if (b.distanceKm == null) return -1;
+        return b.distanceKm - a.distanceKm;
+      });
+    }
     return r;
-  }, [rows, search, fStatus]);
+  }, [rows, search, fStatus, sortByDistance]);
 
   // Reset to page 1 whenever the filtered set changes shape, so a filter
   // change never leaves the user stranded on a now-empty page.
-  useEffect(() => { setPage(1); }, [search, fStatus, pageSize]);
+  useEffect(() => { setPage(1); }, [search, fStatus, pageSize, sortByDistance]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageRows = useMemo(() => filtered.slice((page - 1) * pageSize, page * pageSize), [filtered, page, pageSize]);
 
@@ -160,9 +170,12 @@ export default function TrackingPage({ staffName }) {
       {/* Filter row — same visual pattern as Fleet */}
       <div className="sc-filter-row">
         <input className="sc-search" placeholder="Search plate…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <MultiSelect label="All cars" options={["Over 100km", "No data yesterday"]} selected={fStatus} onChange={setFStatus} />
+        <MultiSelect label="All cars" options={["Over 100km", "No data yesterday", "Currently moving"]} selected={fStatus} onChange={setFStatus} />
+        <button type="button" className={`btn btn-sm ${sortByDistance ? "btn-primary" : "btn-ghost"}`} onClick={() => setSortByDistance((v) => !v)}>
+          ⇅ Sort by distance
+        </button>
         {(search || fStatus.length > 0) && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSearch(""); setFStatus([]); }}>Clear</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSearch(""); setFStatus([]); setSortByDistance(false); }}>Clear</button>
         )}
         <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
           {search || fStatus.length ? `${filtered.length} of ${rows.length} tracked cars` : `${rows.length} tracked cars`}
