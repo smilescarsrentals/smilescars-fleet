@@ -21,6 +21,8 @@ export default function TrackingPage({ staffName }) {
 
   const [search, setSearch] = useState("");
   const [fStatus, setFStatus] = useState([]); // "Over 100km" | "No data yesterday"
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const load = async () => {
     setLoading(true);
@@ -123,6 +125,12 @@ export default function TrackingPage({ staffName }) {
     return r;
   }, [rows, search, fStatus]);
 
+  // Reset to page 1 whenever the filtered set changes shape, so a filter
+  // change never leaves the user stranded on a now-empty page.
+  useEffect(() => { setPage(1); }, [search, fStatus, pageSize]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageRows = useMemo(() => filtered.slice((page - 1) * pageSize, page * pageSize), [filtered, page, pageSize]);
+
   if (loading) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888", fontSize: 14 }}>Loading tracking data…</div>;
   }
@@ -139,7 +147,7 @@ export default function TrackingPage({ staffName }) {
   const checkedCount = suggested.filter((s) => checked[s.imei]).length;
 
   return (
-    <div>
+    <div className="sc-tracking-page">
       <div style={{ marginBottom: "1.25rem" }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: "#111", margin: 0 }}>📍 Tracking</h2>
         <p style={{ fontSize: 13, color: "#888", margin: "4px 0 0" }}>
@@ -168,13 +176,13 @@ export default function TrackingPage({ staffName }) {
       <div className="table-wrap sc-fleet-table">
         <table>
           <thead>
-            <tr>{["Plate", "KM Driven (prev day)", "Current Location", "Tracker", ""].map((h) => <th key={h} data-label={h}>{h}</th>)}</tr>
+            <tr>{["Plate", "KM Driven (prev day)", "Current Location", ""].map((h) => <th key={h} data-label={h}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={5} style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-faint)", fontSize: 14 }}>No cars match your filters.</td></tr>
+              <tr><td colSpan={4} style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-faint)", fontSize: 14 }}>No cars match your filters.</td></tr>
             )}
-            {filtered.map((c) => (
+            {pageRows.map((c) => (
               <tr key={c.plate} style={c.overLimit ? { background: "var(--red-bg, #fef2f2)" } : {}}>
                 <td data-label="Plate" style={{ fontWeight: 600 }}>
                   <span style={{ cursor: "pointer", color: "var(--sc-blue)", textDecoration: "underline" }}
@@ -196,13 +204,30 @@ export default function TrackingPage({ staffName }) {
                     </a>
                   ) : <span style={{ color: "var(--text-faint)" }}>—</span>}
                 </td>
-                <td data-label="Tracker" style={{ color: "var(--text-muted)", fontSize: 12.5 }}>{c.deviceName || c.imei}</td>
-                <td data-label=""><button onClick={() => handleRemoveMatch(c.plate)} style={btnLinkDanger}>Remove</button></td>
+                <td data-label="">
+                  <button onClick={() => handleRemoveMatch(c.plate)} title="Remove tracker match" aria-label="Remove tracker match" style={btnX}>×</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {filtered.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, margin: "10px 0 1.25rem" }}>
+          <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
+            {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}
+          </span>
+          <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} style={{ fontSize: 12.5, padding: "4px 8px", borderRadius: 6, border: "1.5px solid #e5e7eb" }}>
+            <option value={25}>25 / page</option>
+            <option value={50}>50 / page</option>
+            <option value={100}>100 / page</option>
+          </select>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>‹ Prev</button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next ›</button>
+        </div>
+      )}
 
       {/* Suggested matches — stays visible, needs action */}
       <Section
@@ -335,5 +360,5 @@ function Td({ children, strong, muted, style }) {
 
 const btnPrimary = { padding: "8px 16px", fontSize: 13, fontWeight: 600, background: "#111827", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" };
 const btnSecondary = { padding: "7px 14px", fontSize: 13, fontWeight: 600, background: "#fff", color: "#111", border: "1.5px solid #e5e7eb", borderRadius: 8, cursor: "pointer" };
-const btnLinkDanger = { padding: 0, fontSize: 12.5, fontWeight: 600, background: "none", color: "#dc2626", border: "none", cursor: "pointer" };
+const btnX = { padding: 0, width: 24, height: 24, lineHeight: "22px", fontSize: 16, fontWeight: 600, background: "none", color: "#94a3b8", border: "1.5px solid #e5e7eb", borderRadius: "50%", cursor: "pointer" };
 const btnLinkMuted = { padding: 0, fontSize: 12.5, fontWeight: 600, background: "none", color: "#64748b", border: "none", cursor: "pointer", textDecoration: "underline" };

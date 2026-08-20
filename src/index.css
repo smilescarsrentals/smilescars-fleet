@@ -326,6 +326,11 @@ tbody tr:last-child td { border-bottom: none; }
 .sc-fleet-table th[data-label="Staff"],  .sc-fleet-table td[data-label="Staff"]        { width: 8%; }
 .sc-fleet-table th[data-label="Action"], .sc-fleet-table td[data-label="Action"]       { width: 21%; white-space: normal; max-width: none; }
 
+/* Tracking page — scoped overrides so Fleet's own widths stay untouched. */
+.sc-tracking-page .sc-fleet-table th[data-label="Plate"], .sc-tracking-page .sc-fleet-table td[data-label="Plate"] { width: 18%; }
+.sc-tracking-page .sc-fleet-table th[data-label="Current Location"], .sc-tracking-page .sc-fleet-table td[data-label="Current Location"] { width: auto; }
+.sc-tracking-page .sc-fleet-table th:last-child, .sc-tracking-page .sc-fleet-table td:last-child { width: 40px; text-align: right; }
+
 /* History & Sub-Hire: too many columns to compress into view — scroll
    horizontally instead, with each column sized to its natural content
    width rather than squeezed into a percentage. */
