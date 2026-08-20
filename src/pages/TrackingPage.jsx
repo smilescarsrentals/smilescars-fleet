@@ -66,6 +66,24 @@ export default function TrackingPage({ staffName }) {
     }
   };
 
+  const handleIgnore = async (device) => {
+    try {
+      await api.ignoreTrackerDevice({ staffName, imei: device.imei, deviceName: device.deviceName });
+      load();
+    } catch (e) {
+      alert(e.message || "Couldn't dismiss this tracker.");
+    }
+  };
+
+  const handleUnignore = async (imei) => {
+    try {
+      await api.unignoreTrackerDevice({ staffName, imei });
+      load();
+    } catch (e) {
+      alert(e.message || "Couldn't restore this tracker.");
+    }
+  };
+
   if (loading) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888", fontSize: 14 }}>Loading tracker data…</div>;
   }
@@ -81,7 +99,7 @@ export default function TrackingPage({ staffName }) {
     );
   }
 
-  const { confirmed = [], suggested = [], unmatchedDevices = [], unmatchedFleetPlates = [] } = data || {};
+  const { confirmed = [], suggested = [], unmatchedDevices = [], unmatchedFleetPlates = [], ignored = [] } = data || {};
   const checkedCount = suggested.filter((s) => checked[s.imei]).length;
 
   return (
@@ -157,15 +175,18 @@ export default function TrackingPage({ staffName }) {
             <p style={{ fontSize: 12.5, color: "#991b1b", margin: "0 0 10px" }}>
               These trackers exist on TrackSolid but their name didn't match any plate in Fleet — likely a naming
               mismatch, a sold/retired car, or a tracker not yet labeled. They're listed here rather than hidden.
+              If it's not actually one of our fleet cars (a test device, or something else on the account), you
+              can dismiss it — it won't show here again, but nothing is deleted and it can be brought back anytime.
             </p>
             <Table>
-              <thead><tr><Th>Tracker name</Th><Th>IMEI</Th><Th>Why it's unmatched</Th></tr></thead>
+              <thead><tr><Th>Tracker name</Th><Th>IMEI</Th><Th>Why it's unmatched</Th><Th /></tr></thead>
               <tbody>
                 {unmatchedDevices.map((d) => (
                   <tr key={d.imei}>
                     <Td muted>{d.deviceName || "—"}</Td>
                     <Td muted style={{ fontFamily: "monospace", fontSize: 12 }}>{d.imei}</Td>
                     <Td muted>{d.reason || d.deviceGroup || "—"}</Td>
+                    <Td><button onClick={() => handleIgnore(d)} style={btnLinkMuted}>Not our car — dismiss</button></Td>
                   </tr>
                 ))}
               </tbody>
@@ -173,6 +194,29 @@ export default function TrackingPage({ staffName }) {
           </>
         )}
       </Section>
+
+      {/* Dismissed / not-our-cars — collapsed by default, reversible */}
+      {ignored.length > 0 && (
+        <details style={{ marginBottom: "1.1rem" }}>
+          <summary style={{ cursor: "pointer", fontSize: 13.5, fontWeight: 700, color: "#64748b", padding: "4px 0" }}>
+            Dismissed trackers ({ignored.length}) — not our cars
+          </summary>
+          <div style={{ marginTop: 10 }}>
+            <Table>
+              <thead><tr><Th>Tracker name</Th><Th>Dismissed by</Th><Th /></tr></thead>
+              <tbody>
+                {ignored.map((d) => (
+                  <tr key={d.imei}>
+                    <Td muted>{d.deviceName || "—"}</Td>
+                    <Td muted>{d.ignoredBy || "—"}</Td>
+                    <Td><button onClick={() => handleUnignore(d.imei)} style={btnLinkMuted}>Bring back</button></Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        </details>
+      )}
 
       {/* Fleet cars with no tracker at all */}
       <Section title={`Fleet cars with no tracker found (${unmatchedFleetPlates.length})`} tint="#f8fafc" border="#e2e8f0">
@@ -220,3 +264,4 @@ function Td({ children, strong, muted, style }) {
 const btnPrimary = { padding: "8px 16px", fontSize: 13, fontWeight: 600, background: "#111827", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" };
 const btnSecondary = { padding: "7px 14px", fontSize: 13, fontWeight: 600, background: "#fff", color: "#111", border: "1.5px solid #e5e7eb", borderRadius: 8, cursor: "pointer" };
 const btnLinkDanger = { padding: 0, fontSize: 12.5, fontWeight: 600, background: "none", color: "#dc2626", border: "none", cursor: "pointer" };
+const btnLinkMuted = { padding: 0, fontSize: 12.5, fontWeight: 600, background: "none", color: "#64748b", border: "none", cursor: "pointer", textDecoration: "underline" };

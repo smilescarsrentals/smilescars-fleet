@@ -165,6 +165,8 @@ const WRITES = {
   deleteDriverDocument: writes.deleteDriverDocument,
   confirmTrackerMatches: writes.confirmTrackerMatches,
   removeTrackerMatch: writes.removeTrackerMatch,
+  ignoreTrackerDevice: writes.ignoreTrackerDevice,
+  unignoreTrackerDevice: writes.unignoreTrackerDevice,
   setReceivesAllReservationReminders: writes.setReceivesAllReservationReminders,
   addVendorCategory: writes.addVendorCategory,
   setVendorCategories: writes.setVendorCategories,

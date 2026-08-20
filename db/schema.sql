@@ -1063,3 +1063,14 @@ CREATE TABLE IF NOT EXISTS vehicle_mileage_daily (
 
 CREATE INDEX IF NOT EXISTS idx_vehicle_mileage_daily_day ON vehicle_mileage_daily(day);
 CREATE INDEX IF NOT EXISTS idx_vehicle_mileage_daily_plate ON vehicle_mileage_daily(plate);
+
+-- Trackers that exist on the TrackSolid account but aren't SmilesCars
+-- fleet cars (test devices, other things sitting on the same account) —
+-- dismissed once so they stop cluttering the "unmatched" review list on
+-- every reload. Reversible: see writes.unignoreTrackerDevice.
+CREATE TABLE IF NOT EXISTS ignored_tracker_devices (
+  imei          text PRIMARY KEY,
+  device_name   text,
+  ignored_by    text,
+  ignored_at    timestamp DEFAULT now()
+);
