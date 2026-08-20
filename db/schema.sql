@@ -1031,3 +1031,35 @@ ALTER TABLE drivers ADD COLUMN IF NOT EXISTS tin_number text;
 
 -- Driver TIN number (plain profile field, no reminder tracking).
 ALTER TABLE drivers ADD COLUMN IF NOT EXISTS tin_number text;
+
+-- GPS tracker integration (TrackSolid Pro). One confirmed IMEI<->plate
+-- pairing per row — deliberately human-confirmed (see writes.saveTrackerMatch),
+-- never auto-written, since a wrong match would silently attribute one
+-- car's movement to another car's plate.
+CREATE TABLE IF NOT EXISTS vehicle_tracker_map (
+  id            text PRIMARY KEY,
+  plate         text NOT NULL UNIQUE,
+  imei          text NOT NULL UNIQUE,
+  device_name   text,
+  confirmed_by  text,
+  confirmed_at  timestamp DEFAULT now()
+);
+
+-- One row per car per day. distance_m is the totalMileage TrackSolid
+-- already computes for us (meters) — stored as-is, converted to km only
+-- for display, so raw source data stays intact.
+CREATE TABLE IF NOT EXISTS vehicle_mileage_daily (
+  id            text PRIMARY KEY,
+  plate         text NOT NULL,
+  imei          text NOT NULL,
+  day           date NOT NULL,
+  distance_m    numeric,
+  trip_count    int,
+  over_limit    boolean DEFAULT false,
+  had_data      boolean DEFAULT true,
+  synced_at     timestamp DEFAULT now(),
+  UNIQUE(plate, day)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vehicle_mileage_daily_day ON vehicle_mileage_daily(day);
+CREATE INDEX IF NOT EXISTS idx_vehicle_mileage_daily_plate ON vehicle_mileage_daily(plate);

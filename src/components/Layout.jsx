@@ -54,6 +54,7 @@ const Icon = {
   sold: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M20.6 12.8l-7.8 7.8a2 2 0 01-2.8 0l-6.8-6.8a2 2 0 010-2.8l7.8-7.8H18a2.6 2.6 0 012.6 2.6v6z"/><circle cx="15.5" cy="8.5" r="1.4"/></svg>,
   blacklist: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/></svg>,
   drivers: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="11" r="2.2"/><path d="M5 17c0-1.8 1.6-3 3.5-3s3.5 1.2 3.5 3"/><path d="M14 10h5M14 13h5"/></svg>,
+  tracking: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M12 21s7-6.5 7-11.5A7 7 0 105 9.5C5 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/></svg>,
   maintenance: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M14.7 6.3a4 4 0 00-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 005.4-5.4l-2.8 2.8-2-2 2.8-2.8z"/></svg>,
   analytics: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M4 20V10M11 20V4M18 20v-7"/></svg>,
   search: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>,
@@ -80,6 +81,7 @@ const NAV_GROUPS = [
   { label: "Safety", items: [
     { to: "/blacklist", key: "blacklist", label: "Blacklist", icon: Icon.blacklist },
     { to: "/drivers",   key: "drivers",   label: "Drivers",   icon: Icon.drivers },
+    { to: "/tracking",  key: "tracking",  label: "Tracking",  icon: Icon.tracking },
   ]},
 ];
 
@@ -376,7 +378,8 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
     : canViewAll
     ? NAV_GROUPS
     : NAV_GROUPS
-        .map(group => ({ ...group, items: group.items.filter(i => i.key !== "garage") }));
+        .map(group => ({ ...group, items: group.items.filter(i => i.key !== "garage" && i.key !== "tracking") }))
+        .filter(group => group.items.length > 0);
 
   // Load reservation-related notification data. Runs on mount and every 60s
   // so the "pickup within 24h" banner and nav badge count stay current

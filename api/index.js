@@ -72,6 +72,8 @@ const READS = {
   getSettings: reads.getSettings,
   getStaffList: reads.getStaffList,
   getDrivers: reads.getDrivers,
+  getTrackerMatchSuggestions: reads.getTrackerMatchSuggestions,
+  getTrackerMap: reads.getTrackerMap,
   // Files, signatures, agreements — formerly Google Drive
   getSignature: files.getSignature,
   getStaffSignature: files.getStaffSignature,
@@ -161,6 +163,8 @@ const WRITES = {
   addDriverDocument: writes.addDriverDocument,
   editDriverDocument: writes.editDriverDocument,
   deleteDriverDocument: writes.deleteDriverDocument,
+  confirmTrackerMatches: writes.confirmTrackerMatches,
+  removeTrackerMatch: writes.removeTrackerMatch,
   setReceivesAllReservationReminders: writes.setReceivesAllReservationReminders,
   addVendorCategory: writes.addVendorCategory,
   setVendorCategories: writes.setVendorCategories,
