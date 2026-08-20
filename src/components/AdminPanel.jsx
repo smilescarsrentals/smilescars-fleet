@@ -452,6 +452,18 @@ function SystemTab() {
             <div style={{ width: "100%", height: 6, background: "#e5e7eb", borderRadius: 3, marginTop: 4, overflow: "hidden" }}>
               <div style={{ width: `${storagePct}%`, height: "100%", background: storagePct > 70 ? "#dc2626" : storagePct > 50 ? "#d97706" : "#16a34a" }} />
             </div>
+            {health.trackSolid && (
+              <div style={{ marginTop: 10 }}>
+                Tracker integration (TrackSolid):{" "}
+                {health.trackSolid.configured ? (
+                  <strong style={{ color: "#16a34a" }}>✓ Configured</strong>
+                ) : (
+                  <strong style={{ color: "#dc2626" }}>
+                    ✗ Missing: {health.trackSolid.missing.join(", ")}
+                  </strong>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
