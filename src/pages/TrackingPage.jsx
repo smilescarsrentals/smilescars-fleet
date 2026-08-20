@@ -43,8 +43,12 @@ export default function TrackingPage({ staffName }) {
     if (!matches.length) return;
     setSaving(true);
     try {
-      await api.confirmTrackerMatches({ staffName, matches });
+      const res = await api.confirmTrackerMatches({ staffName, matches });
       await load();
+      if (res.failed && res.failed.length) {
+        const lines = res.failed.map((f) => `• ${f.plate || f.deviceName} — ${f.reason}`).join("\n");
+        alert(`Saved ${res.saved} of ${matches.length}. ${res.failed.length} couldn't be saved:\n\n${lines}`);
+      }
     } catch (e) {
       alert(e.message || "Couldn't save matches.");
     } finally {
@@ -155,13 +159,13 @@ export default function TrackingPage({ staffName }) {
               mismatch, a sold/retired car, or a tracker not yet labeled. They're listed here rather than hidden.
             </p>
             <Table>
-              <thead><tr><Th>Tracker name</Th><Th>IMEI</Th><Th>TrackSolid group</Th></tr></thead>
+              <thead><tr><Th>Tracker name</Th><Th>IMEI</Th><Th>Why it's unmatched</Th></tr></thead>
               <tbody>
                 {unmatchedDevices.map((d) => (
                   <tr key={d.imei}>
                     <Td muted>{d.deviceName || "—"}</Td>
                     <Td muted style={{ fontFamily: "monospace", fontSize: 12 }}>{d.imei}</Td>
-                    <Td muted>{d.deviceGroup || "—"}</Td>
+                    <Td muted>{d.reason || d.deviceGroup || "—"}</Td>
                   </tr>
                 ))}
               </tbody>
