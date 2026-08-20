@@ -4,14 +4,34 @@ import { api } from "../lib/api";
 // Phase 1 of the GPS tracker integration: a human-confirmed matching step
 // between TrackSolid's device list and our own Fleet plates. Nothing here
 // auto-saves — every match, even an obvious one, needs a click to confirm.
-// This is intentionally the whole page for now; daily mileage / the 100km
-// alert land here once matching is done and proven reliable.
+// Phase 2 (mileage + the 100km alert) runs nightly via cron and shows up
+// in the "Yesterday's mileage" section below, for cars that are matched.
 export default function TrackingPage({ staffName }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState(null); // { confirmed, suggested, unmatchedDevices, unmatchedFleetPlates }
   const [checked, setChecked] = useState({}); // imei -> bool, which suggested rows to confirm on next save
+  const [mileage, setMileage] = useState(null); // { day, data: [{plate, distanceKm, overLimit}] }
+  const [syncing, setSyncing] = useState(false);
+
+  const loadMileage = async () => {
+    try { const res = await api.getVehicleMileageDaily({}); setMileage(res); }
+    catch { setMileage(null); }
+  };
+
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    try {
+      const res = await api.runTrackerSyncNow({ staffName });
+      await loadMileage();
+      alert(`Synced ${res.day}: ${res.saved} cars updated, ${res.overLimit} over 100km, ${res.skipped} had no tracker data.`);
+    } catch (e) {
+      alert(e.message || "Couldn't run the sync.");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -31,7 +51,7 @@ export default function TrackingPage({ staffName }) {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadMileage(); }, []);
 
   const toggle = (imei) => setChecked((c) => ({ ...c, [imei]: !c[imei] }));
 
@@ -117,6 +137,42 @@ export default function TrackingPage({ staffName }) {
           </p>
         )}
       </div>
+
+      {/* Yesterday's mileage — Phase 2, runs nightly at 6am via cron */}
+      <Section
+        title={mileage && mileage.day ? `Mileage — ${mileage.day}` : "Mileage"}
+        tint="#eff6ff" border="#bfdbfe"
+        action={
+          <button onClick={handleSyncNow} disabled={syncing} style={btnSecondary}>
+            {syncing ? "Syncing…" : "Sync now"}
+          </button>
+        }
+      >
+        {!mileage || !mileage.day ? (
+          <Empty>No sync has run yet. The nightly job runs at 6am, or click "Sync now" to run it right away.</Empty>
+        ) : mileage.data.length === 0 ? (
+          <Empty>No mileage data for {mileage.day} — every confirmed car's tracker may have been offline, or nothing's confirmed yet.</Empty>
+        ) : (
+          <>
+            <p style={{ fontSize: 12.5, color: "#1e40af", margin: "0 0 10px" }}>
+              {mileage.data.filter((m) => m.overLimit).length} of {mileage.data.length} tracked cars drove over
+              100km. Cars with no confirmed tracker aren't shown here.
+            </p>
+            <Table>
+              <thead><tr><Th>Plate</Th><Th>Distance</Th><Th /></tr></thead>
+              <tbody>
+                {mileage.data.map((m) => (
+                  <tr key={m.plate}>
+                    <Td strong>{m.plate}</Td>
+                    <Td muted={!m.overLimit}>{m.distanceKm != null ? `${m.distanceKm.toFixed(1)} km` : "—"}</Td>
+                    <Td>{m.overLimit && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#dc2626" }}>Over 100km</span>}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </>
+        )}
+      </Section>
 
       {/* Confirmed matches */}
       <Section title={`Confirmed matches (${confirmed.length})`} tint="#f0fdf4" border="#bbf7d0">

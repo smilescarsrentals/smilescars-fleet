@@ -180,6 +180,7 @@ export default function DashboardPage({ staffName, role }) {
       </div>
 
       <RevenueWidget />
+      <MileageAlertWidget />
 
       {/* Widgets */}
       <div className="sc-widget-grid">
@@ -329,6 +330,37 @@ function RevenueWidget() {
             </div>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+function MileageAlertWidget() {
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getMileageAlertSummary().then(res => setSummary(res)).catch(() => setSummary(null)).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return null; // quiet — this widget only earns its space once there's something to show
+  if (!summary || !summary.day) return null; // no sync has run yet; nothing to report
+
+  const hasAlerts = summary.overLimitCount > 0;
+
+  return (
+    <div className="sc-widget" style={{ marginTop: 16, borderColor: hasAlerts ? "#fecaca" : undefined, background: hasAlerts ? "#fef2f2" : undefined }}>
+      <div className="sc-widget-header">
+        <div className="sc-widget-title">📍 Tracking</div>
+      </div>
+      {hasAlerts ? (
+        <p style={{ fontSize: 14, fontWeight: 600, color: "#991b1b", padding: "8px 0" }}>
+          {summary.overLimitCount} {summary.overLimitCount === 1 ? "car" : "cars"} drove over 100km on {summary.day}
+        </p>
+      ) : (
+        <p style={{ fontSize: 13, color: "var(--text-muted)", padding: "8px 0" }}>
+          No cars over 100km on {summary.day} ({summary.carsWithData} tracked)
+        </p>
       )}
     </div>
   );

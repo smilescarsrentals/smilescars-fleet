@@ -1044,7 +1044,6 @@ CREATE TABLE IF NOT EXISTS vehicle_tracker_map (
   confirmed_by  text,
   confirmed_at  timestamp DEFAULT now()
 );
-
 -- One row per car per day. distance_m is the totalMileage TrackSolid
 -- already computes for us (meters) — stored as-is, converted to km only
 -- for display, so raw source data stays intact.
@@ -1087,3 +1086,8 @@ CREATE TABLE IF NOT EXISTS tracksolid_device_cache (
   payload     jsonb NOT NULL,
   fetched_at  timestamp DEFAULT now()
 );
+
+-- Vehicle over 100km/day alert (see lib/trackerSync.js).
+INSERT INTO notification_trigger_settings (type, label, enabled)
+VALUES ('tracker_over_limit', 'Vehicle Over 100km/day', 'TRUE')
+ON CONFLICT (type) DO NOTHING;
