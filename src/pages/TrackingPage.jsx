@@ -25,7 +25,11 @@ export default function TrackingPage({ staffName }) {
     try {
       const res = await api.runTrackerSyncNow({ staffName });
       await loadMileage();
-      alert(`Synced ${res.day}: ${res.saved} cars updated, ${res.overLimit} over 100km, ${res.skipped} had no tracker data.`);
+      let msg = `Synced ${res.day}: ${res.saved} cars updated, ${res.overLimit} over 100km, ${res.skipped} had no tracker data.`;
+      if (res.batchErrors && res.batchErrors.length) {
+        msg += `\n\n${res.batchErrors.length} batch(es) failed:\n` + res.batchErrors.map((e) => `• ${e}`).join("\n");
+      }
+      alert(msg);
     } catch (e) {
       alert(e.message || "Couldn't run the sync.");
     } finally {
