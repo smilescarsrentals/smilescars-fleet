@@ -109,6 +109,12 @@ export default function TrackingPage({ staffName }) {
         <p style={{ fontSize: 13, color: "#888", margin: "4px 0 0" }}>
           Match each GPS tracker to the correct car before mileage reports and alerts can use it.
         </p>
+        {data && (
+          <p style={{ fontSize: 12, color: "#94a3b8", margin: "4px 0 0" }}>
+            {data.totalDevices} trackers found on TrackSolid — compare against "All" on TrackSolid's own Monitor
+            page if this ever looks off.
+          </p>
+        )}
       </div>
 
       {/* Confirmed matches */}
