@@ -1,92 +1,68 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import MultiSelect from "../components/MultiSelect";
 
-// Phase 1 of the GPS tracker integration: a human-confirmed matching step
-// between TrackSolid's device list and our own Fleet plates. Nothing here
-// auto-saves — every match, even an obvious one, needs a click to confirm.
-// Phase 2 (mileage + the 100km alert) runs nightly via cron and shows up
-// in the "Yesterday's mileage" section below, for cars that are matched.
+// Main table = confirmed matches only, joined with yesterday's mileage and
+// last-synced location. Matching review (suggested/unmatched/dismissed)
+// lives below it — collapsible, since it's occasional cleanup work, not
+// a daily-use table. "Sync now" refreshes both mileage and location in
+// one run (lib/trackerSync.js's runFullSync).
 export default function TrackingPage({ staffName }) {
+  const navigate = useNavigate();
+
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [data, setData] = useState(null); // { confirmed, suggested, unmatchedDevices, unmatchedFleetPlates }
-  const [checked, setChecked] = useState({}); // imei -> bool, which suggested rows to confirm on next save
-  const [mileage, setMileage] = useState(null); // { day, data: [{plate, distanceKm, overLimit}] }
+  const [overview, setOverview] = useState(null); // { mileageDay, data: [...] }
+  const [matches, setMatches] = useState(null); // { suggested, unmatchedDevices, unmatchedFleetPlates, ignored, totalDevices, dataAsOf }
+  const [checked, setChecked] = useState({});
+  const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  const loadMileage = async () => {
-    try { const res = await api.getVehicleMileageDaily({}); setMileage(res); }
-    catch { setMileage(null); }
-  };
-
-  const handleSyncNow = async () => {
-    setSyncing(true);
-    try {
-      const res = await api.runTrackerSyncNow({ staffName });
-      await loadMileage();
-      let msg = `Synced ${res.day}: ${res.saved} cars updated, ${res.overLimit} over 100km, ${res.skipped} had no tracker data.`;
-      if (res.batchErrors && res.batchErrors.length) {
-        msg += `\n\n${res.batchErrors.length} batch(es) failed:\n` + res.batchErrors.map((e) => `• ${e}`).join("\n");
-      }
-      alert(msg);
-    } catch (e) {
-      alert(e.message || "Couldn't run the sync.");
-    } finally {
-      setSyncing(false);
-    }
-  };
+  const [search, setSearch] = useState("");
+  const [fStatus, setFStatus] = useState([]); // "Over 100km" | "No data yesterday"
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await api.getTrackerMatchSuggestions();
-      setData(res);
-      // Default every suggested (auto-matched) row to checked — the person
-      // un-checks anything they don't want confirmed, rather than having
-      // to check 40+ obvious matches one by one.
+      const [overviewRes, matchesRes] = await Promise.all([
+        api.getTrackerOverviewTable(),
+        api.getTrackerMatchSuggestions(),
+      ]);
+      setOverview(overviewRes);
+      setMatches(matchesRes);
       const initChecked = {};
-      (res.suggested || []).forEach((s) => { initChecked[s.imei] = true; });
+      (matchesRes.suggested || []).forEach((s) => { initChecked[s.imei] = true; });
       setChecked(initChecked);
     } catch (e) {
-      setError(e.message || "Couldn't load tracker data.");
+      setError(e.message || "Couldn't load tracking data.");
     } finally {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); loadMileage(); }, []);
+  useEffect(() => { load(); }, []);
 
   const toggle = (imei) => setChecked((c) => ({ ...c, [imei]: !c[imei] }));
 
   const handleSaveChecked = async () => {
-    if (!data) return;
-    const matches = data.suggested
+    if (!matches) return;
+    const toConfirm = matches.suggested
       .filter((s) => checked[s.imei])
       .map((s) => ({ imei: s.imei, deviceName: s.deviceName, plate: s.suggestedPlate }));
-    if (!matches.length) return;
+    if (!toConfirm.length) return;
     setSaving(true);
     try {
-      const res = await api.confirmTrackerMatches({ staffName, matches });
+      const res = await api.confirmTrackerMatches({ staffName, matches: toConfirm });
       await load();
       if (res.failed && res.failed.length) {
         const lines = res.failed.map((f) => `• ${f.plate || f.deviceName} — ${f.reason}`).join("\n");
-        alert(`Saved ${res.saved} of ${matches.length}. ${res.failed.length} couldn't be saved:\n\n${lines}`);
+        alert(`Saved ${res.saved} of ${toConfirm.length}. ${res.failed.length} couldn't be saved:\n\n${lines}`);
       }
     } catch (e) {
       alert(e.message || "Couldn't save matches.");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleRemove = async (plate) => {
-    if (!window.confirm(`Remove the tracker match for ${plate}? You can re-match it later.`)) return;
-    try {
-      await api.removeTrackerMatch({ staffName, plate });
-      load();
-    } catch (e) {
-      alert(e.message || "Couldn't remove match.");
     }
   };
 
@@ -108,22 +84,58 @@ export default function TrackingPage({ staffName }) {
     }
   };
 
-  if (loading) {
-    return <div style={{ padding: "2rem", textAlign: "center", color: "#888", fontSize: 14 }}>Loading tracker data…</div>;
-  }
+  const handleRemoveMatch = async (plate) => {
+    if (!window.confirm(`Remove the tracker match for ${plate}? You can re-match it later.`)) return;
+    try {
+      await api.removeTrackerMatch({ staffName, plate });
+      load();
+    } catch (e) {
+      alert(e.message || "Couldn't remove match.");
+    }
+  };
 
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    try {
+      const res = await api.runTrackerSyncNow({ staffName });
+      await load();
+      let msg = `Synced ${res.day}: ${res.saved} cars' mileage updated, ${res.overLimit} over 100km, ${res.locationsUpdated} locations refreshed.`;
+      if (res.batchErrors && res.batchErrors.length) {
+        msg += `\n\n${res.batchErrors.length} batch(es) failed:\n` + res.batchErrors.map((e) => `• ${e}`).join("\n");
+      }
+      alert(msg);
+    } catch (e) {
+      alert(e.message || "Couldn't run the sync.");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const rows = overview?.data || [];
+  const filtered = useMemo(() => {
+    let r = rows;
+    if (search.trim()) {
+      const s = search.trim().toUpperCase();
+      r = r.filter((c) => c.plate.toUpperCase().includes(s));
+    }
+    if (fStatus.includes("Over 100km")) r = r.filter((c) => c.overLimit);
+    if (fStatus.includes("No data yesterday")) r = r.filter((c) => c.distanceKm == null);
+    return r;
+  }, [rows, search, fStatus]);
+
+  if (loading) {
+    return <div style={{ padding: "2rem", textAlign: "center", color: "#888", fontSize: 14 }}>Loading tracking data…</div>;
+  }
   if (error) {
     return (
       <div style={{ padding: "1.5rem", background: "#fef2f2", border: "1.5px solid #fecaca", borderRadius: 10, color: "#991b1b", fontSize: 13.5 }}>
         <strong>Couldn't reach TrackSolid.</strong> {error}
-        <div style={{ marginTop: 8 }}>
-          <button onClick={load} style={btnSecondary}>Try again</button>
-        </div>
+        <div style={{ marginTop: 8 }}><button onClick={load} style={btnSecondary}>Try again</button></div>
       </div>
     );
   }
 
-  const { confirmed = [], suggested = [], unmatchedDevices = [], unmatchedFleetPlates = [], ignored = [] } = data || {};
+  const { suggested = [], unmatchedDevices = [], unmatchedFleetPlates = [], ignored = [], totalDevices, dataAsOf } = matches || {};
   const checkedCount = suggested.filter((s) => checked[s.imei]).length;
 
   return (
@@ -131,75 +143,68 @@ export default function TrackingPage({ staffName }) {
       <div style={{ marginBottom: "1.25rem" }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: "#111", margin: 0 }}>📍 Tracking</h2>
         <p style={{ fontSize: 13, color: "#888", margin: "4px 0 0" }}>
-          Match each GPS tracker to the correct car before mileage reports and alerts can use it.
+          {overview?.mileageDay ? `Mileage for ${overview.mileageDay}` : "No mileage synced yet"}
+          {totalDevices != null && ` · ${totalDevices} trackers found on TrackSolid`}
+          {dataAsOf && ` · data as of ${new Date(dataAsOf).toLocaleTimeString("en-TZ", { hour: "2-digit", minute: "2-digit" })}`}
         </p>
-        {data && (
-          <p style={{ fontSize: 12, color: "#94a3b8", margin: "4px 0 0" }}>
-            {data.totalDevices} trackers found on TrackSolid — compare against "Total" on TrackSolid's own Monitor
-            page if this ever looks off.
-            {data.dataAsOf && ` Data as of ${new Date(data.dataAsOf).toLocaleTimeString("en-TZ", { hour: "2-digit", minute: "2-digit" })}.`}
-          </p>
-        )}
       </div>
 
-      {/* Yesterday's mileage — Phase 2, runs nightly at 6am via cron */}
-      <Section
-        title={mileage && mileage.day ? `Mileage — ${mileage.day}` : "Mileage"}
-        tint="#eff6ff" border="#bfdbfe"
-        action={
-          <button onClick={handleSyncNow} disabled={syncing} style={btnSecondary}>
-            {syncing ? "Syncing…" : "Sync now"}
-          </button>
-        }
-      >
-        {!mileage || !mileage.day ? (
-          <Empty>No sync has run yet. The nightly job runs at 6am, or click "Sync now" to run it right away.</Empty>
-        ) : mileage.data.length === 0 ? (
-          <Empty>No mileage data for {mileage.day} — every confirmed car's tracker may have been offline, or nothing's confirmed yet.</Empty>
-        ) : (
-          <>
-            <p style={{ fontSize: 12.5, color: "#1e40af", margin: "0 0 10px" }}>
-              {mileage.data.filter((m) => m.overLimit).length} of {mileage.data.length} tracked cars drove over
-              100km. Cars with no confirmed tracker aren't shown here.
-            </p>
-            <Table>
-              <thead><tr><Th>Plate</Th><Th>Distance</Th><Th /></tr></thead>
-              <tbody>
-                {mileage.data.map((m) => (
-                  <tr key={m.plate}>
-                    <Td strong>{m.plate}</Td>
-                    <Td muted={!m.overLimit}>{m.distanceKm != null ? `${m.distanceKm.toFixed(1)} km` : "—"}</Td>
-                    <Td>{m.overLimit && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#dc2626" }}>Over 100km</span>}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </>
+      {/* Filter row — same visual pattern as Fleet */}
+      <div className="sc-filter-row">
+        <input className="sc-search" placeholder="Search plate…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <MultiSelect label="All cars" options={["Over 100km", "No data yesterday"]} selected={fStatus} onChange={setFStatus} />
+        {(search || fStatus.length > 0) && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSearch(""); setFStatus([]); }}>Clear</button>
         )}
-      </Section>
+        <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
+          {search || fStatus.length ? `${filtered.length} of ${rows.length} tracked cars` : `${rows.length} tracked cars`}
+        </span>
+        <button type="button" onClick={handleSyncNow} disabled={syncing} className="btn btn-primary btn-sm">
+          {syncing ? "Syncing…" : "↻ Sync now"}
+        </button>
+      </div>
 
-      {/* Confirmed matches */}
-      <Section title={`Confirmed matches (${confirmed.length})`} tint="#f0fdf4" border="#bbf7d0">
-        {confirmed.length === 0 ? (
-          <Empty>No cars matched yet — confirm some below to get started.</Empty>
-        ) : (
-          <Table>
-            <thead><tr><Th>Plate</Th><Th>Tracker</Th><Th>Confirmed by</Th><Th /></tr></thead>
-            <tbody>
-              {confirmed.map((m) => (
-                <tr key={m.imei}>
-                  <Td strong>{m.plate}</Td>
-                  <Td muted>{m.deviceName || m.imei}</Td>
-                  <Td muted>{m.confirmedBy || "—"}</Td>
-                  <Td><button onClick={() => handleRemove(m.plate)} style={btnLinkDanger}>Remove</button></Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </Section>
+      {/* Main table */}
+      <div className="table-wrap sc-fleet-table">
+        <table>
+          <thead>
+            <tr>{["Plate", "KM Driven (prev day)", "Current Location", "Tracker", ""].map((h) => <th key={h} data-label={h}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr><td colSpan={5} style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-faint)", fontSize: 14 }}>No cars match your filters.</td></tr>
+            )}
+            {filtered.map((c) => (
+              <tr key={c.plate} style={c.overLimit ? { background: "var(--red-bg, #fef2f2)" } : {}}>
+                <td data-label="Plate" style={{ fontWeight: 600 }}>
+                  <span style={{ cursor: "pointer", color: "var(--sc-blue)", textDecoration: "underline" }}
+                    onClick={() => navigate(`/car/${encodeURIComponent(c.plate)}`)}>
+                    {c.plate}
+                  </span>
+                </td>
+                <td data-label="KM Driven (prev day)">
+                  {c.distanceKm != null ? (
+                    <span style={{ fontWeight: c.overLimit ? 700 : 400, color: c.overLimit ? "#dc2626" : "inherit" }}>
+                      {c.distanceKm.toFixed(1)} km{c.overLimit && " ⚠️"}
+                    </span>
+                  ) : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                </td>
+                <td data-label="Current Location">
+                  {c.lat != null ? (
+                    <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noreferrer" style={{ color: "var(--sc-blue)" }}>
+                      View on map ↗
+                    </a>
+                  ) : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                </td>
+                <td data-label="Tracker" style={{ color: "var(--text-muted)", fontSize: 12.5 }}>{c.deviceName || c.imei}</td>
+                <td data-label=""><button onClick={() => handleRemoveMatch(c.plate)} style={btnLinkDanger}>Remove</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      {/* Suggested matches — need confirmation */}
+      {/* Suggested matches — stays visible, needs action */}
       <Section
         title={`Suggested matches (${suggested.length})`}
         tint="#fffbeb" border="#fde68a"
@@ -233,17 +238,15 @@ export default function TrackingPage({ staffName }) {
         )}
       </Section>
 
-      {/* Unmatched devices */}
-      <Section title={`Trackers with no plate match (${unmatchedDevices.length})`} tint="#fef2f2" border="#fecaca">
+      {/* Collapsible review sections — occasional cleanup, not daily-use */}
+      <CollapsibleSection title={`Trackers with no plate match (${unmatchedDevices.length})`}>
         {unmatchedDevices.length === 0 ? (
           <Empty>Every tracker matched something.</Empty>
         ) : (
           <>
             <p style={{ fontSize: 12.5, color: "#991b1b", margin: "0 0 10px" }}>
-              These trackers exist on TrackSolid but their name didn't match any plate in Fleet — likely a naming
-              mismatch, a sold/retired car, or a tracker not yet labeled. They're listed here rather than hidden.
-              If it's not actually one of our fleet cars (a test device, or something else on the account), you
-              can dismiss it — it won't show here again, but nothing is deleted and it can be brought back anytime.
+              These trackers exist on TrackSolid but their name didn't match any plate in Fleet. If it's not one
+              of our fleet cars, dismiss it — reversible anytime from "Dismissed trackers" below.
             </p>
             <Table>
               <thead><tr><Th>Tracker name</Th><Th>IMEI</Th><Th>Why it's unmatched</Th><Th /></tr></thead>
@@ -260,46 +263,37 @@ export default function TrackingPage({ staffName }) {
             </Table>
           </>
         )}
-      </Section>
+      </CollapsibleSection>
 
-      {/* Dismissed / not-our-cars — collapsed by default, reversible */}
-      {ignored.length > 0 && (
-        <details style={{ marginBottom: "1.1rem" }}>
-          <summary style={{ cursor: "pointer", fontSize: 13.5, fontWeight: 700, color: "#64748b", padding: "4px 0" }}>
-            Dismissed trackers ({ignored.length}) — not our cars
-          </summary>
-          <div style={{ marginTop: 10 }}>
-            <Table>
-              <thead><tr><Th>Tracker name</Th><Th>Dismissed by</Th><Th /></tr></thead>
-              <tbody>
-                {ignored.map((d) => (
-                  <tr key={d.imei}>
-                    <Td muted>{d.deviceName || "—"}</Td>
-                    <Td muted>{d.ignoredBy || "—"}</Td>
-                    <Td><button onClick={() => handleUnignore(d.imei)} style={btnLinkMuted}>Bring back</button></Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </div>
-        </details>
-      )}
-
-      {/* Fleet cars with no tracker at all */}
-      <Section title={`Fleet cars with no tracker found (${unmatchedFleetPlates.length})`} tint="#f8fafc" border="#e2e8f0">
+      <CollapsibleSection title={`Fleet cars with no tracker found (${unmatchedFleetPlates.length})`}>
         {unmatchedFleetPlates.length === 0 ? (
           <Empty>Every Fleet car has a tracker.</Empty>
         ) : (
-          <p style={{ fontSize: 13, color: "#475569", lineHeight: 1.7, margin: 0 }}>
-            {unmatchedFleetPlates.join(", ")}
-          </p>
+          <p style={{ fontSize: 13, color: "#475569", lineHeight: 1.7, margin: 0 }}>{unmatchedFleetPlates.join(", ")}</p>
         )}
-      </Section>
+      </CollapsibleSection>
+
+      {ignored.length > 0 && (
+        <CollapsibleSection title={`Dismissed trackers (${ignored.length}) — not our cars`}>
+          <Table>
+            <thead><tr><Th>Tracker name</Th><Th>Dismissed by</Th><Th /></tr></thead>
+            <tbody>
+              {ignored.map((d) => (
+                <tr key={d.imei}>
+                  <Td muted>{d.deviceName || "—"}</Td>
+                  <Td muted>{d.ignoredBy || "—"}</Td>
+                  <Td><button onClick={() => handleUnignore(d.imei)} style={btnLinkMuted}>Bring back</button></Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </CollapsibleSection>
+      )}
     </div>
   );
 }
 
-// ── Small local building blocks (kept in-file, this page owns its own layout) ──
+// ── Small local building blocks ─────────────────────────────────────────
 function Section({ title, tint, border, action, children }) {
   return (
     <div style={{ background: tint, border: `1.5px solid ${border}`, borderRadius: 12, padding: "1.1rem 1.25rem", marginBottom: "1.1rem" }}>
@@ -309,6 +303,17 @@ function Section({ title, tint, border, action, children }) {
       </div>
       {children}
     </div>
+  );
+}
+// <details> gives free expand/collapse with no extra state — exactly the
+// "expandable and closeable" behaviour asked for, and it remembers
+// nothing between reloads, which is fine for occasional cleanup lists.
+function CollapsibleSection({ title, children }) {
+  return (
+    <details style={{ marginBottom: "1.1rem", background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: 12, padding: "0.9rem 1.1rem" }}>
+      <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 700, color: "#334155" }}>{title}</summary>
+      <div style={{ marginTop: 12 }}>{children}</div>
+    </details>
   );
 }
 function Empty({ children }) {

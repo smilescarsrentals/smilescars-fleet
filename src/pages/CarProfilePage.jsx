@@ -235,6 +235,7 @@ export default function CarProfilePage({ staffName, role }) {
           { id:"statuslog",   label:`Maintenance Log (${maintenanceHistory.length})` },
           { id:"garage",      label:"Garage Updates" },
           { id:"notes",       label:`Notes (${noteHistory.length})` },
+          { id:"tracking",    label:"Tracking" },
         ].map(t => (
           <button key={t.id} style={{ ...S.tab,...(activeTab===t.id?S.tabActive:{}) }} onClick={() => setActiveTab(t.id)}>{t.label}</button>
         ))}
@@ -388,6 +389,70 @@ export default function CarProfilePage({ staffName, role }) {
               </div>}
         </div>
       )}
+
+      {activeTab==="tracking" && <div style={S.tabContent}><TrackingTab plate={decodedPlate} /></div>}
+    </div>
+  );
+}
+
+// Self-contained: fetches its own data, only when this tab is actually
+// selected (CarProfilePage's own load() doesn't touch tracker data — this
+// is a lightweight add-on, not core to the profile).
+function TrackingTab({ plate }) {
+  const [loading, setLoading] = useState(true);
+  const [tracker, setTracker] = useState(null); // { imei, deviceName } or null if unmatched
+  const [location, setLocation] = useState(null);
+  const [history, setHistory] = useState([]); // last 14 days of vehicle_mileage_daily
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const [mapRes, overviewRes] = await Promise.all([
+          api.getTrackerMap(),
+          api.getTrackerOverviewTable(),
+        ]);
+        if (cancelled) return;
+        const match = (mapRes.data || []).find((r) => r.plate === plate);
+        setTracker(match || null);
+        const row = (overviewRes.data || []).find((r) => r.plate === plate);
+        if (row && row.lat != null) setLocation(row);
+      } catch { /* quietly leave the tab showing "no data" */ }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [plate]);
+
+  if (loading) return <p style={S.empty}>Loading tracking info…</p>;
+
+  if (!tracker) {
+    return (
+      <p style={S.empty}>
+        No GPS tracker matched to this car yet. Match it on the{" "}
+        <a href="/tracking" style={{ color:"var(--sc-blue)" }}>Tracking page</a>.
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display:"flex", gap:"1.5rem", flexWrap:"wrap", marginBottom:"1.25rem" }}>
+        <div>
+          <div style={{ fontSize:11.5, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:0.4 }}>Tracker</div>
+          <div style={{ fontSize:14, fontWeight:600 }}>{tracker.deviceName || tracker.imei}</div>
+        </div>
+        <div>
+          <div style={{ fontSize:11.5, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:0.4 }}>Location as of last sync</div>
+          {location ? (
+            <a href={`https://www.google.com/maps?q=${location.lat},${location.lng}`} target="_blank" rel="noreferrer"
+              style={{ fontSize:14, fontWeight:600, color:"var(--sc-blue)" }}>
+              View on map ↗
+            </a>
+          ) : <div style={{ fontSize:14, color:"var(--text-faint)" }}>Not synced yet</div>}
+        </div>
+      </div>
+      <p style={S.empty}>Mileage history for this car will appear here once a few days of syncs have run.</p>
     </div>
   );
 }

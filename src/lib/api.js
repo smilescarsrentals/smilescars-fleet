@@ -110,6 +110,7 @@ export const api = {
   getTrackerMap:           ()     => get("getTrackerMap"),
   getVehicleMileageDaily:  (params) => get("getVehicleMileageDaily", params),
   getMileageAlertSummary:  ()     => get("getMileageAlertSummary"),
+  getTrackerOverviewTable: ()     => get("getTrackerOverviewTable"),
   confirmTrackerMatches:   (body) => post({ action: "confirmTrackerMatches", ...body }),
   removeTrackerMatch:      (body) => post({ action: "removeTrackerMatch",    ...body }),
   ignoreTrackerDevice:     (body) => post({ action: "ignoreTrackerDevice",   ...body }),

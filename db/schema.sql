@@ -1063,6 +1063,22 @@ CREATE TABLE IF NOT EXISTS vehicle_mileage_daily (
 CREATE INDEX IF NOT EXISTS idx_vehicle_mileage_daily_day ON vehicle_mileage_daily(day);
 CREATE INDEX IF NOT EXISTS idx_vehicle_mileage_daily_plate ON vehicle_mileage_daily(plate);
 
+-- Latest known GPS position per car (one row per plate, overwritten each
+-- sync — this is "as of last sync", never live/real-time, per Ramzanali's
+-- explicit choice). No street address available from TrackSolid's bulk
+-- location endpoint (locDesc is always null) — just lat/lng, shown as a
+-- map link rather than a guessed/paid-for reverse-geocoded address.
+CREATE TABLE IF NOT EXISTS vehicle_location_latest (
+  plate       text PRIMARY KEY,
+  imei        text NOT NULL,
+  lat         numeric,
+  lng         numeric,
+  speed_kmh   numeric,
+  acc_on      boolean,
+  gps_time    timestamp,
+  updated_at  timestamp DEFAULT now()
+);
+
 -- Trackers that exist on the TrackSolid account but aren't SmilesCars
 -- fleet cars (test devices, other things sitting on the same account) —
 -- dismissed once so they stop cluttering the "unmatched" review list on

@@ -1,12 +1,12 @@
 // api/cron-tracker-sync.js — invoked by Vercel Cron once daily at 6am
 // Zanzibar time (see vercel.json for the UTC schedule). Pulls yesterday's
-// mileage for every confirmed car from TrackSolid and checks the
-// 100km/day threshold. Logs to system_health_log every run, same as
-// cron-notifications.js, so "did last night's sync actually run" is
-// answerable from data.
+// mileage AND the latest location for every confirmed car from
+// TrackSolid, checks the 100km/day threshold. Logs to system_health_log
+// every run, same as cron-notifications.js, so "did last night's sync
+// actually run" is answerable from data.
 //
 // Secured with CRON_SECRET — see cron-notifications.js for the same note.
-import { syncVehicleMileage } from "../lib/trackerSync.js";
+import { runFullSync } from "../lib/trackerSync.js";
 import { run } from "../lib/core.js";
 import crypto from "node:crypto";
 
@@ -30,8 +30,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await syncVehicleMileage();
-    await logHealth("success", `day:${result.day} checked:${result.carsChecked} saved:${result.saved} overLimit:${result.overLimit} skipped:${result.skipped}`);
+    const result = await runFullSync();
+    await logHealth("success", `day:${result.day} checked:${result.carsChecked} saved:${result.saved} overLimit:${result.overLimit} skipped:${result.skipped} locations:${result.locationsUpdated}`);
     return res.status(200).json({ success: true, ...result });
   } catch (err) {
     console.error("Cron tracker sync error:", err);
