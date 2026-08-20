@@ -20,7 +20,7 @@ export default function TrackingPage({ staffName }) {
   const [syncing, setSyncing] = useState(false);
 
   const [search, setSearch] = useState("");
-  const [fStatus, setFStatus] = useState([]); // "Over 100km" | "No data yesterday"
+  const [fStatus, setFStatus] = useState([]); // "Over 100km" | "No movement recorded"
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [sortByDistance, setSortByDistance] = useState(false);
@@ -122,7 +122,7 @@ export default function TrackingPage({ staffName }) {
       r = r.filter((c) => c.plate.toUpperCase().includes(s));
     }
     if (fStatus.includes("Over 100km")) r = r.filter((c) => c.overLimit);
-    if (fStatus.includes("No data yesterday")) r = r.filter((c) => c.distanceKm == null);
+    if (fStatus.includes("No movement recorded")) r = r.filter((c) => c.distanceKm == null);
     if (fStatus.includes("Currently moving")) r = r.filter((c) => c.accOn === true);
     if (sortByDistance) {
       // nulls (no data) sink to the bottom regardless of direction
@@ -165,12 +165,18 @@ export default function TrackingPage({ staffName }) {
           {totalDevices != null && ` · ${totalDevices} trackers found on TrackSolid`}
           {dataAsOf && ` · data as of ${new Date(dataAsOf).toLocaleTimeString("en-TZ", { hour: "2-digit", minute: "2-digit" })}`}
         </p>
+        <p style={{ fontSize: 12, color: "#94a3b8", margin: "4px 0 0", fontStyle: "italic" }}>
+          "No movement recorded" means TrackSolid didn't log a trip for that car — it's either a genuinely quiet
+          day, or the tracker had no signal. TrackSolid's mileage data only counts registered trips, not tiny
+          GPS drift (confirmed 2026-08-20: a car showing 0.06km on TrackSolid's own site returned nothing from
+          this same data).
+        </p>
       </div>
 
       {/* Filter row — same visual pattern as Fleet */}
       <div className="sc-filter-row">
         <input className="sc-search" placeholder="Search plate…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <MultiSelect label="All cars" options={["Over 100km", "No data yesterday", "Currently moving"]} selected={fStatus} onChange={setFStatus} />
+        <MultiSelect label="All cars" options={["Over 100km", "No movement recorded", "Currently moving"]} selected={fStatus} onChange={setFStatus} />
         <button type="button" className={`btn btn-sm ${sortByDistance ? "btn-primary" : "btn-ghost"}`} onClick={() => setSortByDistance((v) => !v)}>
           ⇅ Sort by distance
         </button>
@@ -208,7 +214,7 @@ export default function TrackingPage({ staffName }) {
                     <span style={{ fontWeight: c.overLimit ? 700 : 400, color: c.overLimit ? "#dc2626" : "inherit" }}>
                       {c.distanceKm.toFixed(1)} km{c.overLimit && " ⚠️"}
                     </span>
-                  ) : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                  ) : <span style={{ color: "var(--text-faint)", fontStyle: "italic" }} title="TrackSolid didn't log a trip for this car yesterday — either it genuinely didn't move, or its tracker had no signal that day. We can't tell which from this data.">No movement recorded</span>}
                 </td>
                 <td data-label="Current Location">
                   {c.lat != null ? (
