@@ -156,7 +156,11 @@ export default function FleetPage({ staffName, role }) {
         // signing a rental contract — it should never trigger the rental
         // agreement, regardless of the global on/off setting above, which
         // only controls whether agreements happen for REAL rentals.
-        if (agreementEnabled && payload.bookingType !== "Transfer") {
+        // Same reasoning for "Long Term" payment status: those are
+        // ongoing/corporate arrangements handled outside the normal
+        // per-checkout agreement flow, not a one-off customer signing on
+        // the spot — per Ramzanali's request, skip the agreement for these too.
+        if (agreementEnabled && payload.bookingType !== "Transfer" && payload.paymentStatus !== "Long Term") {
           setAgreement({ car, checkout: payload });
         } else {
           showToast("✅ Checkout complete");
