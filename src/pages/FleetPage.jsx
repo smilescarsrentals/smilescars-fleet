@@ -56,6 +56,8 @@ export default function FleetPage({ staffName, role }) {
   const [fStatus,   setFStatus]   = useState([]);
   const [fLocation, setFLocation] = useState([]);
   const [fType,     setFType]     = useState([]);
+  const [fReturnFrom, setFReturnFrom] = useState("");
+  const [fReturnTo,   setFReturnTo]   = useState("");
   const [view,      setView]      = useState("all");
   const [expiringFilter, setExpiringFilter] = useState("all"); // all | overdue | soon
   const [modal,        setModal]        = useState(null);
@@ -280,9 +282,15 @@ export default function FleetPage({ staffName, role }) {
       (!q || c.plate.toLowerCase().includes(q) || c.type.toLowerCase().includes(q) || (c.currentClient||"").toLowerCase().includes(q)) &&
       (fStatus.length===0   || fStatus.includes(c.status)) &&
       (fLocation.length===0 || fLocation.includes(c.location)) &&
-      (fType.length===0     || fType.includes(c.type))
+      (fType.length===0     || fType.includes(c.type)) &&
+      // Return-date range only makes sense for cars actually out on rental —
+      // an Available/Maintenance car's returnDate field is stale from its
+      // last rental, not a real upcoming return, so it's excluded here
+      // rather than matched on leftover data.
+      (!fReturnFrom || (c.status === "Rented" && c.returnDate && c.returnDate >= fReturnFrom)) &&
+      (!fReturnTo   || (c.status === "Rented" && c.returnDate && c.returnDate <= fReturnTo))
     );
-  }, [baseList, search, fStatus, fLocation, fType]);
+  }, [baseList, search, fStatus, fLocation, fType, fReturnFrom, fReturnTo]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const paginated  = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
@@ -381,11 +389,14 @@ export default function FleetPage({ staffName, role }) {
           <MultiSelect style={sel} label="All statuses" options={["Available","Rented","Staff Use","Maintenance"]} selected={fStatus} onChange={v=>{setFStatus(v);setPage(1);}} />
           <MultiSelect style={sel} label="All locations" options={locations} selected={fLocation} onChange={v=>{setFLocation(v);setPage(1);}} />
           <MultiSelect style={sel} label="All types" options={types} selected={fType} onChange={v=>{setFType(v);setPage(1);}} />
+          <input type="date" style={sel} value={fReturnFrom} onChange={e=>{setFReturnFrom(e.target.value);setPage(1);}} title="Returning from" />
+          <span style={{ fontSize:12,color:"var(--text-muted)" }}>to</span>
+          <input type="date" style={sel} value={fReturnTo} onChange={e=>{setFReturnTo(e.target.value);setPage(1);}} title="Returning to" />
         </div>
 
-        {(search||fStatus.length||fLocation.length||fType.length) && <button type="button" className="btn btn-ghost btn-sm" onClick={()=>{setSearch("");setFStatus([]);setFLocation([]);setFType([]);setPage(1);}}>Clear</button>}
+        {(search||fStatus.length||fLocation.length||fType.length||fReturnFrom||fReturnTo) && <button type="button" className="btn btn-ghost btn-sm" onClick={()=>{setSearch("");setFStatus([]);setFLocation([]);setFType([]);setFReturnFrom("");setFReturnTo("");setPage(1);}}>Clear</button>}
         <span style={{ fontSize:12,color:"var(--text-muted)",marginLeft:"auto" }}>
-          {(search||fStatus.length||fLocation.length||fType.length||view!=="all")
+          {(search||fStatus.length||fLocation.length||fType.length||fReturnFrom||fReturnTo||view!=="all")
             ? `${filtered.length} ${[...fStatus,...fLocation,...fType,view==="expiring"?"Expiring/Expired":view==="unpaid"?"Unpaid":view==="staffuse"?"Staff Use":""].filter(Boolean).join(" · ")}`
             : `${fleet.length} cars total`}
         </span>
