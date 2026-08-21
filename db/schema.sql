@@ -1107,3 +1107,9 @@ CREATE TABLE IF NOT EXISTS tracksolid_device_cache (
 INSERT INTO notification_trigger_settings (type, label, enabled)
 VALUES ('tracker_over_limit', 'Vehicle Over 100km/day', 'TRUE')
 ON CONFLICT (type) DO NOTHING;
+
+-- Removed 2026-08-20: the Tracking page's table already flags over-limit
+-- cars clearly (red row, sortable by distance), so a separate bell/push
+-- alert for the same thing was redundant. Nothing else about tracker
+-- syncing changed — over_limit is still saved on every mileage row.
+DELETE FROM notification_trigger_settings WHERE type='tracker_over_limit';
