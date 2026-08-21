@@ -77,11 +77,11 @@ const NAV_GROUPS = [
     { to: "/sub-hire", key: "subhire",  label: "Sub-Hire",  icon: Icon.subhire },
     { to: "/fuel",     key: "fuel",     label: "Fuel",      icon: Icon.fuel },
     { to: "/sold",     key: "sold",     label: "Sold",      icon: Icon.sold },
+    { to: "/tracking", key: "tracking", label: "Tracking",  icon: Icon.tracking },
   ]},
   { label: "Safety", items: [
     { to: "/blacklist", key: "blacklist", label: "Blacklist", icon: Icon.blacklist },
     { to: "/drivers",   key: "drivers",   label: "Drivers",   icon: Icon.drivers },
-    { to: "/tracking",  key: "tracking",  label: "Tracking",  icon: Icon.tracking },
   ]},
 ];
 
