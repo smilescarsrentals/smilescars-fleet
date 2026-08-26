@@ -211,6 +211,7 @@ export function GarageLocationPicker({ serviceLocationType, internalLocation, ex
 
 export default function ActionModal({ car, action, locations, garages, drivers, staff, staffName, role, blacklist, onConfirm, onClose, loading, embedded }) {
   const today = new Date().toISOString().split("T")[0];
+  const nowHHMM = new Date().toTimeString().slice(0, 5);
   const canAddLocGarage = role === "Admin" || role === "Manager";
 
   // Richer than the drivers prop (plain strings from config.drivers) — this
@@ -224,8 +225,10 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const [client,        setClient]       = useState(car.currentClient || "");
   const [clientPhone,   setClientPhone]  = useState(car.clientPhone || "");
   const [bookedFrom,    setBookedFrom]   = useState(today);
+  const [transferTime,  setTransferTime] = useState(nowHHMM); // actual time a Transfer happened, since it's often logged well after the fact
   const [returnDate,    setReturnDate]   = useState(action === "extendBooking" && car.returnDate ? String(car.returnDate).split("T")[0] : "");
   const [actualReturn,  setActualReturn] = useState(today);
+  const [returnTime,    setReturnTime]   = useState(nowHHMM); // same idea, for when a Transfer/Rental is completed
   const [location,      setLocation]     = useState(car.location || "");
   const [remarks,       setRemarks]      = useState("");
   const [fuelOut,       setFuelOut]      = useState("");
@@ -297,6 +300,19 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
     onConfirm({
       client, clientPhone,
       bookedFrom, returnDate: isTransfer ? bookedFrom : returnDate, actualReturn,
+      // Combined date+time, only when it's actually meaningful (Transfers,
+      // where "logged at 9am" and "happened at 2am" are genuinely
+      // different things worth recording separately). Left undefined for
+      // Rentals so their checkout/return timestamps behave exactly as
+      // before — stamped at whatever moment they're actually entered.
+      // isTransfer is only ever true during checkOut (it depends on
+      // needsClient, which is false for markReturned) — so the return
+      // side has to check car.bookingType instead, the Fleet row's own
+      // record of what this booking actually is.
+      actualTimestamp:
+        isTransfer && bookedFrom ? `${bookedFrom}T${transferTime || "00:00"}:00`
+        : (isReturn && car.bookingType === "Transfer" && actualReturn) ? `${actualReturn}T${returnTime || "00:00"}:00`
+        : undefined,
       location: loc, remarks, fuelOut, fuelIn, kmOut, kmIn,
       amount: unformat(amount), currency,
       policeFine: unformat(policeFine), parkingFine: unformat(parkingFine),
@@ -436,8 +452,16 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 <div style={S.field}><label style={S.label}>DropOff To *</label>
                   <input style={S.input} value={dropoffTo} onChange={e => setDropoffTo(e.target.value)} onBlur={e => setDropoffTo(toTitleCase(e.target.value))} placeholder="e.g. Hotel name" /></div>
               </div>
-              <div style={S.field}><label style={S.label}>Transfer Date *</label>
-                <input style={S.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} /></div>
+              <div style={S.two}>
+                <div style={S.field}><label style={S.label}>Transfer Date *</label>
+                  <input style={S.input} type="date" value={bookedFrom} onChange={e => setBookedFrom(e.target.value)} /></div>
+                <div style={S.field}><label style={S.label}>Actual Time</label>
+                  <input style={S.input} type="time" value={transferTime} onChange={e => setTransferTime(e.target.value)} /></div>
+              </div>
+              <p style={{ fontSize:11.5, color:"#94a3b8", margin:"-8px 0 8px" }}>
+                Logging this after the fact (e.g. a 2am transfer entered in the morning)? Set the actual time here
+                so it's recorded correctly, not just when you happened to enter it.
+              </p>
               <div style={S.field}><label style={S.label}>Driver Allocated *</label>
                 <DriverPicker drivers={richDrivers} value={driver} onChange={setDriver} staffName={staffName}
                   onDriverAdded={d => setRichDrivers(list => [...list, d])} />
@@ -510,6 +534,15 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
               <div style={S.field}><label style={S.label}>KM In</label>
                 <input style={S.input} type="text" inputMode="numeric" value={kmIn} onChange={e => setKmIn(fmt(e.target.value))} placeholder="e.g. 45,300" /></div>
             </div>
+            {car.bookingType === "Transfer" && (
+              <div style={S.field}><label style={S.label}>Actual Time</label>
+                <input style={S.input} type="time" value={returnTime} onChange={e => setReturnTime(e.target.value)} />
+                <p style={{ fontSize:11.5, color:"#94a3b8", margin:"4px 0 0" }}>
+                  Same idea as the transfer's start time — set this if you're logging the completion later than
+                  when it actually happened.
+                </p>
+              </div>
+            )}
             <div style={S.two}>
               <div style={S.field}><label style={S.label}>Fuel In</label>
                 <select style={sel} value={fuelIn} onChange={e => setFuelIn(e.target.value)}>
