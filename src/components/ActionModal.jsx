@@ -226,6 +226,13 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const [clientPhone,   setClientPhone]  = useState(car.clientPhone || "");
   const [bookedFrom,    setBookedFrom]   = useState(today);
   const [transferTime,  setTransferTime] = useState(nowHHMM); // actual time a Transfer happened, since it's often logged well after the fact
+  // Extra legs for "same car, same client, several trips today" — logged
+  // after the fact, since staff can't realistically be on the system for
+  // a 2am transfer. Leg 1 is the fields above; this holds legs 2+.
+  const [extraLegs, setExtraLegs] = useState([]);
+  const [leg1Completed, setLeg1Completed] = useState(false); // only relevant once a 2nd leg is added
+  const [leg1InDate, setLeg1InDate] = useState(today);
+  const [leg1InTime, setLeg1InTime] = useState(nowHHMM);
   const [returnDate,    setReturnDate]   = useState(action === "extendBooking" && car.returnDate ? String(car.returnDate).split("T")[0] : "");
   const [actualReturn,  setActualReturn] = useState(today);
   const [returnTime,    setReturnTime]   = useState(nowHHMM); // same idea, for when a Transfer/Rental is completed
@@ -281,6 +288,12 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
 
   const isTransfer = needsClient && bookingType === "Transfer";
 
+  const addLeg = () => setExtraLegs(ls => [...ls, {
+    pickupFrom: "", dropoffTo: "", outDate: today, outTime: nowHHMM,
+    completed: false, inDate: today, inTime: nowHHMM,
+  }]);
+  const updateLeg = (i, patch) => setExtraLegs(ls => ls.map((l, j) => j === i ? { ...l, ...patch } : l));
+
   const handleSubmit = () => {
     setErr("");
     if (needsClient && !client.trim()) { setErr("Client name is required."); return; }
@@ -289,6 +302,13 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
     if (isTransfer && !pickupFrom.trim()) { setErr("Pick-up location is required."); return; }
     if (isTransfer && !dropoffTo.trim())  { setErr("Drop-off location is required."); return; }
     if (isTransfer && !driver) { setErr("Driver Allocated is required for a Transfer."); return; }
+    if (isTransfer && extraLegs.length > 0) {
+      for (const [i, leg] of extraLegs.entries()) {
+        if (!leg.pickupFrom.trim() || !leg.dropoffTo.trim() || !leg.outDate || !leg.outTime) {
+          setErr(`Leg ${i + 2} needs a pickup, dropoff, date, and time.`); return;
+        }
+      }
+    }
     if ((needsClient && bookingType === "Rental") || isExtend) { if (!returnDate) { setErr("Return date is required."); return; } }
     if (isMaintenance && serviceLocationType === "External" && !externalVendorId) { setErr("Please select a garage."); return; }
     if (isMaintenance && !kmOut.trim()) { setErr("Odometer (KM) is required."); return; }
@@ -322,6 +342,22 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
       bookingType: needsClient ? bookingType : undefined,
       pickupFrom: isTransfer ? pickupFrom.trim() : undefined,
       dropoffTo:  isTransfer ? dropoffTo.trim()  : undefined,
+      // Only present when "+ Add another leg" was actually used — FleetPage
+      // routes to a different backend action (logMultiLegTransfer) when
+      // this is set, otherwise the normal single-leg checkOut is unchanged.
+      multiLeg: isTransfer && extraLegs.length > 0 ? true : undefined,
+      legs: isTransfer && extraLegs.length > 0 ? [
+        {
+          pickupFrom: pickupFrom.trim(), dropoffTo: dropoffTo.trim(),
+          outTimestamp: `${bookedFrom}T${transferTime || "00:00"}:00`,
+          inTimestamp: leg1Completed ? `${leg1InDate}T${leg1InTime || "00:00"}:00` : null,
+        },
+        ...extraLegs.map((l) => ({
+          pickupFrom: l.pickupFrom.trim(), dropoffTo: l.dropoffTo.trim(),
+          outTimestamp: `${l.outDate}T${l.outTime || "00:00"}:00`,
+          inTimestamp: l.completed ? `${l.inDate}T${l.inTime || "00:00"}:00` : null,
+        })),
+      ] : undefined,
     });
   };
 
@@ -462,6 +498,59 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 Logging this after the fact (e.g. a 2am transfer entered in the morning)? Set the actual time here
                 so it's recorded correctly, not just when you happened to enter it.
               </p>
+
+              {extraLegs.length > 0 && (
+                <div style={{ display:"flex", alignItems:"center", gap:8, margin:"-4px 0 12px" }}>
+                  <input type="checkbox" id="leg1completed" checked={leg1Completed} onChange={e => setLeg1Completed(e.target.checked)} />
+                  <label htmlFor="leg1completed" style={{ fontSize:12.5, color:"#374151" }}>This first leg is already completed</label>
+                </div>
+              )}
+              {extraLegs.length > 0 && leg1Completed && (
+                <div style={S.two}>
+                  <div style={S.field}><label style={S.label}>Returned Date</label>
+                    <input style={S.input} type="date" value={leg1InDate} onChange={e => setLeg1InDate(e.target.value)} /></div>
+                  <div style={S.field}><label style={S.label}>Returned Time</label>
+                    <input style={S.input} type="time" value={leg1InTime} onChange={e => setLeg1InTime(e.target.value)} /></div>
+                </div>
+              )}
+
+              {extraLegs.map((leg, i) => (
+                <div key={i} style={{ border:"1.5px solid #e5e7eb", borderRadius:10, padding:"0.75rem", margin:"0 0 12px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                    <span style={{ fontSize:12.5, fontWeight:700, color:"#374151" }}>Leg {i + 2}</span>
+                    <button type="button" onClick={() => setExtraLegs(ls => ls.filter((_, j) => j !== i))}
+                      style={{ padding:0, background:"none", border:"none", color:"#dc2626", fontSize:12.5, cursor:"pointer" }}>Remove</button>
+                  </div>
+                  <div style={S.two}>
+                    <div style={S.field}><label style={S.label}>PickUp From *</label>
+                      <input style={S.input} value={leg.pickupFrom} onChange={e => updateLeg(i, { pickupFrom: e.target.value })} placeholder="e.g. Hotel" /></div>
+                    <div style={S.field}><label style={S.label}>DropOff To *</label>
+                      <input style={S.input} value={leg.dropoffTo} onChange={e => updateLeg(i, { dropoffTo: e.target.value })} placeholder="e.g. Restaurant" /></div>
+                  </div>
+                  <div style={S.two}>
+                    <div style={S.field}><label style={S.label}>Date</label>
+                      <input style={S.input} type="date" value={leg.outDate} onChange={e => updateLeg(i, { outDate: e.target.value })} /></div>
+                    <div style={S.field}><label style={S.label}>Time Out</label>
+                      <input style={S.input} type="time" value={leg.outTime} onChange={e => updateLeg(i, { outTime: e.target.value })} /></div>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, margin:"4px 0" }}>
+                    <input type="checkbox" id={`legcompleted${i}`} checked={leg.completed} onChange={e => updateLeg(i, { completed: e.target.checked })} />
+                    <label htmlFor={`legcompleted${i}`} style={{ fontSize:12.5, color:"#374151" }}>This leg is already completed</label>
+                  </div>
+                  {leg.completed && (
+                    <div style={S.two}>
+                      <div style={S.field}><label style={S.label}>Returned Date</label>
+                        <input style={S.input} type="date" value={leg.inDate} onChange={e => updateLeg(i, { inDate: e.target.value })} /></div>
+                      <div style={S.field}><label style={S.label}>Returned Time</label>
+                        <input style={S.input} type="time" value={leg.inTime} onChange={e => updateLeg(i, { inTime: e.target.value })} /></div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <button type="button" onClick={addLeg}
+                style={{ padding:"7px 12px", fontSize:12.5, fontWeight:600, background:"#fff", color:"#111", border:"1.5px solid #e5e7eb", borderRadius:8, cursor:"pointer", marginBottom:12 }}>
+                + Add another leg (same car, same client, later today)
+              </button>
               <div style={S.field}><label style={S.label}>Driver Allocated *</label>
                 <DriverPicker drivers={richDrivers} value={driver} onChange={setDriver} staffName={staffName}
                   onDriverAdded={d => setRichDrivers(list => [...list, d])} />

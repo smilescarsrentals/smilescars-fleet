@@ -79,6 +79,7 @@ export const api = {
   cancelReservation:     (body)  => post({ action: "cancelReservation", ...body }),
   verifyStaff:           (body)  => post({ action: "verifyStaff",           ...body }),
   checkOut:              (body)  => post({ action: "checkOut",               ...body }),
+  logMultiLegTransfer:   (body)  => post({ action: "logMultiLegTransfer",    ...body }),
   addCar:                (body)  => post({ action: "addCar",                 ...body }),
   renameFleetPlate:      (body)  => post({ action: "renameFleetPlate",       ...body }),
   addStaff:              (body)  => post({ action: "addStaff",               ...body }),

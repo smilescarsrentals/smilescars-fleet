@@ -100,6 +100,7 @@ const WRITES = {
   confirmInvoiceScan: writes.confirmInvoiceScan,
   verifyStaff: writes.verifyStaff,
   checkOut: writes.checkOut,
+  logMultiLegTransfer: writes.logMultiLegTransfer,
   addCar: writes.addCar,
   renameFleetPlate: writes.renameFleetPlate,
   markReturned: writes.markReturned,

@@ -121,7 +121,11 @@ export default function FleetPage({ staffName, role }) {
       const payload = { plate: car.plate, type: car.type, staffName, ...fields };
       if (action === "checkOut") {
         try {
-          await api.checkOut(payload);
+          if (payload.multiLeg) {
+            await api.logMultiLegTransfer(payload);
+          } else {
+            await api.checkOut(payload);
+          }
         } catch (err) {
           // Apps Script can occasionally report a failure even though the write
           // already went through (e.g. a hiccup in a secondary step server-side,
