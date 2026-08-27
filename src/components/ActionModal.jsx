@@ -129,7 +129,59 @@ function DriverPicker({ drivers, value, onChange, onDriverAdded, staffName }) {
   );
 }
 
-export function GarageLocationPicker({ serviceLocationType, internalLocation, externalVendorId, externalVendorLocation, onChange }) {
+// Lets an Admin add a new Service Provider vendor (garage) right where the
+// Outside Garage picker is, instead of leaving the flow to go to Garage →
+// Vendors. Admin-only by design — everyone else keeps using the existing
+// "add one under Garage → Vendors" path.
+export function AddGarageInline({ role, staffName, onAdded }) {
+  const [adding, setAdding] = useState(false);
+  const [name,   setName]   = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err,    setErr]    = useState("");
+
+  if (role !== "Admin") return null;
+
+  if (!adding) {
+    return (
+      <button type="button" onClick={() => setAdding(true)}
+        style={{ fontSize: 12, color: "var(--sc-blue, #04519B)", background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", fontWeight: 600 }}>
+        + Add Garage
+      </button>
+    );
+  }
+
+  const handleAdd = async () => {
+    if (!name.trim()) { setErr("Garage name is required."); return; }
+    setSaving(true); setErr("");
+    try {
+      const res = await api.addVendor({ name: name.trim(), vendorType: "Service Provider", staffName });
+      onAdded({ id: res.id, name: name.trim() });
+      setAdding(false); setName("");
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ display: "flex", gap: 6 }}>
+        <input style={{ flex: 1, padding: "8px 10px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, fontFamily: "inherit" }}
+          placeholder="Garage name" value={name} autoFocus
+          onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAdd()} />
+        <button type="button" disabled={saving} onClick={handleAdd}
+          style={{ padding: "0 12px", fontSize: 12, fontWeight: 600, color: "#fff", background: "var(--sc-blue, #04519B)", border: "none", borderRadius: 6, cursor: "pointer", opacity: saving ? 0.65 : 1 }}>
+          {saving ? "Adding…" : "Add"}
+        </button>
+        <button type="button" onClick={() => { setAdding(false); setName(""); setErr(""); }}
+          style={{ padding: "0 10px", fontSize: 12, color: "#666", background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 6, cursor: "pointer" }}>
+          Cancel
+        </button>
+      </div>
+      {err && <p style={{ color: "#dc2626", fontSize: 12, margin: "6px 0 0" }}>{err}</p>}
+    </div>
+  );
+}
+
+export function GarageLocationPicker({ serviceLocationType, internalLocation, externalVendorId, externalVendorLocation, onChange, role, staffName }) {
   const [vendors, setVendors] = useState([]);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -182,12 +234,18 @@ export function GarageLocationPicker({ serviceLocationType, internalLocation, ex
                 ))}
               </div>
             )}
-            {loaded && vendors.length === 0 && (
+            {loaded && vendors.length === 0 && role !== "Admin" && (
               <p style={{ fontSize: 11.5, color: "#999", margin: "6px 0 0" }}>
                 No suppliers set up yet — add one under Garage → Supplier (set type to Service Provider).
               </p>
             )}
           </div>
+
+          <AddGarageInline role={role} staffName={staffName}
+            onAdded={(v) => {
+              setVendors(vs => [...vs, { id: v.id, name: v.name, active: true, vendorType: "Service Provider", locationList: [] }]);
+              onChange({ serviceLocationType, internalLocation, externalVendorId: v.id, externalVendorLocation: "" });
+            }} />
 
           {selectedVendor && selectedVendor.locationList && selectedVendor.locationList.length > 0 && (
             <select style={{ width: "100%", padding: "9px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, boxSizing: "border-box", fontFamily: "inherit", marginTop: 6 }}
@@ -660,6 +718,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
             <div style={S.field}><label style={S.label}>Send to *</label>
               <GarageLocationPicker
                 serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId} externalVendorLocation={externalVendorLocation}
+                role={role} staffName={staffName}
                 onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev, externalVendorLocation: evl }) => {
                   setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev); setExternalVendorLocation(evl || "");
                 }} />

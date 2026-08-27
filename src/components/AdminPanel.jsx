@@ -39,7 +39,7 @@ export default function AdminPanel({ staffName, onClose }) {
 
         <div style={S.body}>
           {tab === "fleet"    && <FleetTab    config={config} onConfigChanged={loadConfig} />}
-          {tab === "staff"    && <StaffTab />}
+          {tab === "staff"    && <StaffTab staffName={staffName} />}
           {tab === "notifications" && <NotificationsTab staffName={staffName} />}
           {tab === "features" && <FeaturesTab />}
           {tab === "system"   && <SystemTab />}
@@ -145,10 +145,11 @@ function ConfigListEditor({ title, type, values, onChanged }) {
 }
 
 // ── Staff tab: Add Staff + list with Active toggle + Clear Signature ───────
-function StaffTab() {
+function StaffTab({ staffName }) {
   const [staff,   setStaff]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [busyFuel, setBusyFuel] = useState(null); // name of row mid-save
 
   const load = () => {
     setLoading(true);
@@ -165,6 +166,14 @@ function StaffTab() {
     try { await api.deleteStaffSignature({ staffName: name }); alert("Signature removed."); }
     catch (e) { alert(e.message); }
   };
+  const toggleFuelVoucher = async (name, canIssueFuelVoucher) => {
+    setBusyFuel(name);
+    try {
+      await api.setCanIssueFuelVoucher({ name, enabled: !canIssueFuelVoucher, staffName });
+      setStaff(list => list.map(s => s.name === name ? { ...s, canIssueFuelVoucher: !canIssueFuelVoucher } : s));
+    } catch (e) { alert(e.message); }
+    finally { setBusyFuel(null); }
+  };
 
   return (
     <div>
@@ -178,6 +187,12 @@ function StaffTab() {
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
                 <div style={{ fontSize: 11, color: "#888" }}>{s.role}{!s.active && " · Deactivated"}</div>
               </div>
+              <button type="button" disabled={busyFuel === s.name}
+                style={{ ...S.miniBtn, opacity: s.canIssueFuelVoucher ? 1 : 0.3, filter: s.canIssueFuelVoucher ? "none" : "grayscale(100%)" }}
+                onClick={() => toggleFuelVoucher(s.name, s.canIssueFuelVoucher)}
+                title={s.canIssueFuelVoucher ? `${s.name} can issue fuel vouchers — click to revoke` : `${s.name} cannot issue fuel vouchers — click to grant`}>
+                ⛽
+              </button>
               <button type="button" style={S.miniBtn} onClick={() => clearSignature(s.name)} title="Clear stored signature">🖊️✕</button>
               <button type="button" style={{ ...S.miniBtn, color: s.active ? "#dc2626" : "#16a34a" }}
                 onClick={() => toggleActive(s.name, s.active)}>

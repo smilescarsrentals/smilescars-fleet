@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../lib/api";
+import { AddGarageInline } from "../components/ActionModal";
 
 const STATUSES = ["Queued", "In Progress", "Awaiting Parts", "Completed"];
 const STATUS_COLORS = {
@@ -266,6 +267,7 @@ export default function MaintenancePage({ staffName, role, embedded }) {
       {showAdd && (
         <AddWorkOrderModal
           staffName={staffName}
+          role={role}
           fleet={fleet}
           onClose={() => setShowAdd(false)}
           onSaved={() => { setShowAdd(false); load(); }}
@@ -989,7 +991,7 @@ function ScheduleModal({ fleet, staffName, onClose, onSaved }) {
 }
 
 // ── Add Work Order Modal ─────────────────────────────────────
-function AddWorkOrderModal({ staffName, fleet, onClose, onSaved }) {
+function AddWorkOrderModal({ staffName, role, fleet, onClose, onSaved }) {
   const [form, setForm] = useState({
     plate: "", assignedMechanic: "", issueDescription: "", odometer: "", notes: "",
     serviceLocationType: "Internal", internalLocation: "SmilesCars Office", externalVendorId: "",
@@ -1051,11 +1053,16 @@ function AddWorkOrderModal({ staffName, fleet, onClose, onSaved }) {
                 <option value="">Select a vendor…</option>
                 {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
-              {vendors.length === 0 && (
+              {vendors.length === 0 && role !== "Admin" && (
                 <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "4px 0 0" }}>
                   No Service Provider vendors yet — add one under Garage → Vendors.
                 </p>
               )}
+              <AddGarageInline role={role} staffName={staffName}
+                onAdded={(v) => {
+                  setVendors(vs => [...vs, { id: v.id, name: v.name }]);
+                  set("externalVendorId", v.id);
+                }} />
             </div>
           ) : (
             <div style={S.field}><label style={S.label}>Location</label>

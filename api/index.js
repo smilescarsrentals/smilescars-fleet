@@ -159,6 +159,7 @@ const WRITES = {
   setNotificationTriggerEnabled: writes.setNotificationTriggerEnabled,
   setReceivesDriverDocumentReminders: writes.setReceivesDriverDocumentReminders,
   setCanManageDrivers: writes.setCanManageDrivers,
+  setCanIssueFuelVoucher: writes.setCanIssueFuelVoucher,
   addDriverV2: writes.addDriverV2,
   bulkAddDrivers: writes.bulkAddDrivers,
   bulkAddDriverDocuments: writes.bulkAddDriverDocuments,

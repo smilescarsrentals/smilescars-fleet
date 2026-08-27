@@ -99,6 +99,7 @@ export const api = {
   getAllDriverDocuments:  ()     => get("getAllDriverDocuments"),
   setReceivesDriverDocumentReminders: (body) => post({ action: "setReceivesDriverDocumentReminders", ...body }),
   setCanManageDrivers:    (body) => post({ action: "setCanManageDrivers",    ...body }),
+  setCanIssueFuelVoucher: (body) => post({ action: "setCanIssueFuelVoucher", ...body }),
   addDriverV2:            (body) => post({ action: "addDriverV2",            ...body }),
   bulkAddDrivers:         (body) => post({ action: "bulkAddDrivers",         ...body }),
   bulkAddDriverDocuments: (body) => post({ action: "bulkAddDriverDocuments", ...body }),

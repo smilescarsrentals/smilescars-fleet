@@ -547,7 +547,7 @@ export default function FleetPage({ staffName, role }) {
           onConfirm={handleMoveConfirm} onClose={()=>!saving&&setMoveCar(null)} loading={saving} />
       )}
       {replaceCar && (
-        <ReplaceCarModal car={replaceCar} fleet={fleet} garages={config.garages} staffName={staffName}
+        <ReplaceCarModal car={replaceCar} fleet={fleet} garages={config.garages} staffName={staffName} role={role}
           onConfirm={handleReplaceConfirm} onClose={()=>!saving&&setReplaceCar(null)} loading={saving} />
       )}
       {showAddCar && (
@@ -623,7 +623,7 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
 }
 
 // ── Replace Car Modal ─────────────────────────────────────────
-function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, loading }) {
+function ReplaceCarModal({ car, fleet, garages, staffName, role, onConfirm, onClose, loading }) {
   const available = fleet.filter(c => c.status === "Available");
   const [replacePlate, setReplacePlate] = useState("");
   const [originalAction, setOriginalAction] = useState("garage"); // "garage" | "available"
@@ -726,6 +726,7 @@ function ReplaceCarModal({ car, fleet, garages, staffName, onConfirm, onClose, l
               <>
                 <GarageLocationPicker
                   serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId} externalVendorLocation={externalVendorLocation}
+                  role={role} staffName={staffName}
                   onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev, externalVendorLocation: evl }) => {
                     setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev); setExternalVendorLocation(evl || "");
                   }} />
