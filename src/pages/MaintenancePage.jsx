@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../lib/api";
-import { AddGarageInline } from "../components/ActionModal";
+import { AddGarageInline, cityForCarLocation, GARAGE_CITIES } from "../components/ActionModal";
 
 const STATUSES = ["Queued", "In Progress", "Awaiting Parts", "Completed"];
 const STATUS_COLORS = {
@@ -1009,6 +1009,18 @@ function AddWorkOrderModal({ staffName, role, fleet, onClose, onSaved }) {
     }).catch(() => {});
   }, []);
 
+  // Auto-select the selected car's own branch — same rule as
+  // GarageLocationPicker: only overrides the OLD flat, city-less defaults,
+  // never a value the user (or an earlier auto-select) already set a city on.
+  useEffect(() => {
+    if (!form.plate) return;
+    if (form.internalLocation !== "SmilesCars Office" && form.internalLocation !== "SmilesCars Garage") return;
+    const car = (fleet || []).find(c => c.plate === form.plate);
+    if (!car) return;
+    set("internalLocation", `${form.internalLocation} — ${cityForCarLocation(car.location)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.plate]);
+
   const handleSave = async () => {
     if (!form.plate.trim()) { setErr("Plate is required."); return; }
     if (!isExternal && !form.assignedMechanic.trim()) { setErr("Assigned mechanic is required."); return; }
@@ -1067,8 +1079,12 @@ function AddWorkOrderModal({ staffName, role, fleet, onClose, onSaved }) {
           ) : (
             <div style={S.field}><label style={S.label}>Location</label>
               <select style={S.input} value={form.internalLocation} onChange={e => set("internalLocation", e.target.value)}>
-                <option value="SmilesCars Office">SmilesCars Office</option>
-                <option value="SmilesCars Garage">SmilesCars Garage</option>
+                {GARAGE_CITIES.map(city => (
+                  <optgroup key={city} label={city}>
+                    <option value={`SmilesCars Office — ${city}`}>SmilesCars Office — {city}</option>
+                    <option value={`SmilesCars Garage — ${city}`}>SmilesCars Garage — {city}</option>
+                  </optgroup>
+                ))}
               </select>
             </div>
           )}

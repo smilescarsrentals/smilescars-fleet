@@ -726,7 +726,7 @@ function ReplaceCarModal({ car, fleet, garages, staffName, role, onConfirm, onCl
               <>
                 <GarageLocationPicker
                   serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId} externalVendorLocation={externalVendorLocation}
-                  role={role} staffName={staffName}
+                  role={role} staffName={staffName} carLocation={car?.location}
                   onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev, externalVendorLocation: evl }) => {
                     setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev); setExternalVendorLocation(evl || "");
                   }} />

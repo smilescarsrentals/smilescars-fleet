@@ -181,7 +181,22 @@ export function AddGarageInline({ role, staffName, onAdded }) {
   );
 }
 
-export function GarageLocationPicker({ serviceLocationType, internalLocation, externalVendorId, externalVendorLocation, onChange, role, staffName }) {
+// Smiles operates 4 physical branches (Dar es Salaam, Zanzibar, Arusha,
+// Mwanza) but fleet.location is far more granular than that (specific
+// yards/offices within Dar, plus one-off spots like Showroom/Huawei HQ) —
+// this maps any of those down to the branch its garage actually belongs to.
+// Unrecognized/one-off locations default to Dar es Salaam (HQ), same as
+// every non-Zanzibar/Arusha/Mwanza fleet.location value seen in practice.
+export const GARAGE_CITIES = ["Dar es Salaam", "Zanzibar", "Arusha", "Mwanza"];
+export function cityForCarLocation(location) {
+  const loc = (location || "").toLowerCase();
+  if (loc.includes("zanzibar")) return "Zanzibar";
+  if (loc.includes("arusha")) return "Arusha";
+  if (loc.includes("mwanza")) return "Mwanza";
+  return "Dar es Salaam";
+}
+
+export function GarageLocationPicker({ serviceLocationType, internalLocation, externalVendorId, externalVendorLocation, onChange, role, staffName, carLocation }) {
   const [vendors, setVendors] = useState([]);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -194,19 +209,33 @@ export function GarageLocationPicker({ serviceLocationType, internalLocation, ex
     }).catch(() => {}).finally(() => setLoaded(true));
   }, []);
 
+  // Auto-select the car's own branch. Only overrides the OLD flat, city-less
+  // defaults ("SmilesCars Garage"/"SmilesCars Office" with no " — City")
+  // that every caller's initial form state still carries — never a value
+  // that already names a city, whether auto-set earlier or picked manually.
+  useEffect(() => {
+    if (serviceLocationType === "Internal" && (internalLocation === "SmilesCars Garage" || internalLocation === "SmilesCars Office" || !internalLocation)) {
+      const base = internalLocation === "SmilesCars Office" ? "SmilesCars Office" : "SmilesCars Garage";
+      onChange({ serviceLocationType, internalLocation: `${base} — ${cityForCarLocation(carLocation)}`, externalVendorId, externalVendorLocation });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carLocation]);
+
   const selectedVendor = vendors.find(v => v.id === externalVendorId);
   const filtered = query.trim().length > 0
     ? vendors.filter(v => v.name.toLowerCase().includes(query.toLowerCase()))
     : vendors;
 
   const isExternal = serviceLocationType === "External";
+  const defaultCity = cityForCarLocation(carLocation);
+  const defaultInternalLocation = `SmilesCars Garage — ${defaultCity}`;
 
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
         {[["Internal", "Our Garage"], ["External", "Outside Garage"]].map(([val, lab]) => (
           <button key={val} type="button"
-            onClick={() => onChange({ serviceLocationType: val, internalLocation: val === "Internal" ? (internalLocation || "SmilesCars Garage") : "", externalVendorId: "", externalVendorLocation: "" })}
+            onClick={() => onChange({ serviceLocationType: val, internalLocation: val === "Internal" ? (internalLocation || defaultInternalLocation) : "", externalVendorId: "", externalVendorLocation: "" })}
             style={{ flex: 1, padding: "8px 4px", fontSize: 12, fontWeight: 600, borderRadius: 7, cursor: "pointer", fontFamily: "inherit",
               border: `1.5px solid ${serviceLocationType === val ? "var(--sc-blue)" : "#e5e7eb"}`,
               background: serviceLocationType === val ? "var(--blue-bg)" : "#fff",
@@ -257,10 +286,14 @@ export function GarageLocationPicker({ serviceLocationType, internalLocation, ex
         </div>
       ) : (
         <select style={{ width: "100%", padding: "9px 11px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 7, boxSizing: "border-box", fontFamily: "inherit" }}
-          value={internalLocation || "SmilesCars Garage"}
+          value={internalLocation || defaultInternalLocation}
           onChange={e => onChange({ serviceLocationType, internalLocation: e.target.value, externalVendorId })}>
-          <option value="SmilesCars Garage">SmilesCars Garage</option>
-          <option value="SmilesCars Office">SmilesCars Office</option>
+          {GARAGE_CITIES.map(city => (
+            <optgroup key={city} label={city}>
+              <option value={`SmilesCars Garage — ${city}`}>SmilesCars Garage — {city}</option>
+              <option value={`SmilesCars Office — ${city}`}>SmilesCars Office — {city}</option>
+            </optgroup>
+          ))}
         </select>
       )}
     </div>
@@ -718,7 +751,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
             <div style={S.field}><label style={S.label}>Send to *</label>
               <GarageLocationPicker
                 serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId} externalVendorLocation={externalVendorLocation}
-                role={role} staffName={staffName}
+                role={role} staffName={staffName} carLocation={car?.location}
                 onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev, externalVendorLocation: evl }) => {
                   setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev); setExternalVendorLocation(evl || "");
                 }} />
