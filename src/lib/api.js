@@ -64,6 +64,7 @@ export const api = {
   getSubHire:            ()      => get("getSubHire"),
   getClients:            ()      => get("getClients"),
   getFuel:               ()      => get("getFuel"),
+  getFuelByPlate:        (plate) => get("getFuelByPlate", { plate }),
   getCarByPlate:         (plate) => get("getCarByPlate", { plate }),
   getCarHistory:         (plate)       => get("getCarHistory",     { plate }),
   getHistoryByStaff:     (staffName)   => get("getHistoryByStaff", { staffName }),

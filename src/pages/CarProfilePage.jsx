@@ -56,6 +56,7 @@ export default function CarProfilePage({ staffName, role }) {
 
   const [car,        setCar]        = useState(null);
   const [history,    setHistory]    = useState([]);
+  const [fuel,       setFuel]       = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState("");
   const [note,       setNote]       = useState("");
@@ -72,6 +73,8 @@ export default function CarProfilePage({ staffName, role }) {
       if (canSeeFullProfile) {
         const histRes = await api.getCarHistory(decodedPlate);
         setHistory(histRes.data || []);
+        const fuelRes = await api.getFuelByPlate(decodedPlate);
+        setFuel(fuelRes.data || []);
       }
     } catch (e) { setError("Failed to load car profile: " + e.message); }
     finally { setLoading(false); }
@@ -94,6 +97,24 @@ export default function CarProfilePage({ staffName, role }) {
   const rentalHistory     = useMemo(() => history.filter(h => ["Checked Out","Returned","Booking Extended"].includes(h.action)), [history]);
   const maintenanceHistory = useMemo(() => history.filter(h => ["Sent to Maintenance","Marked Available"].includes(h.action)), [history]);
   const noteHistory        = useMemo(() => history.filter(h => h.action === "Note Added"), [history]);
+
+  // Average KM per fueling: gap between consecutive odometer readings across
+  // fill-ups. Sorted ascending by KM (not by date — a few rows have the same
+  // date but different KM) so this is resilient to fuel log rows being
+  // entered out of chronological order. Non-positive gaps are skipped —
+  // that's a duplicate entry (same KM re-logged) or a bad/rolled-back
+  // odometer reading, not a real distance travelled.
+  const avgKmPerFueling = useMemo(() => {
+    const kms = fuel.map(f => f.currentKm).filter(k => typeof k === "number" && !Number.isNaN(k)).sort((a, b) => a - b);
+    const gaps = [];
+    for (let i = 1; i < kms.length; i++) {
+      const gap = kms[i] - kms[i - 1];
+      if (gap > 0) gaps.push(gap);
+    }
+    if (!gaps.length) return null;
+    return Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
+  }, [fuel]);
+
 
   const handleSaveNote = async () => {
     if (!note.trim()) return;
@@ -234,6 +255,7 @@ export default function CarProfilePage({ staffName, role }) {
           { id:"history",     label:`Rentals Log (${rentalHistory.length})` },
           { id:"statuslog",   label:`Maintenance Log (${maintenanceHistory.length})` },
           { id:"garage",      label:"Garage Updates" },
+          { id:"fuel",        label:`Fuel (${fuel.length})` },
           { id:"notes",       label:`Notes (${noteHistory.length})` },
           { id:"tracking",    label:"Tracking" },
         ].map(t => (
@@ -247,6 +269,7 @@ export default function CarProfilePage({ staffName, role }) {
             {[
               ["Plate",car.plate],["Type",car.type],["Status",car.status],["Location",car.location||"—"],
               ["Driver",car.driver||"—"],["Fuel Out",fuelVal(car.fuelOut)||"—"],["KM Out",car.kmOut?Number(car.kmOut).toLocaleString("en-US"):"—"],
+              ["Avg KM per Fueling",avgKmPerFueling!=null?`${avgKmPerFueling.toLocaleString("en-US")} km`:"—"],
               ["Current Client",car.currentClient||"—"],["Client Phone",car.clientPhone||"—"],
               ["Booked From",fmtDate(car.bookedFrom)],["Return Date",fmtDate(car.returnDate)],
               ["Payment Status",car.paymentStatus||"—"],["Amount",car.amount?fmtMoney(car.amount,car.currency):"—"],
@@ -366,6 +389,12 @@ export default function CarProfilePage({ staffName, role }) {
         </div>
       )}
 
+      {activeTab==="fuel" && (
+        <div style={S.tabContent}>
+          <FuelTab fuel={fuel} avgKm={avgKmPerFueling} />
+        </div>
+      )}
+
       {activeTab==="notes" && (
         <div style={S.tabContent}>
           {noteToast && <div style={S.toast}>{noteToast}</div>}
@@ -394,6 +423,45 @@ export default function CarProfilePage({ staffName, role }) {
     </div>
   );
 }
+
+// Fed data loaded by the parent (unlike TrackingTab/CarMaintenanceTab below,
+// which fetch their own) — the average also needs to appear in Overview,
+// which is always visible, so the fetch has to happen up front either way.
+function isJunkAmount(a) {
+  if (a === null || a === undefined || String(a).trim() === "") return true;
+  return Number.isNaN(Number(a));
+}
+function FuelTab({ fuel, avgKm }) {
+  if (fuel.length === 0) {
+    return <p style={S.empty}>No fuel records for this car yet.</p>;
+  }
+  return (
+    <div>
+      <div style={{ ...S.statBox, textAlign:"left", marginBottom:"1.25rem", display:"inline-block" }}>
+        <div style={S.statLbl}>Average KM per Fueling</div>
+        <div style={S.statVal}>
+          {avgKm != null ? `${avgKm.toLocaleString("en-US")} km` : "—"}
+        </div>
+        {avgKm == null && <p style={{ fontSize:11.5, color:"#999", margin:"4px 0 0" }}>Need at least two fill-ups with an odometer reading to calculate this.</p>}
+      </div>
+
+      <table style={S.table}>
+        <thead><tr>{["Date","Product","KM","Amount"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
+        <tbody>
+          {fuel.map((f,i) => (
+            <tr key={i} style={{ borderBottom:"1px solid #f3f4f6" }}>
+              <td data-label="Date" style={{ ...S.td,fontSize:12,color:"#888" }}>{fmtDate(f.date)}</td>
+              <td data-label="Product" style={S.td}>{f.product || "—"}</td>
+              <td data-label="KM" style={S.td}>{f.currentKm != null ? f.currentKm.toLocaleString("en-US") : "—"}</td>
+              <td data-label="Amount" style={S.td}>{isJunkAmount(f.amount) ? "—" : `TZS ${Number(f.amount).toLocaleString("en-US")}`}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 
 // Self-contained: fetches its own data, only when this tab is actually
 // selected (CarProfilePage's own load() doesn't touch tracker data — this
