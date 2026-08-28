@@ -115,6 +115,29 @@ export default function CarProfilePage({ staffName, role }) {
     return Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
   }, [fuel]);
 
+  // Average KM per Litre: distance-weighted (total km / total litres), not
+  // an average of per-fill ratios, so a handful of short intervals can't
+  // skew it. Pairs the km driven since the PREVIOUS fill with the litres
+  // put in at THIS fill (the fuel that covered that distance) — only counts
+  // when both are genuine numbers, which naturally excludes every "Full
+  // Tank" text-only row without touching the underlying data.
+  const avgKmPerLitre = useMemo(() => {
+    const withKm = fuel
+      .filter(f => typeof f.currentKm === "number" && !Number.isNaN(f.currentKm))
+      .sort((a, b) => a.currentKm - b.currentKm);
+    let sumKm = 0, sumLitres = 0;
+    for (let i = 1; i < withKm.length; i++) {
+      const kmGap = withKm[i].currentKm - withKm[i - 1].currentKm;
+      const litresNum = Number(withKm[i].litres);
+      if (kmGap > 0 && !Number.isNaN(litresNum) && litresNum > 0) {
+        sumKm += kmGap;
+        sumLitres += litresNum;
+      }
+    }
+    if (sumLitres === 0) return null;
+    return Math.round((sumKm / sumLitres) * 10) / 10;
+  }, [fuel]);
+
 
   const handleSaveNote = async () => {
     if (!note.trim()) return;
@@ -270,6 +293,7 @@ export default function CarProfilePage({ staffName, role }) {
               ["Plate",car.plate],["Type",car.type],["Status",car.status],["Location",car.location||"—"],
               ["Driver",car.driver||"—"],["Fuel Out",fuelVal(car.fuelOut)||"—"],["KM Out",car.kmOut?Number(car.kmOut).toLocaleString("en-US"):"—"],
               ["Avg KM per Fueling",avgKmPerFueling!=null?`${avgKmPerFueling.toLocaleString("en-US")} km`:"—"],
+              ["Avg KM per Litre",avgKmPerLitre!=null?`${avgKmPerLitre} km/L`:"—"],
               ["Current Client",car.currentClient||"—"],["Client Phone",car.clientPhone||"—"],
               ["Booked From",fmtDate(car.bookedFrom)],["Return Date",fmtDate(car.returnDate)],
               ["Payment Status",car.paymentStatus||"—"],["Amount",car.amount?fmtMoney(car.amount,car.currency):"—"],
@@ -391,7 +415,7 @@ export default function CarProfilePage({ staffName, role }) {
 
       {activeTab==="fuel" && (
         <div style={S.tabContent}>
-          <FuelTab fuel={fuel} avgKm={avgKmPerFueling} />
+          <FuelTab fuel={fuel} avgKm={avgKmPerFueling} avgKmL={avgKmPerLitre} />
         </div>
       )}
 
@@ -431,28 +455,38 @@ function isJunkAmount(a) {
   if (a === null || a === undefined || String(a).trim() === "") return true;
   return Number.isNaN(Number(a));
 }
-function FuelTab({ fuel, avgKm }) {
+function FuelTab({ fuel, avgKm, avgKmL }) {
   if (fuel.length === 0) {
     return <p style={S.empty}>No fuel records for this car yet.</p>;
   }
   return (
     <div>
-      <div style={{ ...S.statBox, textAlign:"left", marginBottom:"1.25rem", display:"inline-block" }}>
-        <div style={S.statLbl}>Average KM per Fueling</div>
-        <div style={S.statVal}>
-          {avgKm != null ? `${avgKm.toLocaleString("en-US")} km` : "—"}
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:"1.25rem" }}>
+        <div style={{ ...S.statBox, textAlign:"left" }}>
+          <div style={S.statLbl}>Average KM per Fueling</div>
+          <div style={S.statVal}>
+            {avgKm != null ? `${avgKm.toLocaleString("en-US")} km` : "—"}
+          </div>
+          {avgKm == null && <p style={{ fontSize:11.5, color:"#999", margin:"4px 0 0" }}>Need at least two fill-ups with an odometer reading.</p>}
         </div>
-        {avgKm == null && <p style={{ fontSize:11.5, color:"#999", margin:"4px 0 0" }}>Need at least two fill-ups with an odometer reading to calculate this.</p>}
+        <div style={{ ...S.statBox, textAlign:"left" }}>
+          <div style={S.statLbl}>Average KM per Litre</div>
+          <div style={S.statVal}>
+            {avgKmL != null ? `${avgKmL} km/L` : "—"}
+          </div>
+          {avgKmL == null && <p style={{ fontSize:11.5, color:"#999", margin:"4px 0 0" }}>Need fill-ups with a real litres amount, not just "Full Tank".</p>}
+        </div>
       </div>
 
       <table style={S.table}>
-        <thead><tr>{["Date","Product","KM","Amount"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
+        <thead><tr>{["Date","Product","KM","Litres","Amount"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
         <tbody>
           {fuel.map((f,i) => (
             <tr key={i} style={{ borderBottom:"1px solid #f3f4f6" }}>
               <td data-label="Date" style={{ ...S.td,fontSize:12,color:"#888" }}>{fmtDate(f.date)}</td>
               <td data-label="Product" style={S.td}>{f.product || "—"}</td>
               <td data-label="KM" style={S.td}>{f.currentKm != null ? f.currentKm.toLocaleString("en-US") : "—"}</td>
+              <td data-label="Litres" style={S.td}>{f.litres || "—"}</td>
               <td data-label="Amount" style={S.td}>{isJunkAmount(f.amount) ? "—" : `TZS ${Number(f.amount).toLocaleString("en-US")}`}</td>
             </tr>
           ))}

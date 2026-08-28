@@ -15,7 +15,8 @@ import * as writes from "../lib/writes.js";
 import * as files from "../lib/files.js";
 import { health } from "../lib/health.js";
 import { extractInvoiceData } from "../lib/invoiceScan.js";
-import { requireMaintenanceEditAccess } from "../lib/core.js";
+import { extractFuelReceiptData } from "../lib/fuelReceiptScan.js";
+import { requireMaintenanceEditAccess, requireFuelVoucherAccess } from "../lib/core.js";
 
 // Optional. Only used for actions this API doesn't implement — leave it unset
 // once the Apps Script is retired.
@@ -98,6 +99,12 @@ const WRITES = {
     return { success: true, data };
   },
   confirmInvoiceScan: writes.confirmInvoiceScan,
+  scanFuelReceipt: async (body) => {
+    await requireFuelVoucherAccess(body.staffName);
+    const data = await extractFuelReceiptData({ imageBase64: body.imageBase64, mimeType: body.mimeType });
+    return { success: true, data };
+  },
+  confirmFuelReceipts: writes.confirmFuelReceipts,
   verifyStaff: writes.verifyStaff,
   checkOut: writes.checkOut,
   logMultiLegTransfer: writes.logMultiLegTransfer,

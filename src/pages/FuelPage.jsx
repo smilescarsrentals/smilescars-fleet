@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { get, post } from "../lib/api";
 import DateField from "../components/DateField";
+import { compressImage } from "../lib/imageCompress";
 
 // ── Helpers ──────────────────────────────────────────────────
 function fmtNum(n) {
@@ -636,6 +637,184 @@ function EditFuelModal({ entry, fleet, staffName, onClose, onSaved }) {
 }
 
 // ── Main Page ────────────────────────────────────────────────
+// Receipts print the date as DD-MM-YYYY ("26-08-2026") — converts to the
+// YYYY-MM-DD a <input type="date"> needs. Returns "" (never a guess) for
+// anything that doesn't cleanly match, leaving it for manual entry.
+function parseReceiptDate(str) {
+  if (!str) return "";
+  const m = String(str).match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (!m) return "";
+  const [, d, mo, y] = m;
+  return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+
+// One row per uploaded receipt photo — OCR'd, then reviewed/corrected by a
+// human before anything saves. The plate is the one field never trusted
+// from OCR alone: it's pre-filled as a starting guess into the same
+// PlateSearch picker used elsewhere, so confirming it means actually
+// picking a real fleet plate, not accepting raw handwriting.
+function BulkFuelScanModal({ fleet, staffName, onClose, onSaved }) {
+  const [rows, setRows] = useState([]); // { id, previewUrl, plate, date, product, litres, amount, litresConfidence, amountConfidence, plateConfidence, scanError }
+  const [scanning, setScanning] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [savedCount, setSavedCount] = useState(null);
+
+  const plateOptions = useMemo(() => (fleet || []).map(c => c.plate).filter(Boolean).sort(), [fleet]);
+
+  const handleFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    e.target.value = ""; // allow re-selecting the same file(s) later
+    setError(""); setScanning(true);
+
+    for (const file of files) {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      let compressed;
+      try {
+        compressed = await compressImage(file);
+      } catch {
+        setRows(rs => [...rs, { id, previewUrl: URL.createObjectURL(file), scanError: "Could not read that image." }]);
+        continue;
+      }
+      const previewUrl = URL.createObjectURL(file);
+      try {
+        const res = await post({ action: "scanFuelReceipt", imageBase64: compressed.base64, mimeType: compressed.mimeType, staffName });
+        const d = res.data;
+        setRows(rs => [...rs, {
+          id, previewUrl,
+          plate: d.plate || "", plateConfidence: d.plateConfidence,
+          date: parseReceiptDate(d.receiptDate),
+          product: d.product && ["Diesel", "Super", "Unleaded"].includes(d.product) ? d.product : (d.product || ""),
+          litres: d.litres != null ? String(d.litres) : "",
+          litresConfidence: d.litresConfidence,
+          amount: d.totalAmount != null ? String(d.totalAmount) : "",
+          amountConfidence: d.totalAmountConfidence,
+        }]);
+      } catch (ex) {
+        setRows(rs => [...rs, { id, previewUrl, scanError: ex.message }]);
+      }
+    }
+    setScanning(false);
+  };
+
+  const updateRow = (id, patch) => setRows(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r));
+  const removeRow = (id) => setRows(rs => rs.filter(r => r.id !== id));
+
+  const validRows = rows.filter(r => !r.scanError);
+  const readyToSave = validRows.length > 0 && validRows.every(r => r.plate && r.date && (r.litres || r.amount));
+
+  const handleSaveAll = async () => {
+    if (!readyToSave) { setError("Every receipt needs a plate, date, and at least a litres or amount value."); return; }
+    setSaving(true); setError("");
+    try {
+      const receipts = validRows.map(r => ({ plate: r.plate, date: r.date, product: r.product || "", litres: r.litres || "", amount: r.amount || "" }));
+      const res = await post({ action: "confirmFuelReceipts", staffName, receipts });
+      if (!res.success) throw new Error(res.error || "Save failed");
+      setSavedCount(receipts.length);
+      onSaved?.();
+    } catch (ex) {
+      setError(ex.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (savedCount != null) {
+    return (
+      <div style={S.overlay} onClick={onClose}>
+        <div style={{ ...S.modal, maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+          <div style={S.mHead}><span style={{ fontWeight: 700 }}>Done</span><button type="button" style={S.closeBtn} onClick={onClose}>✕</button></div>
+          <div style={S.mBody}>
+            <p style={{ fontSize: 14 }}>✅ Saved {savedCount} receipt{savedCount === 1 ? "" : "s"} — matched to existing fuel entries where one was waiting, created new ones otherwise.</p>
+          </div>
+          <div style={S.mFoot}><button type="button" style={S.saveBtn} onClick={onClose}>Close</button></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modal, maxWidth: 720 }} onClick={e => e.stopPropagation()}>
+        <div style={S.mHead}>
+          <span style={{ fontWeight: 700 }}>Bulk Upload Fuel Receipts</span>
+          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={S.mBody}>
+          <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: "0 0 12px" }}>
+            Select all of today's receipt photos at once. Each one is read automatically — check the plate especially, since it's handwritten on the receipt and OCR can misread it.
+          </p>
+          <label style={{ ...S.addBtn, display: "inline-block", cursor: "pointer" }}>
+            {scanning ? "Reading receipts…" : "＋ Choose Photos"}
+            <input type="file" accept="image/*" multiple style={{ display: "none" }} disabled={scanning} onChange={handleFiles} />
+          </label>
+
+          {rows.length > 0 && (
+            <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+              {rows.map(r => (
+                <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10, display: "flex", gap: 10 }}>
+                  <img src={r.previewUrl} alt="" style={{ width: 60, height: 80, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />
+                  {r.scanError ? (
+                    <div style={{ flex: 1, fontSize: 12.5, color: "var(--red)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span>{r.scanError}</span>
+                      <button type="button" style={S.iconBtn} onClick={() => removeRow(r.id)}>🗑</button>
+                    </div>
+                  ) : (
+                    <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      <div>
+                        <label style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                          Plate {r.plateConfidence === "low" && <span style={{ color: "var(--amber, #b45309)" }}>(check this — handwriting unclear)</span>}
+                        </label>
+                        <PlateSearch plates={plateOptions} value={r.plate} onChange={p => updateRow(r.id, { plate: p })} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Date</label>
+                        <input type="date" style={S.input} value={r.date} onChange={e => updateRow(r.id, { date: e.target.value })} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Product</label>
+                        <select style={S.input} value={r.product} onChange={e => updateRow(r.id, { product: e.target.value })}>
+                          <option value="">— Select —</option>
+                          <option value="Diesel">Diesel</option>
+                          <option value="Super">Super</option>
+                          <option value="Unleaded">Unleaded</option>
+                        </select>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            Litres {r.litresConfidence === "low" && r.litres && <span style={{ color: "var(--amber, #b45309)" }}>⚠</span>}
+                          </label>
+                          <input type="number" style={S.input} value={r.litres} onChange={e => updateRow(r.id, { litres: e.target.value })} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            Amount {r.amountConfidence === "low" && r.amount && <span style={{ color: "var(--amber, #b45309)" }}>⚠</span>}
+                          </label>
+                          <input type="number" style={S.input} value={r.amount} onChange={e => updateRow(r.id, { amount: e.target.value })} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {!r.scanError && <button type="button" style={{ ...S.iconBtn, alignSelf: "flex-start" }} onClick={() => removeRow(r.id)}>🗑</button>}
+                </div>
+              ))}
+            </div>
+          )}
+          {error && <p style={S.error}>{error}</p>}
+        </div>
+        <div style={S.mFoot}>
+          <button type="button" style={S.cancelBtn} onClick={onClose}>Cancel</button>
+          <button type="button" style={{ ...S.saveBtn, opacity: (saving || !readyToSave) ? 0.65 : 1 }} disabled={saving || !readyToSave} onClick={handleSaveAll}>
+            {saving ? "Saving…" : `Save ${validRows.length || ""} Receipt${validRows.length === 1 ? "" : "s"}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function FuelPage({ staffName, role, fuelAccess }) {
   const isAdmin   = role === "Admin" || role === "Manager";
   const hasAccess = Array.isArray(fuelAccess) && fuelAccess.map(n => n.trim().toLowerCase()).includes(staffName.trim().toLowerCase());
@@ -651,6 +830,11 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
   const [filterProduct, setFilterProduct] = useState("");
   const [filterFrom,    setFilterFrom]    = useState("");
   const [filterTo,      setFilterTo]      = useState("");
+  const [showBulkScan,  setShowBulkScan]  = useState(false);
+  // Whether THIS staff member can use the fuel-voucher bulk upload — Admin
+  // always can (see requireFuelVoucherAccess on the backend); everyone else
+  // needs the ⛽ flag granted in Admin Panel's Staff tab.
+  const [canBulkScan,   setCanBulkScan]   = useState(role === "Admin");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -659,9 +843,14 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
       if (fuelRes.success)     setEntries(fuelRes.data   || []);
       if (fleetRes.success)    setFleet(fleetRes.data    || []);
       if (subHireRes.success)  setSubHire(subHireRes.data || []);
+      if (role !== "Admin") {
+        const staffRes = await get("getStaffList");
+        const me = (staffRes.staff || []).find(s => s.name.trim().toLowerCase() === staffName.trim().toLowerCase());
+        setCanBulkScan(!!me?.canIssueFuelVoucher);
+      }
     } catch {}
     setLoading(false);
-  }, []);
+  }, [role, staffName]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -732,6 +921,9 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
         </div>
         <div className="sc-hf-row3">
           <DateField label="To" style={S.filterInput} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
+          {canBulkScan && (
+            <button type="button" className="btn btn-ghost" onClick={() => setShowBulkScan(true)}>📎 Bulk Upload Receipts</button>
+          )}
           <button type="button" className="btn btn-add" onClick={() => hasAccess ? setShowAdd(true) : setAccessDenied(true)}>＋ Add New</button>
         </div>
         {(filterPlate || filterProduct || filterFrom || filterTo) && (
@@ -828,6 +1020,11 @@ export default function FuelPage({ staffName, role, fuelAccess }) {
         <EditFuelModal
           entry={editEntry} fleet={fleet} staffName={staffName}
           onClose={() => setEditEntry(null)} onSaved={load} />
+      )}
+      {showBulkScan && (
+        <BulkFuelScanModal
+          fleet={fleet} staffName={staffName}
+          onClose={() => setShowBulkScan(false)} onSaved={load} />
       )}
     </div>
   );
