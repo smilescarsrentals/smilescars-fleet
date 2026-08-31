@@ -150,6 +150,9 @@ function StaffTab({ staffName }) {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [busyFuel, setBusyFuel] = useState(null); // name of row mid-save
+  const [busyLocation, setBusyLocation] = useState(null);
+  const [busyHr, setBusyHr] = useState(null);
+  const [busyCoo, setBusyCoo] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -174,6 +177,30 @@ function StaffTab({ staffName }) {
     } catch (e) { alert(e.message); }
     finally { setBusyFuel(null); }
   };
+  const changeLocation = async (name, location) => {
+    setBusyLocation(name);
+    try {
+      await api.setStaffLocation({ name, location, staffName });
+      setStaff(list => list.map(s => s.name === name ? { ...s, location } : s));
+    } catch (e) { alert(e.message); }
+    finally { setBusyLocation(null); }
+  };
+  const changeHrAccess = async (name, access) => {
+    setBusyHr(name);
+    try {
+      await api.setHRAccess({ name, access, staffName });
+      setStaff(list => list.map(s => s.name === name ? { ...s, hrAccess: access } : s));
+    } catch (e) { alert(e.message); }
+    finally { setBusyHr(null); }
+  };
+  const toggleCoo = async (name, isCoo) => {
+    setBusyCoo(name);
+    try {
+      await api.setIsCoo({ name, enabled: !isCoo, staffName });
+      setStaff(list => list.map(s => s.name === name ? { ...s, isCoo: !isCoo } : s));
+    } catch (e) { alert(e.message); }
+    finally { setBusyCoo(null); }
+  };
 
   return (
     <div>
@@ -182,11 +209,35 @@ function StaffTab({ staffName }) {
       {loading ? <p style={{ fontSize: 13, color: "#888" }}>Loading…</p> : (
         <div style={S.listBox}>
           {staff.map(s => (
-            <div key={s.name} style={{ ...S.listRow, opacity: s.active ? 1 : 0.55 }}>
-              <div style={{ flex: 1 }}>
+            <div key={s.name} style={{ ...S.listRow, opacity: s.active ? 1 : 0.55, flexWrap: "wrap", rowGap: 6 }}>
+              <div style={{ flex: 1, minWidth: 140 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
                 <div style={{ fontSize: 11, color: "#888" }}>{s.role}{!s.active && " · Deactivated"}</div>
               </div>
+              <select value={s.location || ""} disabled={busyLocation === s.name}
+                onChange={e => changeLocation(s.name, e.target.value)}
+                style={{ fontSize: 11, padding: "4px 6px", borderRadius: 6, border: "1.5px solid #e5e7eb", fontFamily: "inherit" }}
+                title="Branch location">
+                <option value="">No location</option>
+                <option value="Dar es Salaam">Dar es Salaam</option>
+                <option value="Zanzibar">Zanzibar</option>
+                <option value="Arusha">Arusha</option>
+                <option value="Mwanza">Mwanza</option>
+              </select>
+              <select value={s.hrAccess || "None"} disabled={busyHr === s.name}
+                onChange={e => changeHrAccess(s.name, e.target.value)}
+                style={{ fontSize: 11, padding: "4px 6px", borderRadius: 6, border: "1.5px solid #e5e7eb", fontFamily: "inherit" }}
+                title="HR module access">
+                <option value="None">HR: None</option>
+                <option value="View">HR: View</option>
+                <option value="Edit">HR: Edit</option>
+              </select>
+              <button type="button" disabled={busyCoo === s.name}
+                style={{ ...S.miniBtn, opacity: s.isCoo ? 1 : 0.3, filter: s.isCoo ? "none" : "grayscale(100%)" }}
+                onClick={() => toggleCoo(s.name, s.isCoo)}
+                title={s.isCoo ? `${s.name} is the COO approver — click to revoke` : `${s.name} is not the COO approver — click to grant`}>
+                👔
+              </button>
               <button type="button" disabled={busyFuel === s.name}
                 style={{ ...S.miniBtn, opacity: s.canIssueFuelVoucher ? 1 : 0.3, filter: s.canIssueFuelVoucher ? "none" : "grayscale(100%)" }}
                 onClick={() => toggleFuelVoucher(s.name, s.canIssueFuelVoucher)}

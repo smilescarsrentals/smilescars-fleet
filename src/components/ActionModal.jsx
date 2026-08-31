@@ -188,6 +188,10 @@ export function AddGarageInline({ role, staffName, onAdded }) {
 // Unrecognized/one-off locations default to Dar es Salaam (HQ), same as
 // every non-Zanzibar/Arusha/Mwanza fleet.location value seen in practice.
 export const GARAGE_CITIES = ["Dar es Salaam", "Zanzibar", "Arusha", "Mwanza"];
+// HR module pilot: which branches currently have it enabled. Extending to
+// another branch later is just adding it to this array — no other logic
+// needs to change.
+export const HR_ENABLED_LOCATIONS = ["Dar es Salaam"];
 export function cityForCarLocation(location) {
   const loc = (location || "").toLowerCase();
   if (loc.includes("zanzibar")) return "Zanzibar";

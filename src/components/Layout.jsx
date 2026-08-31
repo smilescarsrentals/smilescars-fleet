@@ -4,6 +4,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { pushSupported, pushPermission, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from "../lib/push";
 import AdminPanel from "./AdminPanel";
+import { HR_ENABLED_LOCATIONS } from "./ActionModal";
 
 // "2026-07-22" via new Date(str) parses as UTC midnight, not local midnight —
 // in a UTC+3 timezone (Tanzania) that silently adds most of a day to every
@@ -61,6 +62,8 @@ const Icon = {
   bell: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M18 8a6 6 0 10-12 0c0 6-2.5 7.5-2.5 7.5h17S18 14 18 8z"/><path d="M10.3 20a1.8 1.8 0 003.4 0"/></svg>,
   menu: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M3 6h18M3 12h18M3 18h18"/></svg>,
   logout: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>,
+  myhr: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/><path d="M12 13.5v-2"/></svg>,
+  hr: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.4 2.5-5.8 5.5-5.8s5.5 2.4 5.5 5.8"/><path d="M17 4.5a3 3 0 010 6"/><path d="M15.5 14.2a5.6 5.6 0 015.5 5.8"/></svg>,
 };
 
 const NAV_GROUPS = [
@@ -82,6 +85,10 @@ const NAV_GROUPS = [
   { label: "Safety", items: [
     { to: "/blacklist", key: "blacklist", label: "Blacklist", icon: Icon.blacklist },
     { to: "/drivers",   key: "drivers",   label: "Drivers",   icon: Icon.drivers },
+  ]},
+  { label: "HR", items: [
+    { to: "/my-hr", key: "myhr", label: "My HR", icon: Icon.myhr },
+    { to: "/hr",    key: "hr",   label: "HR",    icon: Icon.hr },
   ]},
 ];
 
@@ -371,14 +378,28 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const [othersUpcomingCount, setOthersUpcomingCount] = useState(0); // Admin/Manager only — count of other staff's, no details
 
   const canViewAll = role === "Admin" || role === "Manager";
+  const [myLocation, setMyLocation] = useState("");
+  const [myHrAccess, setMyHrAccess] = useState("None");
+  useEffect(() => {
+    api.getStaffList().then(res => {
+      const me = (res.staff || []).find(s => s.name.trim().toLowerCase() === staffName.trim().toLowerCase());
+      setMyLocation(me?.location || "");
+      setMyHrAccess(me?.hrAccess || "None");
+    }).catch(() => {});
+  }, [staffName]);
+  const hasMyHrAccess = role === "Admin" || HR_ENABLED_LOCATIONS.includes(myLocation);
+  const hasHrAccess = role === "Admin" || myHrAccess !== "None";
+
   const visibleNavGroups = role === "Garage Manager"
     ? NAV_GROUPS
         .map(group => ({ ...group, items: group.items.filter(i => i.key === "garage" || i.key === "fleet") }))
         .filter(group => group.items.length > 0)
     : canViewAll
     ? NAV_GROUPS
+        .map(group => ({ ...group, items: group.items.filter(i => (i.key !== "myhr" || hasMyHrAccess) && (i.key !== "hr" || hasHrAccess)) }))
+        .filter(group => group.items.length > 0)
     : NAV_GROUPS
-        .map(group => ({ ...group, items: group.items.filter(i => i.key !== "garage" && i.key !== "tracking") }))
+        .map(group => ({ ...group, items: group.items.filter(i => i.key !== "garage" && i.key !== "tracking" && (i.key !== "myhr" || hasMyHrAccess) && (i.key !== "hr" || hasHrAccess)) }))
         .filter(group => group.items.length > 0);
 
   // Load reservation-related notification data. Runs on mount and every 60s
