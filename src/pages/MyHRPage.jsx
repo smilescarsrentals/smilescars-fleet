@@ -87,11 +87,13 @@ export default function MyHRPage({ staffName, role }) {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(role === "Admin");
   const [requests, setRequests] = useState([]);
+  const [disciplinary, setDisciplinary] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [busyId, setBusyId] = useState(null);
 
   const loadRequests = () => {
     api.getMyLeaveRequests(staffName).then(res => setRequests(res.data || [])).catch(() => {});
+    api.getMyDisciplinaryRecords(staffName).then(res => setDisciplinary(res.data || [])).catch(() => {});
   };
 
   useEffect(() => {
@@ -162,6 +164,23 @@ export default function MyHRPage({ staffName, role }) {
                   Cancel request
                 </button>
               )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h2 style={{ fontSize: 18, fontWeight: 700, margin: "28px 0 12px" }}>My Disciplinary Record</h2>
+      {disciplinary.length === 0 ? (
+        <p style={{ fontSize: 13, color: "#888" }}>Nothing on file.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {disciplinary.map(d => (
+            <div key={d.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{d.type}</span>
+                <span style={{ fontSize: 11.5, color: "#888" }}>{fmtDate(d.date)}</span>
+              </div>
+              {d.description && <p style={{ fontSize: 12, color: "#555", margin: "4px 0 0" }}>{d.description}</p>}
             </div>
           ))}
         </div>
