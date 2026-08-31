@@ -716,7 +716,9 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
               <div style={S.field}><label style={S.label}>Returned Date</label>
                 <input style={S.input} type="date" value={actualReturn} onChange={e => setActualReturn(e.target.value)} /></div>
               <div style={S.field}><label style={S.label}>KM In</label>
-                <input style={S.input} type="text" inputMode="numeric" value={kmIn} onChange={e => setKmIn(fmt(e.target.value))} placeholder="e.g. 45,300" /></div>
+                <input style={S.input} type="text" inputMode="numeric" value={kmIn} onChange={e => setKmIn(fmt(e.target.value))} placeholder="e.g. 45,300" />
+                {car.kmOut && <p style={{ fontSize: 11.5, color: "#94a3b8", margin: "4px 0 0" }}>KM Out at checkout: {car.kmOut} km</p>}
+              </div>
             </div>
             {car.bookingType === "Transfer" && (
               <div style={S.field}><label style={S.label}>Actual Time</label>
@@ -783,7 +785,9 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
           {/* Mark Available */}
           {isAvailable && (
             <div style={S.field}><label style={S.label}>KM Out (from garage)</label>
-              <input style={S.input} type="text" inputMode="numeric" value={kmOut} onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" /></div>
+              <input style={S.input} type="text" inputMode="numeric" value={kmOut} onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" />
+              {car.kmOut && <p style={{ fontSize: 11.5, color: "#94a3b8", margin: "4px 0 0" }}>Recorded when sent to the garage: {car.kmOut} km — check the new reading makes sense against this.</p>}
+            </div>
           )}
 
           {/* Staff Use */}

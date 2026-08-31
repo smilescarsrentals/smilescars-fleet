@@ -486,6 +486,7 @@ function MarkAvailableModal({ log, staffName, onClose, onDone }) {
   const [location, setLocation] = useState("");
   const [currentKm, setCurrentKm] = useState("");
   const [carClient, setCarClient] = useState("");
+  const [carKmOut, setCarKmOut] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -495,6 +496,7 @@ function MarkAvailableModal({ log, staffName, onClose, onDone }) {
       setLocations(configRes?.locations || []);
       const car = (fleetRes?.data || []).find(c => c.plate === log.plate);
       setCarClient(car?.currentClient || "");
+      setCarKmOut(car?.kmOut || "");
     }).finally(() => setLoading(false));
   }, []);
 
@@ -526,6 +528,7 @@ function MarkAvailableModal({ log, staffName, onClose, onDone }) {
             <input style={S.input} value={currentKm} placeholder="e.g. 84,200"
               onChange={e => setCurrentKm(e.target.value)}
               onBlur={e => setCurrentKm(fmtOdometer(e.target.value).replace(" Km", ""))} />
+            {carKmOut && <p style={{ fontSize: 11.5, color: "var(--text-faint)", margin: "4px 0 0" }}>Recorded when sent to the garage: {carKmOut} km — check the new reading makes sense against this.</p>}
           </div>
 
           <div style={S.field}>
