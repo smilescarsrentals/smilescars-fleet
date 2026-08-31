@@ -145,6 +145,8 @@ function LeaveRequestsTab({ staffName, canReviewHR, isCoo }) {
   const [busyId, setBusyId] = useState(null);
   const [notesDraft, setNotesDraft] = useState({});
 
+  const canDelete = canReviewHR || isCoo;
+
   const load = () => {
     setLoading(true);
     api.getHRLeaveRequests(staffName).then(res => setRequests(res.data || [])).catch(() => {}).finally(() => setLoading(false));
@@ -159,6 +161,14 @@ function LeaveRequestsTab({ staffName, canReviewHR, isCoo }) {
       else await api.reviewLeaveRequestCOO({ staffName, requestId: id, decision, notes });
       load();
     } catch (e) { alert(e.message); }
+    finally { setBusyId(null); }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm("Delete this leave request permanently? This cannot be undone.")) return;
+    setBusyId(id);
+    try { await api.deleteLeaveRequest({ staffName, requestId: id }); load(); }
+    catch (e) { alert(e.message); }
     finally { setBusyId(null); }
   };
 
@@ -178,7 +188,15 @@ function LeaveRequestsTab({ staffName, canReviewHR, isCoo }) {
                 <div style={{ fontSize: 11.5, color: "#888" }}>{fmtDate(r.startDate)} to {fmtDate(r.endDate)} · {r.daysRequested} day{r.daysRequested === 1 ? "" : "s"}</div>
                 {r.reason && <div style={{ fontSize: 11.5, color: "#888", marginTop: 2 }}>{r.reason}</div>}
               </div>
-              <StatusBadge status={r.status} />
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <StatusBadge status={r.status} />
+                {canDelete && (
+                  <button type="button" disabled={busyId === r.id} onClick={() => remove(r.id)} title="Delete this request permanently"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 13, padding: 0 }}>
+                    🗑
+                  </button>
+                )}
+              </div>
             </div>
             {r.hrReviewedBy && <p style={{ fontSize: 11, color: "#888", margin: "6px 0 0" }}>HR: {r.hrReviewedBy}{r.hrNotes ? ` — ${r.hrNotes}` : ""}</p>}
             {r.cooReviewedBy && <p style={{ fontSize: 11, color: "#888", margin: "2px 0 0" }}>COO: {r.cooReviewedBy}{r.cooNotes ? ` — ${r.cooNotes}` : ""}</p>}

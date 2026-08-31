@@ -407,6 +407,16 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
         .map(group => ({ ...group, items: group.items.filter(i => i.key !== "garage" && i.key !== "tracking" && (i.key !== "myhr" || hasMyHrAccess) && (i.key !== "hr" || hasHrAccess)) }))
         .filter(group => group.items.length > 0);
 
+  // The reservation reminder banner is only relevant to the operationally-
+  // immediate, rental-facing pages (Main group: Dashboard/Fleet/Reservations/
+  // Leads/Garage/Clients) — a pickup reminder is a distraction while working
+  // in Safety, Operations, or HR pages, which are about unrelated tasks.
+  // Routes not in any group (e.g. a car profile detail page) default to
+  // showing it, same as Main.
+  const HIDE_RESERVATION_BANNER_GROUPS = ["Safety", "Operations", "HR"];
+  const currentNavGroup = NAV_GROUPS.find(g => g.items.some(i => location.pathname === i.to || location.pathname.startsWith(i.to + "/")))?.label;
+  const showReservationBanner = !HIDE_RESERVATION_BANNER_GROUPS.includes(currentNavGroup);
+
   // Load reservation-related notification data. Runs on mount and every 60s
   // so the "pickup within 24h" banner and nav badge count stay current
   // without requiring a manual page refresh.
@@ -684,7 +694,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
         {/* Personal reservation reminder — pickup within 24h, not yet checked out.
             Own reservations show full detail; Admin/Manager additionally see a
             count-only line for other staff's upcoming reservations. */}
-        {(myUpcoming.length > 0 || othersUpcomingCount > 0) && (
+        {showReservationBanner && (myUpcoming.length > 0 || othersUpcomingCount > 0) && (
           <div style={{ background:"var(--sc-overdue-bg)", borderBottom:`1.5px solid var(--sc-overdue-border)`, padding:"8px 16px" }}>
             <div style={{ maxWidth:1280, margin:"0 auto" }}>
               {myUpcoming.map(r => {

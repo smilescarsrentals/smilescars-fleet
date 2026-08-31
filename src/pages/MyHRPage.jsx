@@ -161,7 +161,7 @@ export default function MyHRPage({ staffName, role }) {
               {r.status === "Pending HR" && (
                 <button type="button" disabled={busyId === r.id} onClick={() => cancelRequest(r.id)}
                   style={{ marginTop: 8, fontSize: 11.5, color: "#dc2626", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                  Cancel request
+                  Revoke request
                 </button>
               )}
             </div>

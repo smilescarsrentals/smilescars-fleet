@@ -102,6 +102,7 @@ export const api = {
   cancelLeaveRequest:     (body) => post({ action: "cancelLeaveRequest", ...body }),
   reviewLeaveRequestHR:   (body) => post({ action: "reviewLeaveRequestHR", ...body }),
   reviewLeaveRequestCOO:  (body) => post({ action: "reviewLeaveRequestCOO", ...body }),
+  deleteLeaveRequest:     (body) => post({ action: "deleteLeaveRequest", ...body }),
   getDrivers:             ()     => get("getDrivers"),
   setStaffActive:        (body)  => post({ action: "setStaffActive",         ...body }),
   addDriverWithPhone:     (body) => post({ action: "addDriverWithPhone",     ...body }),

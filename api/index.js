@@ -182,6 +182,7 @@ const WRITES = {
   cancelLeaveRequest: writes.cancelLeaveRequest,
   reviewLeaveRequestHR: writes.reviewLeaveRequestHR,
   reviewLeaveRequestCOO: writes.reviewLeaveRequestCOO,
+  deleteLeaveRequest: writes.deleteLeaveRequest,
   addDisciplinaryRecord: writes.addDisciplinaryRecord,
   seedOnboardingChecklist: writes.seedOnboardingChecklist,
   addOnboardingItem: writes.addOnboardingItem,
