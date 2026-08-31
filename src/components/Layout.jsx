@@ -380,15 +380,20 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const canViewAll = role === "Admin" || role === "Manager";
   const [myLocation, setMyLocation] = useState("");
   const [myHrAccess, setMyHrAccess] = useState("None");
+  const [myIsCoo, setMyIsCoo] = useState(false);
   useEffect(() => {
     api.getStaffList().then(res => {
       const me = (res.staff || []).find(s => s.name.trim().toLowerCase() === staffName.trim().toLowerCase());
       setMyLocation(me?.location || "");
       setMyHrAccess(me?.hrAccess || "None");
+      setMyIsCoo(!!me?.isCoo);
     }).catch(() => {});
   }, [staffName]);
   const hasMyHrAccess = role === "Admin" || HR_ENABLED_LOCATIONS.includes(myLocation);
-  const hasHrAccess = role === "Admin" || myHrAccess !== "None";
+  // COO can always reach the HR page to do leave sign-off, even with no
+  // general HR view/edit grant — matches requireHRViewOrCOOAccess on the
+  // backend for the leave-request queue specifically.
+  const hasHrAccess = role === "Admin" || myHrAccess !== "None" || myIsCoo;
 
   const visibleNavGroups = role === "Garage Manager"
     ? NAV_GROUPS
