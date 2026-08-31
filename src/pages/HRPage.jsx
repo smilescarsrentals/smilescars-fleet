@@ -162,6 +162,7 @@ function StaffDetailModal({ staffName, target, editable, onClose }) {
   const [disciplinary, setDisciplinary] = useState(null);
   const [showAddLeave, setShowAddLeave] = useState(false);
   const [showAddDisc, setShowAddDisc] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -169,25 +170,36 @@ function StaffDetailModal({ staffName, target, editable, onClose }) {
   const loadLeave = () => api.getHRLeaveRequests(staffName).then(res => setLeaveRequests((res.data || []).filter(r => r.staffName === target.name))).catch(() => setLeaveRequests([]));
   const loadDisc = () => api.getHRDisciplinaryRecords(staffName, target.name).then(res => setDisciplinary(res.data || [])).catch(() => setDisciplinary([]));
 
-  useEffect(() => { loadProfile(); loadLeave(); loadDisc(); }, [target.name]);
+  useEffect(() => { loadProfile(); loadLeave(); loadDisc(); setEditingProfile(false); }, [target.name]);
 
   const setField = (k, v) => setProfile(p => ({ ...p, [k]: v }));
   const saveProfile = async () => {
     setSaving(true); setErr("");
     try {
-      await api.saveHRStaffProfile({
-        staffName, targetStaffName: target.name, nationalId: profile.nationalId, contractType: profile.contractType,
-        startDate: profile.startDate, nextOfKinName: profile.nextOfKinName, nextOfKinRelationship: profile.nextOfKinRelationship,
-        nextOfKinPhone: profile.nextOfKinPhone, notes: profile.notes,
-      });
+      await Promise.all([
+        api.saveHRStaffProfile({
+          staffName, targetStaffName: target.name, nationalId: profile.nationalId, contractType: profile.contractType,
+          startDate: profile.startDate, nextOfKinName: profile.nextOfKinName, nextOfKinRelationship: profile.nextOfKinRelationship,
+          nextOfKinPhone: profile.nextOfKinPhone, notes: profile.notes,
+        }),
+        api.setStaffPhone({ staffName, name: target.name, phone: profile.phone }),
+      ]);
+      setEditingProfile(false);
     } catch (e) { setErr(e.message); }
     finally { setSaving(false); }
   };
+  const cancelEdit = () => { loadProfile(); setEditingProfile(false); setErr(""); };
 
   const field = (label, key, type = "text") => (
     <div style={{ marginBottom: 8 }}>
       <label style={labelStyle}>{label}</label>
       <input type={type} disabled={!editable} value={profile[key] || ""} onChange={e => setField(key, e.target.value)} style={inputStyle(editable)} />
+    </div>
+  );
+  const viewRow = (label, value) => (
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "5px 0", borderBottom: "1px solid #f5f5f5" }}>
+      <span style={{ color: "#888" }}>{label}</span>
+      <span style={{ fontWeight: 500, textAlign: "right" }}>{value || "—"}</span>
     </div>
   );
 
@@ -200,11 +212,31 @@ function StaffDetailModal({ staffName, target, editable, onClose }) {
           <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{target.name}</h3>
           <button type="button" onClick={onClose} style={closeBtnStyle}>✕</button>
         </div>
-        <p style={{ fontSize: 11.5, color: "#888", margin: "0 0 14px" }}>{target.role} · {target.phone || "no phone on file"}</p>
+        <p style={{ fontSize: 11.5, color: "#888", margin: "0 0 14px" }}>{target.role}</p>
 
-        <p style={sectionHeaderStyle}>Profile</p>
-        {!profile ? <p style={{ fontSize: 12.5, color: "#888", marginTop: 6 }}>Loading…</p> : (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <p style={sectionHeaderStyle}>Profile</p>
+          {editable && profile && !editingProfile && (
+            <button type="button" onClick={() => setEditingProfile(true)}
+              style={{ fontSize: 11, fontWeight: 700, color: "var(--sc-blue, #04519B)", background: "var(--blue-bg, #eaf2fb)", border: "none", borderRadius: 999, padding: "3px 12px", cursor: "pointer" }}>
+              Edit
+            </button>
+          )}
+        </div>
+        {!profile ? <p style={{ fontSize: 12.5, color: "#888", marginTop: 6 }}>Loading…</p> : !editingProfile ? (
           <div style={{ marginTop: 8 }}>
+            {viewRow("Phone", profile.phone)}
+            {viewRow("National ID", profile.nationalId)}
+            {viewRow("Contract Type", profile.contractType)}
+            {viewRow("Start Date", fmtDate(profile.startDate))}
+            {viewRow("Next of Kin Name", profile.nextOfKinName)}
+            {viewRow("Next of Kin Relationship", profile.nextOfKinRelationship)}
+            {viewRow("Next of Kin Phone", profile.nextOfKinPhone)}
+            {profile.notes && <p style={{ fontSize: 12, color: "#555", margin: "8px 0 0" }}>{profile.notes}</p>}
+          </div>
+        ) : (
+          <div style={{ marginTop: 8 }}>
+            {field("Phone", "phone")}
             {field("National ID", "nationalId")}
             {field("Contract Type", "contractType")}
             {field("Start Date", "startDate", "date")}
@@ -215,7 +247,10 @@ function StaffDetailModal({ staffName, target, editable, onClose }) {
               <label style={labelStyle}>Notes</label>
               <textarea disabled={!editable} value={profile.notes || ""} onChange={e => setField("notes", e.target.value)} style={{ ...inputStyle(editable), minHeight: 44 }} />
             </div>
-            {editable && <button type="button" onClick={saveProfile} disabled={saving} style={{ ...primaryBtnStyle, padding: "6px 12px", fontSize: 12, opacity: saving ? 0.65 : 1 }}>{saving ? "Saving…" : "Save Profile"}</button>}
+            <div style={{ display: "flex", gap: 6 }}>
+              <button type="button" onClick={saveProfile} disabled={saving} style={{ ...primaryBtnStyle, padding: "6px 12px", fontSize: 12, opacity: saving ? 0.65 : 1 }}>{saving ? "Saving…" : "Save"}</button>
+              <button type="button" onClick={cancelEdit} disabled={saving} style={{ ...secondaryBtnStyle, padding: "6px 12px", fontSize: 12 }}>Cancel</button>
+            </div>
           </div>
         )}
 
