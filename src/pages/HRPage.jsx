@@ -200,6 +200,7 @@ function LeaveRequestsTab({ staffName, canReviewHR, isCoo }) {
             </div>
             {r.hrReviewedBy && <p style={{ fontSize: 11, color: "#888", margin: "6px 0 0" }}>HR: {r.hrReviewedBy}{r.hrNotes ? ` — ${r.hrNotes}` : ""}</p>}
             {r.cooReviewedBy && <p style={{ fontSize: 11, color: "#888", margin: "2px 0 0" }}>COO: {r.cooReviewedBy}{r.cooNotes ? ` — ${r.cooNotes}` : ""}</p>}
+            {r.status === "Cancelled" && r.cancelledBy && <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>Revoked by {r.cancelledBy}</p>}
             {(canActHR || canActCoo) && (
               <div style={{ marginTop: 8 }}>
                 <input placeholder="Optional note" value={notesDraft[r.id] || ""} onChange={e => setNotesDraft(d => ({ ...d, [r.id]: e.target.value }))}
@@ -471,7 +472,7 @@ export default function HRPage({ staffName, role }) {
   if (!canSeeProfiles && !canSeeLeave) {
     return (
       <div style={{ padding: 24 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>HR</h2>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>HR Management</h2>
         <p style={{ fontSize: 13, color: "#888" }}>You don't have access to the HR module.</p>
       </div>
     );
@@ -479,7 +480,7 @@ export default function HRPage({ staffName, role }) {
 
   return (
     <div style={{ padding: 24, maxWidth: 760 }}>
-      <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>HR</h2>
+      <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>HR Management</h2>
       {access === "View" && <p style={{ fontSize: 11.5, color: "#888", margin: "0 0 14px" }}>View-only access.</p>}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, borderBottom: "1px solid #e5e7eb" }}>
         {canSeeProfiles && (

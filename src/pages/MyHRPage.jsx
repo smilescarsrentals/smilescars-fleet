@@ -120,7 +120,7 @@ export default function MyHRPage({ staffName, role }) {
   if (!allowed) {
     return (
       <div style={{ padding: 24 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>My HR</h2>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>My Profile</h2>
         <p style={{ fontSize: 13, color: "#888" }}>This is currently only available to Dar es Salaam staff.</p>
       </div>
     );
@@ -158,7 +158,8 @@ export default function MyHRPage({ staffName, role }) {
               </div>
               {r.hrNotes && <p style={{ fontSize: 11.5, color: "#888", margin: "6px 0 0" }}>HR note: {r.hrNotes}</p>}
               {r.cooNotes && <p style={{ fontSize: 11.5, color: "#888", margin: "4px 0 0" }}>COO note: {r.cooNotes}</p>}
-              {r.status === "Pending HR" && (
+              {r.status === "Cancelled" && r.cancelledBy && <p style={{ fontSize: 11, color: "#aaa", margin: "4px 0 0" }}>Revoked by {r.cancelledBy}</p>}
+              {["Pending HR", "Pending COO", "Approved"].includes(r.status) && (
                 <button type="button" disabled={busyId === r.id} onClick={() => cancelRequest(r.id)}
                   style={{ marginTop: 8, fontSize: 11.5, color: "#dc2626", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                   Revoke request
