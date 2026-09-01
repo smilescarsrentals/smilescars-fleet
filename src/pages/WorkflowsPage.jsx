@@ -27,6 +27,20 @@ function fmtDateTime(iso) {
 // Reads a File object into the { base64, mimeType, filename } shape the
 // upload endpoints expect — same FileReader.readAsDataURL pattern already
 // used elsewhere in this app (imageCompress.js, pdfSplit.js).
+// Mirrors lib/files.js's MAX_FILE_BYTES. Checked client-side, before ever
+// attempting the upload — the file gets base64-encoded for transport
+// (~33% larger), and Vercel's serverless functions reject any request body
+// over ~4.5MB at the platform level, before our own code (and its
+// friendlier error message) ever runs. Catching an oversized file here
+// avoids that bare, unhelpful 413 entirely.
+const MAX_PDF_BYTES = 3 * 1024 * 1024;
+function checkFileSize(file) {
+  if (file.size > MAX_PDF_BYTES) {
+    return `This PDF is ${(file.size / 1024 / 1024).toFixed(1)} MB — please use a file under ${MAX_PDF_BYTES / 1024 / 1024} MB.`;
+  }
+  return null;
+}
+
 function readFileAsPayload(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -48,6 +62,8 @@ function UploadForm({ staffName, onClose, onSaved }) {
 
   const submit = async () => {
     if (!file) { setErr("Choose a PDF file first."); return; }
+    const sizeErr = checkFileSize(file);
+    if (sizeErr) { setErr(sizeErr); return; }
     setSaving(true); setErr("");
     try {
       const payload = await readFileAsPayload(file);
@@ -65,7 +81,11 @@ function UploadForm({ staffName, onClose, onSaved }) {
           <button type="button" onClick={onClose} style={closeBtnStyle}>✕</button>
         </div>
         <label style={labelStyle}>PDF File</label>
-        <input type="file" accept="application/pdf,.pdf" onChange={e => setFile(e.target.files?.[0] || null)} style={{ ...inputStyle, marginBottom: 10 }} />
+        <input type="file" accept="application/pdf,.pdf" onChange={e => {
+          const f = e.target.files?.[0] || null;
+          setFile(f);
+          setErr(f ? (checkFileSize(f) || "") : "");
+        }} style={{ ...inputStyle, marginBottom: 10 }} />
         <label style={labelStyle}>Note (optional)</label>
         <input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. August fuel invoice" style={{ ...inputStyle, marginBottom: 12 }} />
         {err && <p style={{ color: "#dc2626", fontSize: 12, margin: "0 0 10px" }}>{err}</p>}
@@ -118,6 +138,8 @@ function InvoiceDetailModal({ staffName, invoice, canApprove, canUpload, onClose
 
   const submitResubmit = async () => {
     if (!resubmitFile) { setErr("Choose a PDF file first."); return; }
+    const sizeErr = checkFileSize(resubmitFile);
+    if (sizeErr) { setErr(sizeErr); return; }
     setSaving(true); setErr("");
     try {
       const payload = await readFileAsPayload(resubmitFile);
@@ -161,7 +183,11 @@ function InvoiceDetailModal({ staffName, invoice, canApprove, canUpload, onClose
         {canUpload && invoice.status === "Changes Requested" && (
           <div style={{ border: "1px solid #e5e7eb", borderRadius: 9, padding: 10, marginBottom: 8, background: "#fafafa" }}>
             <label style={labelStyle}>Upload Revised PDF</label>
-            <input type="file" accept="application/pdf,.pdf" onChange={e => setResubmitFile(e.target.files?.[0] || null)} style={{ ...inputStyle, marginBottom: 8 }} />
+            <input type="file" accept="application/pdf,.pdf" onChange={e => {
+              const f = e.target.files?.[0] || null;
+              setResubmitFile(f);
+              setErr(f ? (checkFileSize(f) || "") : "");
+            }} style={{ ...inputStyle, marginBottom: 8 }} />
             <button type="button" disabled={saving} onClick={submitResubmit} style={{ ...primaryBtnStyle, padding: "6px 12px", fontSize: 12, opacity: saving ? 0.65 : 1 }}>
               {saving ? "Uploading…" : "Resubmit"}
             </button>
