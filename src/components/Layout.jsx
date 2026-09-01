@@ -64,6 +64,7 @@ const Icon = {
   logout: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>,
   myhr: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/><path d="M12 13.5v-2"/></svg>,
   hr: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.4 2.5-5.8 5.5-5.8s5.5 2.4 5.5 5.8"/><path d="M17 4.5a3 3 0 010 6"/><path d="M15.5 14.2a5.6 5.6 0 015.5 5.8"/></svg>,
+  workflows: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 13l2 2 4-4"/></svg>,
 };
 
 const NAV_GROUPS = [
@@ -89,6 +90,9 @@ const NAV_GROUPS = [
   { label: "HR", items: [
     { to: "/my-hr", key: "myhr", label: "My Profile", icon: Icon.myhr },
     { to: "/hr",    key: "hr",   label: "HR Management", icon: Icon.hr },
+  ]},
+  { label: "Workflows", items: [
+    { to: "/workflows", key: "workflows", label: "Invoice Approvals", icon: Icon.workflows },
   ]},
 ];
 
@@ -381,12 +385,14 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const [myLocation, setMyLocation] = useState("");
   const [myHrAccess, setMyHrAccess] = useState("None");
   const [myIsCoo, setMyIsCoo] = useState(false);
+  const [myWorkflowAccess, setMyWorkflowAccess] = useState("None");
   useEffect(() => {
     api.getStaffList().then(res => {
       const me = (res.staff || []).find(s => s.name.trim().toLowerCase() === staffName.trim().toLowerCase());
       setMyLocation(me?.location || "");
       setMyHrAccess(me?.hrAccess || "None");
       setMyIsCoo(!!me?.isCoo);
+      setMyWorkflowAccess(me?.workflowAccess || "None");
     }).catch(() => {});
   }, [staffName]);
   const hasMyHrAccess = role === "Admin" || HR_ENABLED_LOCATIONS.includes(myLocation);
@@ -394,6 +400,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   // general HR view/edit grant — matches requireHRViewOrCOOAccess on the
   // backend for the leave-request queue specifically.
   const hasHrAccess = role === "Admin" || myHrAccess !== "None" || myIsCoo;
+  const hasWorkflowAccess = role === "Admin" || myWorkflowAccess !== "None";
 
   const visibleNavGroups = role === "Garage Manager"
     ? NAV_GROUPS
@@ -401,10 +408,10 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
         .filter(group => group.items.length > 0)
     : canViewAll
     ? NAV_GROUPS
-        .map(group => ({ ...group, items: group.items.filter(i => (i.key !== "myhr" || hasMyHrAccess) && (i.key !== "hr" || hasHrAccess)) }))
+        .map(group => ({ ...group, items: group.items.filter(i => (i.key !== "myhr" || hasMyHrAccess) && (i.key !== "hr" || hasHrAccess) && (i.key !== "workflows" || hasWorkflowAccess)) }))
         .filter(group => group.items.length > 0)
     : NAV_GROUPS
-        .map(group => ({ ...group, items: group.items.filter(i => i.key !== "garage" && i.key !== "tracking" && (i.key !== "myhr" || hasMyHrAccess) && (i.key !== "hr" || hasHrAccess)) }))
+        .map(group => ({ ...group, items: group.items.filter(i => i.key !== "garage" && i.key !== "tracking" && (i.key !== "myhr" || hasMyHrAccess) && (i.key !== "hr" || hasHrAccess) && (i.key !== "workflows" || hasWorkflowAccess)) }))
         .filter(group => group.items.length > 0);
 
   // The reservation reminder banner is only relevant to the operationally-

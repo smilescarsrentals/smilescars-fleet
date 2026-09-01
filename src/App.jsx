@@ -29,6 +29,7 @@ const DriversPage      = lazy(() => import("./pages/DriversPage"));
 const TrackingPage     = lazy(() => import("./pages/TrackingPage"));
 const MyHRPage         = lazy(() => import("./pages/MyHRPage"));
 const HRPage           = lazy(() => import("./pages/HRPage"));
+const WorkflowsPage    = lazy(() => import("./pages/WorkflowsPage"));
 
 export default function App() {
   const [staffName, setStaffName] = useState(
@@ -88,6 +89,7 @@ export default function App() {
             <Route path="/drivers"      element={<DriversPage staffName={staffName} role={role} />} />
             <Route path="/my-hr"        element={<MyHRPage staffName={staffName} role={role} />} />
             <Route path="/hr"           element={<HRPage staffName={staffName} role={role} />} />
+            <Route path="/workflows"    element={<WorkflowsPage staffName={staffName} role={role} />} />
             <Route path="/tracking"     element={<TrackingPage staffName={staffName} role={role} />} />
             <Route path="/sign/:token"  element={<SignaturePage />} />
             <Route path="*"           element={<Navigate to={role === "Garage Manager" ? "/garage" : "/"} />} />
