@@ -85,9 +85,9 @@ const NAV_GROUPS = [
   ]},
   { label: "Safety", items: [
     { to: "/blacklist", key: "blacklist", label: "Blacklist", icon: Icon.blacklist },
-    { to: "/drivers",   key: "drivers",   label: "Drivers",   icon: Icon.drivers },
   ]},
   { label: "HR", items: [
+    { to: "/drivers", key: "drivers", label: "Drivers", icon: Icon.drivers },
     { to: "/my-hr", key: "myhr", label: "My Profile", icon: Icon.myhr },
     { to: "/hr",    key: "hr",   label: "HR Management", icon: Icon.hr },
   ]},

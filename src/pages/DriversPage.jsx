@@ -917,6 +917,8 @@ function DriverDetailModal({ driver, docs, staffName, canEdit, onClose, onChange
               <DriverDocuments driverId={driver.id} driverName={driver.name} docs={docs} canEdit={canEdit} staffName={staffName}
                 addingDoc={addingDoc} setAddingDoc={setAddingDoc} onChanged={onChanged} />
 
+              <DriverLeave driverId={driver.id} leaveDaysAvailable={driver.leaveDaysAvailable} canEdit={canEdit} staffName={staffName} onChanged={onChanged} />
+
               <DriverAssignmentLog driverName={driver.name} />
 
               {viewingPhoto && driver.photoFileId && (
@@ -1092,6 +1094,172 @@ function DriverDocuments({ driverId, driverName, docs, canEdit, staffName, addin
 // Built entirely from existing checkout/transfer history — not a
 // separately maintained field, so it can never drift from what actually
 // happened and needs zero manual entry from staff.
+// Reads any file type (image or PDF — a driver's leave proof could be an
+// SMS/WhatsApp screenshot or a scanned letter) as base64. compressImage
+// only handles images, so this is separate rather than trying to force a
+// PDF through that path.
+function readAnyFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({ base64: String(reader.result).split(",")[1], mimeType: file.type || "application/octet-stream", filename: file.name });
+    reader.onerror = () => reject(new Error("Could not read the selected file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function AddDriverLeaveForm({ driverId, staffName, onClose, onSaved }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [daysUsed, setDaysUsed] = useState("");
+  const [notes, setNotes] = useState("");
+  const [file, setFile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const submit = async () => {
+    if (!daysUsed || Number(daysUsed) <= 0) { setErr("Enter how many days were used."); return; }
+    setSaving(true); setErr("");
+    try {
+      let payload = {};
+      if (file) {
+        const isImage = file.type.startsWith("image/");
+        const read = isImage ? await compressImage(file) : await readAnyFileAsBase64(file);
+        payload = { fileBase64: read.base64, mimeType: read.mimeType, filename: file.name };
+      }
+      await api.addDriverLeaveRecord({ staffName, driverId, date, daysUsed, notes, ...payload });
+      onSaved();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ border: "1.5px solid var(--border)", borderRadius: 10, padding: 12, marginBottom: 10, background: "var(--bg)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 8 }}>
+        <div><label style={S.label}>Date</label><input type="date" style={S.input} value={date} onChange={e => setDate(e.target.value)} /></div>
+        <div><label style={S.label}>Days Used</label><input type="number" style={S.input} value={daysUsed} onChange={e => setDaysUsed(e.target.value)} placeholder="e.g. 3" /></div>
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <label style={S.label}>Proof (SMS/WhatsApp screenshot or letter — optional)</label>
+        <input type="file" accept="image/*,application/pdf" style={S.input} onChange={e => setFile(e.target.files?.[0] || null)} />
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <label style={S.label}>Notes</label>
+        <textarea style={S.textarea} rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Requested by SMS, family emergency" />
+      </div>
+      {err && <p style={S.err}>{err}</p>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose} disabled={saving}>Cancel</button>
+        <button type="button" style={{ ...S.btn, flex: 1, marginTop: 0, background: "var(--sc-blue)", opacity: saving ? 0.65 : 1 }} onClick={submit} disabled={saving}>
+          {saving ? "Saving…" : "Log Leave"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Drivers have no system login, so leave is requested informally (SMS,
+// WhatsApp, a written letter) and recorded here on their behalf — a
+// running days-available number (directly editable, no fixed policy
+// assumed) plus a dated log with the proof document attached.
+function DriverLeave({ driverId, leaveDaysAvailable, canEdit, staffName, onChanged }) {
+  const [records, setRecords] = useState(null);
+  const [editingDays, setEditingDays] = useState(false);
+  const [daysInput, setDaysInput] = useState(leaveDaysAvailable ?? "");
+  const [showAdd, setShowAdd] = useState(false);
+  const [viewingProof, setViewingProof] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const load = () => { api.getDriverLeaveRecords(driverId).then(res => setRecords(res.data || [])).catch(() => setRecords([])); };
+  useEffect(load, [driverId]);
+
+  const fmtDate = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return isNaN(d) ? "—" : d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+  };
+
+  const saveDays = async () => {
+    setSaving(true); setErr("");
+    try {
+      await api.setDriverLeaveDaysAvailable({ staffName, driverId, leaveDaysAvailable: daysInput });
+      setEditingDays(false);
+      onChanged();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.3 }}>Leave</span>
+        {canEdit && !showAdd && (
+          <button type="button" onClick={() => setShowAdd(true)} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>
+            + Log Leave
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        {!editingDays ? (
+          <>
+            <span style={{ fontSize: 13 }}>
+              <strong>{leaveDaysAvailable != null ? leaveDaysAvailable : "Not set"}</strong>{leaveDaysAvailable != null ? " days available" : ""}
+            </span>
+            {canEdit && (
+              <button type="button" onClick={() => { setDaysInput(leaveDaysAvailable ?? ""); setEditingDays(true); }}
+                style={{ fontSize: 11, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer" }}>
+                Edit
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <input type="number" value={daysInput} onChange={e => setDaysInput(e.target.value)}
+              style={{ width: 70, padding: "5px 8px", fontSize: 13, border: "1.5px solid var(--border)", borderRadius: 6, background: "var(--surface)", color: "var(--text)" }} />
+            <button type="button" disabled={saving} onClick={saveDays}
+              style={{ fontSize: 11.5, fontWeight: 600, color: "#fff", background: "var(--sc-blue)", border: "none", borderRadius: 6, padding: "5px 10px", cursor: "pointer" }}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button type="button" onClick={() => setEditingDays(false)} style={{ fontSize: 11.5, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Cancel</button>
+          </>
+        )}
+      </div>
+      {err && <p style={S.err}>{err}</p>}
+
+      {showAdd && <AddDriverLeaveForm driverId={driverId} staffName={staffName} onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); onChanged(); }} />}
+
+      {records === null ? (
+        <p style={{ fontSize: 12.5, color: "var(--text-faint)" }}>Loading…</p>
+      ) : records.length === 0 ? (
+        <p style={{ fontSize: 12.5, color: "var(--text-faint)" }}>No leave recorded yet.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {records.map(r => (
+            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, border: "1px solid var(--border)", borderRadius: 7, padding: "6px 9px" }}>
+              <div>
+                <strong>{fmtDate(r.date)}</strong> — {r.daysUsed} day{r.daysUsed === 1 ? "" : "s"}
+                {r.notes && <span style={{ color: "var(--text-muted)" }}> · {r.notes}</span>}
+                <div style={{ fontSize: 10.5, color: "var(--text-faint)" }}>Logged by {r.loggedBy}</div>
+              </div>
+              {r.fileId && (
+                <button type="button" onClick={() => setViewingProof(r)} style={{ fontSize: 11, color: "var(--sc-blue)", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>
+                  View Proof
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {viewingProof && (
+        <DocumentViewerModal
+          doc={{ fileId: viewingProof.fileId, fileMimeType: viewingProof.fileMimeType, docType: "Leave Proof", label: fmtDate(viewingProof.date) }}
+          onClose={() => setViewingProof(null)} />
+      )}
+    </div>
+  );
+}
+
 function DriverAssignmentLog({ driverName }) {
   const [log, setLog] = useState(null);
 
