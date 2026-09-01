@@ -98,6 +98,96 @@ function UploadForm({ staffName, onClose, onSaved }) {
   );
 }
 
+// Multiple PDFs at once, each becomes its own invoice — no per-file note,
+// keeping with the "just simple PDF uploading" brief. Files are checked
+// for size the moment they're picked (same MAX_PDF_BYTES rule as the
+// single-upload form) so an oversized one is flagged before any upload
+// attempt, and uploads run one at a time so a status can be shown per file.
+function BulkUploadForm({ staffName, onClose, onSaved }) {
+  const [files, setFiles] = useState([]);
+  const [statuses, setStatuses] = useState({}); // filename -> "ready" | "oversized message" | "Uploading…" | "Done" | error message
+  const [uploading, setUploading] = useState(false);
+
+  const handleFiles = (e) => {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = ""; // allow re-selecting the same file(s) later
+    setFiles(prev => [...prev, ...picked]);
+    setStatuses(prev => {
+      const next = { ...prev };
+      picked.forEach(f => { next[f.name] = checkFileSize(f) || "ready"; });
+      return next;
+    });
+  };
+
+  const removeFile = (name) => {
+    setFiles(prev => prev.filter(f => f.name !== name));
+    setStatuses(prev => { const next = { ...prev }; delete next[name]; return next; });
+  };
+
+  const uploadAll = async () => {
+    setUploading(true);
+    let anySucceeded = false;
+    for (const f of files) {
+      if (statuses[f.name] !== "ready") continue; // skip oversized or already-done files
+      setStatuses(prev => ({ ...prev, [f.name]: "Uploading…" }));
+      try {
+        const payload = await readFileAsPayload(f);
+        await api.uploadWorkflowInvoice({ staffName, fileBase64: payload.base64, mimeType: payload.mimeType, filename: payload.filename, note: "" });
+        setStatuses(prev => ({ ...prev, [f.name]: "Done" }));
+        anySucceeded = true;
+      } catch (e) {
+        setStatuses(prev => ({ ...prev, [f.name]: e.message }));
+      }
+    }
+    setUploading(false);
+    if (anySucceeded) onSaved();
+  };
+
+  const readyCount = files.filter(f => statuses[f.name] === "ready").length;
+
+  return (
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={{ ...modalStyle, width: 480 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Bulk Upload Invoices</h3>
+          <button type="button" onClick={onClose} style={closeBtnStyle}>✕</button>
+        </div>
+        <label style={{ ...inputStyle, display: "inline-block", cursor: "pointer", textAlign: "center", background: "#f4f6f8" }}>
+          + Choose PDFs
+          <input type="file" accept="application/pdf,.pdf" multiple disabled={uploading} onChange={handleFiles} style={{ display: "none" }} />
+        </label>
+
+        {files.length > 0 && (
+          <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6, maxHeight: 280, overflowY: "auto" }}>
+            {files.map(f => {
+              const status = statuses[f.name];
+              const isError = status && status !== "ready" && status !== "Uploading…" && status !== "Done";
+              return (
+                <div key={f.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", border: "1px solid #f0f0f0", borderRadius: 8, padding: "8px 10px" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
+                    <div style={{ fontSize: 11, color: isError ? "#dc2626" : status === "Done" ? "#166534" : "#888" }}>{status}</div>
+                  </div>
+                  {status === "ready" && !uploading && (
+                    <button type="button" onClick={() => removeFile(f.name)} style={{ ...closeBtnStyle, fontSize: 12 }}>✕</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+          <button type="button" onClick={uploadAll} disabled={uploading || readyCount === 0} style={{ ...primaryBtnStyle, opacity: (uploading || readyCount === 0) ? 0.65 : 1 }}>
+            {uploading ? "Uploading…" : `Upload ${readyCount || ""}`.trim()}
+          </button>
+          <button type="button" onClick={onClose} style={secondaryBtnStyle}>{uploading ? "Close when done" : "Cancel"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReviewForm({ decision, onSubmit, onClose, saving }) {
   const [remarks, setRemarks] = useState("");
   const isApprove = decision === "Approve";
@@ -116,10 +206,25 @@ function ReviewForm({ decision, onSubmit, onClose, saving }) {
   );
 }
 
+function PdfViewerModal({ url, onClose }) {
+  return (
+    <div style={{ ...overlayStyle, zIndex: 200 }} onClick={onClose}>
+      <div style={{ background: "#fff", borderRadius: 12, padding: 12, width: "min(900px, 94vw)", height: "88vh", display: "flex", flexDirection: "column" }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+          <button type="button" onClick={onClose} style={closeBtnStyle}>✕</button>
+        </div>
+        <iframe title="Invoice PDF" src={url} style={{ flex: 1, width: "100%", border: "none", borderRadius: 8 }} />
+      </div>
+    </div>
+  );
+}
+
 function InvoiceDetailModal({ staffName, invoice, canApprove, canUpload, onClose, onChanged }) {
   const [events, setEvents] = useState(null);
   const [reviewing, setReviewing] = useState(null); // "Approve" | "RequestChanges" | null
   const [resubmitFile, setResubmitFile] = useState(null);
+  const [showPdf, setShowPdf] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -161,9 +266,10 @@ function InvoiceDetailModal({ staffName, invoice, canApprove, canUpload, onClose
           <StatusBadge status={invoice.status} />
         </div>
         {invoice.note && <p style={{ fontSize: 12.5, color: "#555", margin: "0 0 10px" }}>{invoice.note}</p>}
-        <a href={invoice.fileUrl} target="_blank" rel="noreferrer" style={{ ...primaryBtnStyle, display: "inline-block", textDecoration: "none", marginBottom: 12 }}>
+        <button type="button" onClick={() => setShowPdf(true)} style={{ ...primaryBtnStyle, marginBottom: 12 }}>
           View PDF
-        </a>
+        </button>
+        {showPdf && <PdfViewerModal url={invoice.fileUrl} onClose={() => setShowPdf(false)} />}
 
         {invoice.reviewedBy && (
           <p style={{ fontSize: 12, color: "#888", margin: "0 0 10px" }}>
@@ -217,6 +323,7 @@ export default function WorkflowsPage({ staffName, role }) {
   const [access, setAccess] = useState(role === "Admin" ? "Approve" : "None");
   const [invoices, setInvoices] = useState([]);
   const [showUpload, setShowUpload] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [selected, setSelected] = useState(null);
 
   const loadInvoices = () => {
@@ -254,7 +361,10 @@ export default function WorkflowsPage({ staffName, role }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Invoice Approvals</h2>
         {canUpload && (
-          <button type="button" onClick={() => setShowUpload(true)} style={primaryBtnStyle}>+ Upload Invoice</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={() => setShowUpload(true)} style={primaryBtnStyle}>+ Upload Invoice</button>
+            <button type="button" onClick={() => setShowBulkUpload(true)} style={secondaryBtnStyle}>Bulk Upload</button>
+          </div>
         )}
       </div>
 
@@ -277,6 +387,7 @@ export default function WorkflowsPage({ staffName, role }) {
       )}
 
       {showUpload && <UploadForm staffName={staffName} onClose={() => setShowUpload(false)} onSaved={() => { setShowUpload(false); loadInvoices(); }} />}
+      {showBulkUpload && <BulkUploadForm staffName={staffName} onClose={() => { setShowBulkUpload(false); loadInvoices(); }} onSaved={loadInvoices} />}
       {selectedFresh && (
         <InvoiceDetailModal staffName={staffName} invoice={selectedFresh} canApprove={canApprove} canUpload={canUpload}
           onClose={() => setSelected(null)} onChanged={() => { setSelected(null); loadInvoices(); }} />
