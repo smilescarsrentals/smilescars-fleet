@@ -350,8 +350,12 @@ function InvoiceCard({ staffName, invoice, canApprove, canUpload, onOpenHistory,
         </div>
         <StatusBadge status={invoice.status} />
       </div>
-      <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }} onClick={stop}>
-        <button type="button" onClick={() => setViewingPdf(true)} style={cardBtnStyle}>View PDF</button>
+      <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", alignItems: "center" }} onClick={stop}>
+        {invoice.fileId ? (
+          <button type="button" onClick={() => setViewingPdf(true)} style={cardBtnStyle}>View PDF</button>
+        ) : (
+          <span style={{ fontSize: 11, color: "#aaa" }}>PDF auto-deleted after 14 days</span>
+        )}
         {canApprove && invoice.status === "Pending" && (
           <>
             <button type="button" disabled={busy} onClick={() => setReviewing("Approve")} style={{ ...cardBtnStyle, color: "#16a34a", borderColor: "#bbf7d0" }}>Approve</button>
