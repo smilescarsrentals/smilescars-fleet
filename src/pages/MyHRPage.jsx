@@ -163,7 +163,7 @@ export default function MyHRPage({ staffName, role }) {
           {!profile ? <p style={{ fontSize: 12.5, color: "#888", marginTop: 8 }}>Loading…</p> : (
             <div style={{ fontSize: 12.5, display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
               <div><span style={{ color: "#888" }}>National ID: </span>{profile.nationalId || "—"}</div>
-              <div><span style={{ color: "#888" }}>Contract: </span>{profile.contractType || "—"}</div>
+              <div><span style={{ color: "#888" }}>Contract Status: </span>{profile.contractType || "—"}</div>
               <div><span style={{ color: "#888" }}>Start Date: </span>{fmtDate(profile.startDate)}</div>
               <div><span style={{ color: "#888" }}>Next of Kin: </span>{profile.nextOfKinName || "—"}{profile.nextOfKinRelationship ? ` (${profile.nextOfKinRelationship})` : ""}</div>
               <div><span style={{ color: "#888" }}>Next of Kin Phone: </span>{profile.nextOfKinPhone || "—"}</div>

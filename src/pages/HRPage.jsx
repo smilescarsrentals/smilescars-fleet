@@ -227,7 +227,7 @@ function StaffDetailModal({ staffName, target, editable, onClose }) {
           <div style={{ marginTop: 8 }}>
             {viewRow("Phone", profile.phone)}
             {viewRow("National ID", profile.nationalId)}
-            {viewRow("Contract Type", profile.contractType)}
+            {viewRow("Contract Status", profile.contractType)}
             {viewRow("Start Date", fmtDate(profile.startDate))}
             {viewRow("Next of Kin Name", profile.nextOfKinName)}
             {viewRow("Next of Kin Relationship", profile.nextOfKinRelationship)}
@@ -238,7 +238,14 @@ function StaffDetailModal({ staffName, target, editable, onClose }) {
           <div style={{ marginTop: 8 }}>
             {field("Phone", "phone")}
             {field("National ID", "nationalId")}
-            {field("Contract Type", "contractType")}
+            <div style={{ marginBottom: 8 }}>
+              <label style={labelStyle}>Contract Status</label>
+              <select disabled={!editable} value={profile.contractType || ""} onChange={e => setField("contractType", e.target.value)} style={inputStyle(editable)}>
+                <option value="">— Select —</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
             {field("Start Date", "startDate", "date")}
             {field("Next of Kin Name", "nextOfKinName")}
             {field("Next of Kin Relationship", "nextOfKinRelationship")}
