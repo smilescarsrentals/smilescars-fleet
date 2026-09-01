@@ -38,7 +38,6 @@ export default function DriversPage({ staffName, role }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showZipImport, setShowZipImport] = useState(false);
-  const [showLicenseCleanup, setShowLicenseCleanup] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
 
   // Filter state
@@ -197,9 +196,6 @@ export default function DriversPage({ staffName, role }) {
           <>
             <button type="button" className="btn btn-ghost" onClick={() => setShowImport(true)}>⬆ Import CSV</button>
             <button type="button" className="btn btn-ghost" onClick={() => setShowZipImport(true)}>📎 Import Documents (ZIP)</button>
-            {role === "Admin" && (
-              <button type="button" className="btn btn-ghost" onClick={() => setShowLicenseCleanup(true)}>🪄 Clean Up License Photos</button>
-            )}
             <button type="button" className="btn btn-add" onClick={() => setShowAdd(true)}>+ Add Driver</button>
           </>
         )}
@@ -252,9 +248,6 @@ export default function DriversPage({ staffName, role }) {
       )}
       {showZipImport && (
         <ImportZipModal staffName={staffName} drivers={drivers} onClose={() => setShowZipImport(false)} onSaved={() => { setShowZipImport(false); load(); }} />
-      )}
-      {showLicenseCleanup && (
-        <LicenseCleanupReviewModal staffName={staffName} onClose={() => { setShowLicenseCleanup(false); load(); }} />
       )}
       {selectedDriver && (
         <DriverDetailModal driver={selectedDriver} docs={docsByDriver[selectedDriver.id] || []} staffName={staffName} canEdit={canEdit}
@@ -813,122 +806,6 @@ function SplitPdfModal({ driverId, driverName, staffName, onClose, onSaved }) {
               </div>
             </>
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Admin-only review tool for the retroactive license-photo cleanup — steps
-// through one Driving License document at a time, generating a cleaned
-// candidate on the fly and showing it side-by-side with the original.
-// Nothing is replaced until "Use Cleaned Version" is clicked; "Skip" just
-// discards the unused preview and leaves the original untouched.
-function LicenseCleanupReviewModal({ staffName, onClose }) {
-  const [docs, setDocs] = useState(null);
-  const [index, setIndex] = useState(0);
-  const [preview, setPreview] = useState(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  useEffect(() => {
-    api.getDriverLicenseDocsForCleanup(staffName).then(res => setDocs(res.data || [])).catch(e => setErr(e.message));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const currentDoc = docs && docs[index] ? docs[index] : null;
-
-  useEffect(() => {
-    if (!currentDoc) return;
-    setPreview(null); setErr(""); setLoadingPreview(true);
-    api.previewDriverLicenseCleanup({ staffName, docId: currentDoc.id })
-      .then(res => setPreview(res))
-      .catch(e => setErr(e.message))
-      .finally(() => setLoadingPreview(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDoc?.id]);
-
-  const advance = () => setIndex(i => i + 1);
-
-  const accept = async () => {
-    if (!preview) return;
-    setBusy(true); setErr("");
-    try {
-      await api.applyDriverLicenseCleanup({ staffName, docId: currentDoc.id, previewFileId: preview.previewFileId });
-      advance();
-    } catch (e) { setErr(e.message); }
-    finally { setBusy(false); }
-  };
-
-  const skip = async () => {
-    setBusy(true); setErr("");
-    try {
-      if (preview) await api.discardDriverLicenseCleanupPreview({ staffName, previewFileId: preview.previewFileId });
-      advance();
-    } catch (e) { setErr(e.message); }
-    finally { setBusy(false); }
-  };
-
-  if (docs === null) {
-    return (
-      <div style={S.overlay} onClick={onClose}>
-        <div style={{ ...S.modal, width: 380 }} onClick={e => e.stopPropagation()}>
-          <p style={{ padding: "1.25rem", fontSize: 13, color: "var(--text-muted)" }}>{err || "Loading…"}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!currentDoc) {
-    return (
-      <div style={S.overlay} onClick={onClose}>
-        <div style={{ ...S.modal, width: 380 }} onClick={e => e.stopPropagation()}>
-          <div style={S.mHead}><p style={S.mTitle}>License Photo Cleanup</p><button type="button" style={S.closeBtn} onClick={onClose}>✕</button></div>
-          <div style={S.mBody}>
-            <p style={{ fontSize: 13 }}>{docs.length === 0 ? "No Driving License photos to review." : `All ${docs.length} driving license photos reviewed.`}</p>
-            <button type="button" style={{ ...S.btn, background: "var(--sc-blue)" }} onClick={onClose}>Close</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={S.overlay} onClick={onClose}>
-      <div style={{ ...S.modal, width: 560 }} onClick={e => e.stopPropagation()}>
-        <div style={S.mHead}>
-          <p style={S.mTitle}>License Photo Cleanup — {index + 1} of {docs.length}</p>
-          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
-        </div>
-        <div style={S.mBody}>
-          <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{currentDoc.driverName}</p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-            <div>
-              <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Original</p>
-              <img src={currentDoc.fileUrl} alt="Original" style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)" }} />
-            </div>
-            <div>
-              <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Cleaned</p>
-              {loadingPreview ? (
-                <div style={{ aspectRatio: "3/2", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", borderRadius: 8, border: "1px dashed var(--border)" }}>
-                  <span style={{ fontSize: 12, color: "var(--text-faint)" }}>Processing…</span>
-                </div>
-              ) : preview ? (
-                <img src={preview.previewFileUrl} alt="Cleaned" style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)" }} />
-              ) : (
-                <p style={{ fontSize: 12, color: "var(--red)" }}>{err || "Could not generate a preview."}</p>
-              )}
-            </div>
-          </div>
-          {err && preview && <p style={S.err}>{err}</p>}
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={skip} disabled={busy || loadingPreview}>Skip / Keep Original</button>
-            <button type="button" style={{ ...S.btn, flex: 1, marginTop: 0, background: "var(--sc-blue)", opacity: (busy || loadingPreview || !preview) ? 0.65 : 1 }}
-              onClick={accept} disabled={busy || loadingPreview || !preview}>
-              {busy ? "Saving…" : "Use Cleaned Version"}
-            </button>
-          </div>
         </div>
       </div>
     </div>
