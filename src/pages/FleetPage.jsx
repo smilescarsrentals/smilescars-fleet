@@ -64,6 +64,7 @@ export default function FleetPage({ staffName, role }) {
   const [agreement,    setAgreement]    = useState(null);
   const [moveCar,      setMoveCar]      = useState(null);
   const [replaceCar,   setReplaceCar]   = useState(null);
+  const [changeGarageCar, setChangeGarageCar] = useState(null);
   const [showAddCar,   setShowAddCar]   = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [toast,        setToast]        = useState("");
@@ -220,6 +221,19 @@ export default function FleetPage({ staffName, role }) {
       });
       setReplaceCar(null);
       showToast(`✅ ${replaceCar.plate} replaced by ${fields.replacePlate}`);
+      cache.clear();
+      await load(true);
+    } catch (e) { showToast("❌ Error: " + e.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleChangeGarageConfirm = async (fields) => {
+    if (!changeGarageCar) return;
+    setSaving(true);
+    try {
+      await api.changeFleetGarage({ ...fields, staffName });
+      setChangeGarageCar(null);
+      showToast(`✅ Garage updated for ${changeGarageCar.plate}`);
       cache.clear();
       await load(true);
     } catch (e) { showToast("❌ Error: " + e.message); }
@@ -496,7 +510,7 @@ export default function FleetPage({ staffName, role }) {
                     </td>
                   )}
                   <td data-label="Action">
-                    <ActionButtons car={car} onAction={(c,a)=>setModal({car:c,action:a})} onMove={c=>setMoveCar(c)} onReplace={c=>setReplaceCar(c)} canSell={canExportOrSell} role={role} myOverdueCount={myOverdueCount} setOverdueBlock={setOverdueBlock} />
+                    <ActionButtons car={car} onAction={(c,a)=>setModal({car:c,action:a})} onMove={c=>setMoveCar(c)} onReplace={c=>setReplaceCar(c)} onChangeGarage={c=>setChangeGarageCar(c)} canSell={canExportOrSell} role={role} myOverdueCount={myOverdueCount} setOverdueBlock={setOverdueBlock} />
                   </td>
                 </tr>
               );
@@ -550,6 +564,10 @@ export default function FleetPage({ staffName, role }) {
         <ReplaceCarModal car={replaceCar} fleet={fleet} garages={config.garages} staffName={staffName} role={role}
           onConfirm={handleReplaceConfirm} onClose={()=>!saving&&setReplaceCar(null)} loading={saving} />
       )}
+      {changeGarageCar && (
+        <ChangeGarageModal car={changeGarageCar} staffName={staffName} role={role}
+          onConfirm={handleChangeGarageConfirm} onClose={()=>!saving&&setChangeGarageCar(null)} loading={saving} />
+      )}
       {showAddCar && (
         <AddCarModal locations={config.locations}
           onClose={()=>setShowAddCar(false)}
@@ -559,7 +577,7 @@ export default function FleetPage({ staffName, role }) {
   );
 }
 
-function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOverdueCount, setOverdueBlock }) {
+function ActionButtons({ car, onAction, onMove, onReplace, onChangeGarage, canSell, role, myOverdueCount, setOverdueBlock }) {
   // Garage Manager still can't touch rental-operations actions (Check Out,
   // Extend, Sell, Staff Use, Move, Replace) — that stays view-only. But
   // Maintenance and Mark Available ARE their job now, so those two get
@@ -616,6 +634,7 @@ function ActionButtons({ car, onAction, onMove, onReplace, canSell, role, myOver
   if (car.status==="Maintenance") return (
     <div style={row}>
       {btn("Mark Available","setAvailable","var(--green)","var(--green-bg)")}
+      {btn("Edit Garage","changeGarage","var(--sc-blue)","var(--blue-bg)",()=>onChangeGarage(car))}
       {!isGarageManager && btn("Move","move","var(--sc-blue)","var(--blue-bg)",()=>onMove(car))}
     </div>
   );
@@ -762,6 +781,68 @@ function ReplaceCarModal({ car, fleet, garages, staffName, role, onConfirm, onCl
           <button type="button" style={{ width:"100%",padding:"11px",fontSize:14,fontWeight:600,color:"#fff",background:"var(--sc-blue)",border:"none",borderRadius:8,cursor:"pointer",opacity:loading?0.65:1,fontFamily:"inherit" }}
             onClick={handleSubmit} disabled={loading}>
             {loading ? "Processing…" : `Confirm Replacement`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Change Garage Modal ──────────────────────────────────────────
+function ChangeGarageModal({ car, staffName, role, onConfirm, onClose, loading }) {
+  const [serviceLocationType, setServiceLocationType] = useState("Internal");
+  const [internalLocation, setInternalLocation] = useState(car.garage || "SmilesCars Garage");
+  const [externalVendorId, setExternalVendorId] = useState("");
+  const [externalVendorLocation, setExternalVendorLocation] = useState("");
+  const [err, setErr] = useState("");
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    api.getCurrentGarageAssignment(car.plate).then(res => {
+      const d = res?.data;
+      if (d) {
+        setServiceLocationType(d.serviceLocationType || "Internal");
+        setInternalLocation(d.serviceLocationType === "External" ? "SmilesCars Garage" : (d.internalLocation || car.garage || "SmilesCars Garage"));
+        setExternalVendorId(d.externalVendorId || "");
+        setExternalVendorLocation(d.externalVendorLocation || "");
+      }
+    }).catch(() => {}).finally(() => setReady(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [car.plate]);
+
+  const handleSubmit = () => {
+    if (serviceLocationType === "External" && !externalVendorId) { setErr("Please select a garage."); return; }
+    onConfirm({ plate: car.plate, serviceLocationType, internalLocation, externalVendorId, externalVendorLocation });
+  };
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:14,width:420,maxWidth:"100%",maxHeight:"92vh",overflow:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ padding:"1rem 1.25rem",borderRadius:"14px 14px 0 0",background:"var(--sc-blue)",display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
+          <div>
+            <p style={{ fontSize:16,fontWeight:700,color:"#fff",margin:0 }}>Change Garage</p>
+            <p style={{ fontSize:12,color:"rgba(255,255,255,0.8)",margin:"2px 0 0" }}>{car.plate} · {car.type}</p>
+          </div>
+          <button type="button" style={{ background:"rgba(255,255,255,0.25)",border:"none",color:"#fff",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14 }} onClick={onClose}>✕</button>
+        </div>
+        <div style={{ padding:"1.25rem" }}>
+          {car.garage && (
+            <p style={{ fontSize:12.5,color:"#888",margin:"0 0 12px" }}>Currently at: <strong style={{ color:"#333" }}>{car.garage}</strong></p>
+          )}
+          {!ready ? (
+            <p style={{ fontSize:13,color:"#888" }}>Loading…</p>
+          ) : (
+            <GarageLocationPicker
+              serviceLocationType={serviceLocationType} internalLocation={internalLocation} externalVendorId={externalVendorId} externalVendorLocation={externalVendorLocation}
+              role={role} staffName={staffName} carLocation={car.location}
+              onChange={({ serviceLocationType: t, internalLocation: il, externalVendorId: ev, externalVendorLocation: evl }) => {
+                setServiceLocationType(t); setInternalLocation(il); setExternalVendorId(ev); setExternalVendorLocation(evl || "");
+              }} />
+          )}
+          {err && <p style={{ fontSize:12.5,color:"#dc2626",margin:"10px 0 0" }}>{err}</p>}
+          <button type="button" style={{ width:"100%",marginTop:16,padding:"11px",fontSize:14,fontWeight:600,color:"#fff",background:"var(--sc-blue)",border:"none",borderRadius:8,cursor:"pointer",opacity:loading?0.65:1,fontFamily:"inherit" }}
+            onClick={handleSubmit} disabled={loading}>
+            {loading ? "Saving…" : "Save"}
           </button>
         </div>
       </div>

@@ -10,6 +10,7 @@ const ACTION_COLORS = {
   "Returned":            { bg: "var(--green-bg)",  color: "var(--green)" },
   "Booking Extended":    { bg: "var(--blue-bg)",   color: "var(--sc-blue)" },
   "Sent to Maintenance": { bg: "var(--amber-bg)",  color: "var(--amber)" },
+  "Garage Changed":      { bg: "var(--blue-bg)",   color: "var(--sc-blue)" },
   "Marked Available":    { bg: "var(--green-bg)",  color: "var(--green)" },
   "Location Updated":    { bg: "var(--border-light)", color: "var(--sc-grey)" },
   "Payment Updated":     { bg: "var(--purple-bg)", color: "var(--purple)" },
@@ -227,6 +228,7 @@ export default function HistoryPage({ role }) {
                   <td data-label="Type" style={{ color:"var(--text-muted)" }}>{h.type}</td>
                   <td data-label="Action" style={{ padding:"10px 12px" }}>
                     <span style={{ display:"inline-block",fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:99,background:ac.bg,color:ac.color,whiteSpace:"nowrap" }}>{h.action}</span>
+                    {h.isReplacement && <span style={{ display:"inline-block",fontSize:10.5,fontWeight:600,padding:"3px 8px",borderRadius:99,background:"var(--purple-bg, #f3e8ff)",color:"var(--purple, #7c3aed)",marginLeft:5,whiteSpace:"nowrap" }}>Replacement</span>}
                   </td>
                   <td data-label="Client" style={{ fontSize:13 }}>
                     {h.client ? <div><div style={{ fontWeight:500 }}>{h.client}</div>{h.clientPhone && <div style={{ fontSize:12,color:"var(--text-muted)" }}>{h.clientPhone}</div>}</div> : <span style={{ color:"var(--text-faint)" }}>—</span>}

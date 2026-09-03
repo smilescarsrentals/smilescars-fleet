@@ -33,6 +33,7 @@ const ACTION_COLORS = {
   "Returned":             { bg: "#dcfce7", color: "#15803d" },
   "Booking Extended":     { bg: "#e0f2fe", color: "#0369a1" },
   "Sent to Maintenance":  { bg: "#ffedd5", color: "#c2410c" },
+  "Garage Changed":       { bg: "#e0f2fe", color: "#0369a1" },
   "Marked Available":     { bg: "#dcfce7", color: "#15803d" },
   "Location Updated":     { bg: "#f3f4f6", color: "#374151" },
   "Payment Updated":      { bg: "#ede9fe", color: "#6d28d9" },
@@ -95,7 +96,7 @@ export default function CarProfilePage({ staffName, role }) {
   }, [history]);
 
   const rentalHistory     = useMemo(() => history.filter(h => ["Checked Out","Returned","Booking Extended"].includes(h.action)), [history]);
-  const maintenanceHistory = useMemo(() => history.filter(h => ["Sent to Maintenance","Marked Available"].includes(h.action)), [history]);
+  const maintenanceHistory = useMemo(() => history.filter(h => ["Sent to Maintenance","Marked Available","Garage Changed"].includes(h.action)), [history]);
   const noteHistory        = useMemo(() => history.filter(h => h.action === "Note Added"), [history]);
 
   // Average KM per fueling: gap between consecutive odometer readings across
@@ -362,7 +363,10 @@ export default function CarProfilePage({ staffName, role }) {
                         onMouseEnter={e => e.currentTarget.style.background="#f9fafb"}
                         onMouseLeave={e => e.currentTarget.style.background=""}>
                         <td data-label="Date" style={{ ...S.td,fontSize:12,color:"#888" }}>{fmtDateTime(h.timestamp)}</td>
-                        <td data-label="Action" style={S.td}><span style={{ ...S.badge,background:ac.bg,color:ac.color }}>{h.action}</span></td>
+                        <td data-label="Action" style={S.td}>
+                          <span style={{ ...S.badge,background:ac.bg,color:ac.color }}>{h.action}</span>
+                          {h.isReplacement && <span style={{ display:"inline-block",fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:99,background:"#f3e8ff",color:"#7c3aed",marginLeft:5,whiteSpace:"nowrap" }}>Replacement</span>}
+                        </td>
                         <td data-label="Client" style={{ ...S.td,fontWeight:500 }}>{h.client||"—"}</td>
                         <td data-label="Booked From" style={{ ...S.td,fontSize:12 }}>{fmtDate(h.bookedFrom)}</td>
                         <td data-label="Return Date" style={{ ...S.td,fontSize:12 }}>{fmtDate(h.returnDate)}</td>
