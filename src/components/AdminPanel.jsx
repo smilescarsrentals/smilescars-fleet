@@ -11,7 +11,7 @@ const TABS = [
   { key: "system",   label: "System"   },
 ];
 
-export default function AdminPanel({ staffName, onClose }) {
+export default function AdminPanel({ staffName, role }) {
   const [tab, setTab] = useState("fleet");
   const [config, setConfig] = useState({ locations: [], garages: [], drivers: [] });
 
@@ -20,12 +20,17 @@ export default function AdminPanel({ staffName, onClose }) {
   };
   useEffect(loadConfig, []);
 
+  // Nav-level gating already restricts this route to Admin — this is
+  // defense-in-depth for anyone who navigates to the URL directly.
+  if (role !== "Admin") {
+    return <div style={{ padding: 24 }}><p style={{ fontSize: 13, color: "#888" }}>You don't have access to this page.</p></div>;
+  }
+
   return (
-    <div style={S.overlay} onClick={onClose}>
-      <div style={S.modal} onClick={e => e.stopPropagation()}>
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: "1.25rem" }}>
+      <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
         <div style={S.head}>
-          <p style={S.title}>⚙️ Admin Panel</p>
-          <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>
+          <p style={S.title}>⚙️ Admin</p>
         </div>
 
         <div style={S.tabBar}>

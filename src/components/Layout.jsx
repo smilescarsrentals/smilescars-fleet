@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { pushSupported, pushPermission, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from "../lib/push";
-import AdminPanel from "./AdminPanel";
 import { HR_ENABLED_LOCATIONS } from "./ActionModal";
 
 // "2026-07-22" via new Date(str) parses as UTC midnight, not local midnight —
@@ -65,6 +64,7 @@ const Icon = {
   myhr: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/><path d="M12 13.5v-2"/></svg>,
   hr: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.4 2.5-5.8 5.5-5.8s5.5 2.4 5.5 5.8"/><path d="M17 4.5a3 3 0 010 6"/><path d="M15.5 14.2a5.6 5.6 0 015.5 5.8"/></svg>,
   workflows: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 13l2 2 4-4"/></svg>,
+  admin: (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}><path d="M12 2l7 3.5v6c0 5-3 8.5-7 10.5-4-2-7-5.5-7-10.5v-6L12 2z"/><path d="M9.5 12.5l1.8 1.8 3.2-3.6"/></svg>,
 };
 
 const NAV_GROUPS = [
@@ -93,6 +93,9 @@ const NAV_GROUPS = [
   ]},
   { label: "Workflows", items: [
     { to: "/workflows", key: "workflows", label: "Invoice Approvals", icon: Icon.workflows },
+  ]},
+  { label: "Admin", items: [
+    { to: "/admin", key: "admin", label: "Admin", icon: Icon.admin },
   ]},
 ];
 
@@ -377,7 +380,6 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
   const [staffList,    setStaffList]    = useState([]);
   const [viewingStaff, setViewingStaff] = useState(staffName);
   const [urgentCount,  setUrgentCount]  = useState(0);
-  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [myUpcoming,        setMyUpcoming]        = useState([]); // my own reservations picking up within 24h, not yet checked out
   const [othersUpcomingCount, setOthersUpcomingCount] = useState(0); // Admin/Manager only — count of other staff's, no details
 
@@ -408,10 +410,10 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
         .filter(group => group.items.length > 0)
     : canViewAll
     ? NAV_GROUPS
-        .map(group => ({ ...group, items: group.items.filter(i => (i.key !== "myhr" || hasMyHrAccess) && (i.key !== "hr" || hasHrAccess) && (i.key !== "workflows" || hasWorkflowAccess)) }))
+        .map(group => ({ ...group, items: group.items.filter(i => (i.key !== "myhr" || hasMyHrAccess) && (i.key !== "hr" || hasHrAccess) && (i.key !== "workflows" || hasWorkflowAccess) && (i.key !== "admin" || role === "Admin")) }))
         .filter(group => group.items.length > 0)
     : NAV_GROUPS
-        .map(group => ({ ...group, items: group.items.filter(i => i.key !== "garage" && i.key !== "tracking" && (i.key !== "myhr" || hasMyHrAccess) && (i.key !== "hr" || hasHrAccess) && (i.key !== "workflows" || hasWorkflowAccess)) }))
+        .map(group => ({ ...group, items: group.items.filter(i => i.key !== "garage" && i.key !== "tracking" && (i.key !== "myhr" || hasMyHrAccess) && (i.key !== "hr" || hasHrAccess) && (i.key !== "workflows" || hasWorkflowAccess) && (i.key !== "admin" || role === "Admin")) }))
         .filter(group => group.items.length > 0);
 
   // The reservation reminder banner is only relevant to the operationally-
@@ -687,11 +689,11 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
                 )}
               </div>
             </button>
-            {/* Role badge — for Admins, this is a separate button that opens the Admin Panel */}
+            {/* Role badge — for Admins, this is a separate button that opens the Admin page */}
             {role === "Admin" && (
-              <button type="button" onClick={() => setAdminPanelOpen(true)} className="sc-topbar-role-btn"
+              <button type="button" onClick={() => navigate("/admin")} className="sc-topbar-role-btn"
                 style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:".4px", background:roleBadge.bg, color:roleBadge.color, padding:"3px 9px", borderRadius:4, border:"none", cursor:"pointer" }}
-                title="Open Admin Panel">
+                title="Open Admin">
                 {role}
               </button>
             )}
@@ -871,7 +873,6 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
         </div>
       </div>
 
-      {adminPanelOpen && <AdminPanel staffName={staffName} onClose={() => setAdminPanelOpen(false)} />}
     </div>
   );
 }
