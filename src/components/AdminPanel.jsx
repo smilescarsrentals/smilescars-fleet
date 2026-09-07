@@ -1,12 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { api } from "../lib/api";
 import AddCarModal from "./AddCarModal";
 import { toTitleCase } from "../lib/textFormat";
+import { splitIntoCoverNoteChunks } from "../lib/coverNoteSplit";
 
 const TABS = [
   { key: "fleet",    label: "Fleet"    },
   { key: "staff",    label: "Staff"    },
   { key: "notifications", label: "Notifications" },
+  { key: "coverNotes", label: "Cover Notes" },
   { key: "features", label: "Features" },
   { key: "system",   label: "System"   },
 ];
@@ -46,6 +48,7 @@ export default function AdminPanel({ staffName, role }) {
           {tab === "fleet"    && <FleetTab    config={config} onConfigChanged={loadConfig} />}
           {tab === "staff"    && <StaffTab staffName={staffName} />}
           {tab === "notifications" && <NotificationsTab staffName={staffName} />}
+          {tab === "coverNotes" && <CoverNotesTab staffName={staffName} />}
           {tab === "features" && <FeaturesTab />}
           {tab === "system"   && <SystemTab />}
         </div>
@@ -344,6 +347,15 @@ function NotificationsTab({ staffName }) {
     finally { setBusyKey(null); }
   };
 
+  const toggleInsuranceReminders = async (s) => {
+    setBusyKey("ins-" + s.name);
+    try {
+      await api.setReceivesInsuranceReminders({ name: s.name, enabled: !s.receivesInsuranceReminders, staffName });
+      setStaff(list => list.map(x => x.name === s.name ? { ...x, receivesInsuranceReminders: !x.receivesInsuranceReminders } : x));
+    } catch (e) { alert(e.message); }
+    finally { setBusyKey(null); }
+  };
+
   const toggleCanManageDrivers = async (s) => {
     setBusyKey("cmd-" + s.name);
     try {
@@ -387,6 +399,16 @@ function NotificationsTab({ staffName }) {
       </p>
       {staff.filter(s => s.active).map(s => (
         <ToggleRow key={s.name} label={s.name} sub={s.role} on={s.receivesDriverDocumentReminders} busy={busyKey === "dd-" + s.name} onToggle={() => toggleDriverDocReminders(s)} />
+      ))}
+
+      <p style={{ fontSize: 12, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 0.3, margin: "20px 0 8px" }}>
+        Insurance Cover Note Reminders
+      </p>
+      <p style={{ fontSize: 12, color: "#888", margin: "0 0 12px" }}>
+        Turn this on for whoever should be notified when a car's insurance cover note is expiring (30 and 7 days before).
+      </p>
+      {staff.filter(s => s.active).map(s => (
+        <ToggleRow key={s.name} label={s.name} sub={s.role} on={s.receivesInsuranceReminders} busy={busyKey === "ins-" + s.name} onToggle={() => toggleInsuranceReminders(s)} />
       ))}
 
       <p style={{ fontSize: 12, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 0.3, margin: "20px 0 8px" }}>
@@ -468,6 +490,284 @@ function ToggleRow({ label, sub, on, busy, onToggle }) {
 }
 
 // ── System tab: Dropbox sync status + Backup snapshot ──────────────────────
+// ── Cover Notes tab: bulk upload + per-car overview ─────────────────────
+const EXPIRY_STYLE = (expiry) => {
+  if (!expiry) return { bg: "#f3f4f6", fg: "#6b7280", label: "No cover note" };
+  const days = Math.floor((new Date(expiry) - new Date()) / 86400000);
+  if (days < 0) return { bg: "#fee2e2", fg: "#991b1b", label: `Expired ${fmtShortDate(expiry)}` };
+  if (days <= 30) return { bg: "#fef3c7", fg: "#92400e", label: `Expires ${fmtShortDate(expiry)}` };
+  return { bg: "#dcfce7", fg: "#166534", label: `Valid until ${fmtShortDate(expiry)}` };
+};
+function fmtShortDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return isNaN(d) ? iso : d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function CoverNotesTab({ staffName }) {
+  const [fleetStatus, setFleetStatus] = useState(null);
+  const [showUpload, setShowUpload] = useState(false);
+
+  const load = () => {
+    api.getFleetCoverNoteStatus(staffName).then(res => setFleetStatus(res.data || [])).catch(() => setFleetStatus([]));
+  };
+  useEffect(load, []);
+
+  const missing = fleetStatus ? fleetStatus.filter(c => !c.hasCoverNote) : [];
+
+  return (
+    <div>
+      <button type="button" style={S.primaryBtn} onClick={() => setShowUpload(true)}>+ Bulk Upload Cover Note PDFs</button>
+
+      {fleetStatus === null ? <p style={{ fontSize: 13, color: "#888" }}>Loading…</p> : (
+        <>
+          <p style={S.sectionTitle}>{missing.length} car{missing.length === 1 ? "" : "s"} with no cover note on file</p>
+          {missing.length > 0 && (
+            <div style={{ ...S.listBox, marginBottom: 16 }}>
+              {missing.map(c => (
+                <div key={c.plate} style={S.listRow}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{c.plate}</div>
+                  <div style={{ fontSize: 11, color: "#888", marginLeft: 6 }}>{c.type}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p style={S.sectionTitle}>All Cars</p>
+          <div style={{ ...S.listBox, maxHeight: 320 }}>
+            {fleetStatus.map(c => {
+              const st = EXPIRY_STYLE(c.currentExpiry);
+              return (
+                <div key={c.plate} style={S.listRow}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{c.plate}</div>
+                    <div style={{ fontSize: 11, color: "#888" }}>{c.type}{c.currentInsurer ? ` · ${c.currentInsurer}` : ""}</div>
+                  </div>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: st.bg, color: st.fg, whiteSpace: "nowrap" }}>{st.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {showUpload && <BulkUploadCoverNotesModal staffName={staffName} onClose={() => { setShowUpload(false); load(); }} />}
+    </div>
+  );
+}
+
+function BulkUploadCoverNotesModal({ staffName, onClose }) {
+  const [fleet, setFleet] = useState([]);
+  const [files, setFiles] = useState([]); // source File objects picked
+  const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState("");
+  const [items, setItems] = useState([]); // review items
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    api.getFleet().then(res => setFleet(res.data || [])).catch(() => {});
+  }, []);
+
+  const plateOptions = useMemo(() => fleet.map(c => c.plate).filter(Boolean).sort(), [fleet]);
+  const normalizedPlateMap = useMemo(() => {
+    const map = {};
+    plateOptions.forEach(p => { map[p.replace(/\s+/g, "").toUpperCase()] = p; });
+    return map;
+  }, [plateOptions]);
+
+  const matchPlates = (guesses) => (guesses || [])
+    .map(g => normalizedPlateMap[String(g).replace(/\s+/g, "").toUpperCase()])
+    .filter(Boolean);
+
+  const startScan = async () => {
+    if (files.length === 0) { setErr("Choose at least one PDF file first."); return; }
+    setScanning(true); setErr("");
+    const collected = [];
+    try {
+      for (let fi = 0; fi < files.length; fi++) {
+        const file = files[fi];
+        setScanProgress(`Splitting ${file.name} (${fi + 1} of ${files.length})…`);
+        const chunks = await splitIntoCoverNoteChunks(file);
+        for (let ci = 0; ci < chunks.length; ci++) {
+          setScanProgress(`${file.name}: reading cover note ${ci + 1} of ${chunks.length}…`);
+          try {
+            const res = await api.scanCoverNote({ staffName, fileBase64: chunks[ci].base64, filename: chunks[ci].filename });
+            collected.push({
+              id: `${fi}-${ci}-${Date.now()}`, previewFileId: res.previewFileId, previewFileUrl: res.previewFileUrl,
+              sourceLabel: `${file.name} (${chunks[ci].pageRange})`,
+              plates: matchPlates(res.plates), rawPlates: res.plates || [],
+              startDate: res.startDate || "", expiryDate: res.expiryDate || "",
+              insurerName: res.insurerName || "", coverNoteNumber: res.coverNoteNumber || "",
+              status: "pending",
+            });
+          } catch (e) {
+            collected.push({
+              id: `${fi}-${ci}-${Date.now()}`, previewFileId: null, previewFileUrl: null,
+              sourceLabel: `${file.name} (${chunks[ci].pageRange})`, plates: [], rawPlates: [],
+              startDate: "", expiryDate: "", insurerName: "", coverNoteNumber: "", status: "error", error: e.message,
+            });
+          }
+        }
+      }
+      setItems(collected);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setScanning(false); setScanProgress("");
+    }
+  };
+
+  const updateItem = (id, patch) => setItems(list => list.map(it => it.id === id ? { ...it, ...patch } : it));
+
+  const confirmItem = async (item) => {
+    if (!item.plates.length) { updateItem(item.id, { error: "Select at least one car." }); return; }
+    updateItem(item.id, { busy: true, error: "" });
+    try {
+      await api.confirmCoverNote({
+        staffName, previewFileId: item.previewFileId, plates: item.plates,
+        startDate: item.startDate || null, expiryDate: item.expiryDate || null,
+        insurerName: item.insurerName, coverNoteNumber: item.coverNoteNumber,
+      });
+      updateItem(item.id, { status: "confirmed", busy: false });
+    } catch (e) {
+      updateItem(item.id, { busy: false, error: e.message });
+    }
+  };
+  const discardItem = async (item) => {
+    updateItem(item.id, { busy: true });
+    try {
+      if (item.previewFileId) await api.discardCoverNotePreview({ staffName, previewFileId: item.previewFileId });
+      updateItem(item.id, { status: "discarded", busy: false });
+    } catch (e) {
+      updateItem(item.id, { busy: false, error: e.message });
+    }
+  };
+
+  const pendingCount = items.filter(it => it.status === "pending").length;
+  const allDone = items.length > 0 && pendingCount === 0;
+
+  return (
+    <div style={S.overlay} onClick={scanning ? undefined : onClose}>
+      <div style={{ ...S.modal, width: 620 }} onClick={e => e.stopPropagation()}>
+        <div style={S.head}>
+          <p style={S.title}>Bulk Upload Cover Notes</p>
+          {!scanning && <button type="button" style={S.closeBtn} onClick={onClose}>✕</button>}
+        </div>
+        <div style={{ ...S.body, maxHeight: "75vh" }}>
+          {items.length === 0 ? (
+            <>
+              <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 12px" }}>
+                Select all your cover note PDFs at once. Each is automatically split into 2-page cover notes, read, and matched to a car — you'll confirm each match before anything is filed.
+              </p>
+              <input type="file" accept="application/pdf,.pdf" multiple disabled={scanning}
+                onChange={e => setFiles(Array.from(e.target.files || []))} style={{ ...S.input, marginBottom: 10 }} />
+              {files.length > 0 && <p style={{ fontSize: 12, color: "#555", margin: "0 0 10px" }}>{files.length} file{files.length === 1 ? "" : "s"} selected</p>}
+              {err && <p style={S.err}>{err}</p>}
+              {scanning && <p style={{ fontSize: 12.5, color: "#7c3aed", margin: "0 0 10px" }}>{scanProgress}</p>}
+              <button type="button" style={{ ...S.primaryBtn, marginBottom: 0, opacity: scanning ? 0.65 : 1 }} disabled={scanning} onClick={startScan}>
+                {scanning ? "Reading…" : "Split & Scan"}
+              </button>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: 12.5, color: "#888", margin: "0 0 12px" }}>
+                {pendingCount} of {items.length} still need review{allDone ? " — all done." : "."}
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {items.map(item => (
+                  <CoverNoteReviewRow key={item.id} item={item} plateOptions={plateOptions}
+                    onChange={patch => updateItem(item.id, patch)}
+                    onConfirm={() => confirmItem(item)} onDiscard={() => discardItem(item)} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CoverNoteReviewRow({ item, plateOptions, onChange, onConfirm, onDiscard }) {
+  const [plateQuery, setPlateQuery] = useState("");
+  const [viewing, setViewing] = useState(false);
+
+  if (item.status === "confirmed") {
+    return <div style={{ border: "1px solid #dcfce7", background: "#f0fdf4", borderRadius: 9, padding: 10, fontSize: 12.5, color: "#166534" }}>✅ {item.sourceLabel} — filed under {item.plates.join(", ")}</div>;
+  }
+  if (item.status === "discarded") {
+    return <div style={{ border: "1px solid #f3f4f6", background: "#fafafa", borderRadius: 9, padding: 10, fontSize: 12.5, color: "#888" }}>Discarded — {item.sourceLabel}</div>;
+  }
+  if (item.status === "error") {
+    return <div style={{ border: "1px solid #fee2e2", background: "#fef2f2", borderRadius: 9, padding: 10, fontSize: 12.5, color: "#991b1b" }}>Could not read {item.sourceLabel}: {item.error}</div>;
+  }
+
+  const suggestions = plateQuery ? plateOptions.filter(p => p.replace(/\s+/g, "").toUpperCase().includes(plateQuery.replace(/\s+/g, "").toUpperCase())).slice(0, 8) : [];
+
+  return (
+    <div style={{ border: "1px solid #e5e7eb", borderRadius: 9, padding: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600 }}>{item.sourceLabel}</span>
+        <button type="button" style={S.smallLink} onClick={() => setViewing(true)}>View PDF</button>
+      </div>
+
+      {item.rawPlates.length > 0 && item.plates.length === 0 && (
+        <p style={{ fontSize: 11, color: "#b45309", margin: "0 0 6px" }}>Read as "{item.rawPlates.join(", ")}" — no exact match in the fleet, pick manually below.</p>
+      )}
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 6 }}>
+        {item.plates.map(p => (
+          <span key={p} style={{ fontSize: 11.5, fontWeight: 600, background: "#ede9fe", color: "#7c3aed", padding: "3px 8px", borderRadius: 999, display: "flex", alignItems: "center", gap: 5 }}>
+            {p}
+            <button type="button" onClick={() => onChange({ plates: item.plates.filter(x => x !== p) })} style={{ background: "none", border: "none", cursor: "pointer", color: "#7c3aed", fontSize: 12, padding: 0 }}>✕</button>
+          </span>
+        ))}
+      </div>
+      <div style={{ position: "relative", marginBottom: 8 }}>
+        <input value={plateQuery} onChange={e => setPlateQuery(e.target.value)} placeholder="Add a car (search plate)…" style={S.input} />
+        {suggestions.length > 0 && (
+          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 7, marginTop: 2, maxHeight: 160, overflowY: "auto", zIndex: 10, boxShadow: "0 4px 14px rgba(0,0,0,0.1)" }}>
+            {suggestions.map(p => (
+              <button type="button" key={p} onClick={() => { if (!item.plates.includes(p)) onChange({ plates: [...item.plates, p] }); setPlateQuery(""); }}
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", fontSize: 12.5, border: "none", background: "none", cursor: "pointer" }}>
+                {p}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+        <div><label style={S.label}>Start Date</label><input type="date" value={item.startDate} onChange={e => onChange({ startDate: e.target.value })} style={S.input} /></div>
+        <div><label style={S.label}>Expiry Date</label><input type="date" value={item.expiryDate} onChange={e => onChange({ expiryDate: e.target.value })} style={S.input} /></div>
+        <div><label style={S.label}>Insurer</label><input value={item.insurerName} onChange={e => onChange({ insurerName: e.target.value })} style={S.input} /></div>
+        <div><label style={S.label}>Cover Note #</label><input value={item.coverNoteNumber} onChange={e => onChange({ coverNoteNumber: e.target.value })} style={S.input} /></div>
+      </div>
+
+      {item.error && <p style={S.err}>{item.error}</p>}
+      <div style={{ display: "flex", gap: 6 }}>
+        <button type="button" disabled={item.busy} onClick={onConfirm}
+          style={{ ...S.primaryBtn, marginBottom: 0, padding: "7px 14px", fontSize: 12.5, opacity: item.busy ? 0.65 : 1 }}>
+          {item.busy ? "Filing…" : "File Under Selected Car(s)"}
+        </button>
+        <button type="button" disabled={item.busy} onClick={onDiscard}
+          style={{ padding: "7px 14px", fontSize: 12.5, color: "#666", background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 7, cursor: "pointer" }}>
+          Discard
+        </button>
+      </div>
+
+      {viewing && item.previewFileUrl && (
+        <div style={S.overlay} onClick={() => setViewing(false)}>
+          <div style={{ ...S.modal, width: "min(90vw, 700px)", height: "80vh" }} onClick={e => e.stopPropagation()}>
+            <div style={S.head}><p style={S.title}>{item.sourceLabel}</p><button type="button" style={S.closeBtn} onClick={() => setViewing(false)}>✕</button></div>
+            <iframe title="Cover note preview" src={item.previewFileUrl} style={{ flex: 1, border: "none", width: "100%" }} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SystemTab() {
   const [status,   setStatus]   = useState(null);
   const [backing,  setBacking]  = useState(false);

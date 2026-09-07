@@ -58,6 +58,7 @@ export default function CarProfilePage({ staffName, role }) {
   const [car,        setCar]        = useState(null);
   const [history,    setHistory]    = useState([]);
   const [fuel,       setFuel]       = useState([]);
+  const [coverNotes, setCoverNotes] = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState("");
   const [note,       setNote]       = useState("");
@@ -71,6 +72,8 @@ export default function CarProfilePage({ staffName, role }) {
       const fleetRes = await api.getCarByPlate(decodedPlate);
       if (!fleetRes.success) { setError(fleetRes.error || `Car "${decodedPlate}" not found.`); setLoading(false); return; }
       setCar(fleetRes.data);
+      const coverRes = await api.getCoverNotesForCar(decodedPlate);
+      setCoverNotes(coverRes.data || []);
       if (canSeeFullProfile) {
         const histRes = await api.getCarHistory(decodedPlate);
         setHistory(histRes.data || []);
@@ -84,6 +87,18 @@ export default function CarProfilePage({ staffName, role }) {
   useEffect(() => { load(); }, [decodedPlate]);
 
   const [selectedRental, setSelectedRental] = useState(null);
+
+  // Cover notes are already ordered by expiry_date DESC from the backend —
+  // the first one is the one furthest from expiring, i.e. the current one.
+  const insuranceStatus = useMemo(() => {
+    const current = coverNotes[0];
+    if (!current || !current.expiryDate) return { label: "No cover note on file", color: "#888" };
+    const days = Math.floor((new Date(current.expiryDate) - new Date()) / 86400000);
+    const fmt = new Date(current.expiryDate).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+    if (days < 0) return { label: `Expired ${fmt}`, color: "#dc2626" };
+    if (days <= 30) return { label: `Expires ${fmt}`, color: "#b45309" };
+    return { label: `Valid until ${fmt}`, color: "#166534" };
+  }, [coverNotes]);
 
   const stats = useMemo(() => {
     const rentals = history.filter(h => h.action === "Checked Out");
@@ -295,6 +310,7 @@ export default function CarProfilePage({ staffName, role }) {
               ["Driver",car.driver||"—"],["Fuel Out",fuelVal(car.fuelOut)||"—"],["KM Out",car.kmOut?Number(car.kmOut).toLocaleString("en-US"):"—"],
               ["Avg KM per Fueling",avgKmPerFueling!=null?`${avgKmPerFueling.toLocaleString("en-US")} km`:"—"],
               ["Avg KM per Litre",avgKmPerLitre!=null?`${avgKmPerLitre} km/L`:"—"],
+              ["Insurance",<span style={{ color:insuranceStatus.color, fontWeight:600 }}>{insuranceStatus.label}</span>],
               ["Current Client",car.currentClient||"—"],["Client Phone",car.clientPhone||"—"],
               ["Booked From",fmtDate(car.bookedFrom)],["Return Date",fmtDate(car.returnDate)],
               ["Payment Status",car.paymentStatus||"—"],["Amount",car.amount?fmtMoney(car.amount,car.currency):"—"],
