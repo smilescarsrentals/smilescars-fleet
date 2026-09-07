@@ -310,7 +310,18 @@ export default function CarProfilePage({ staffName, role }) {
               ["Driver",car.driver||"—"],["Fuel Out",fuelVal(car.fuelOut)||"—"],["KM Out",car.kmOut?Number(car.kmOut).toLocaleString("en-US"):"—"],
               ["Avg KM per Fueling",avgKmPerFueling!=null?`${avgKmPerFueling.toLocaleString("en-US")} km`:"—"],
               ["Avg KM per Litre",avgKmPerLitre!=null?`${avgKmPerLitre} km/L`:"—"],
-              ["Insurance",<span style={{ color:insuranceStatus.color, fontWeight:600 }}>{insuranceStatus.label}</span>],
+              ["Insurance",
+                <span>
+                  <span style={{ color:insuranceStatus.color, fontWeight:600 }}>{insuranceStatus.label}</span>
+                  {coverNotes[0]?.fileUrl && (
+                    <>
+                      {" · "}
+                      <a href={coverNotes[0].fileUrl} target="_blank" rel="noreferrer" style={{ color:"var(--sc-blue,#04519B)", fontWeight:600 }}>View</a>
+                      {" / "}
+                      <a href={`${coverNotes[0].fileUrl}&download=1`} style={{ color:"var(--sc-blue,#04519B)", fontWeight:600 }}>Download</a>
+                    </>
+                  )}
+                </span>],
               ["Current Client",car.currentClient||"—"],["Client Phone",car.clientPhone||"—"],
               ["Booked From",fmtDate(car.bookedFrom)],["Return Date",fmtDate(car.returnDate)],
               ["Payment Status",car.paymentStatus||"—"],["Amount",car.amount?fmtMoney(car.amount,car.currency):"—"],
@@ -322,6 +333,30 @@ export default function CarProfilePage({ staffName, role }) {
               </div>
             ))}
           </div>
+
+          {coverNotes.length > 0 && (
+            <div style={{ marginTop:20, paddingTop:16, borderTop:"1px solid #f3f4f6" }}>
+              <p style={{ fontSize:12, fontWeight:700, color:"#888", textTransform:"uppercase", letterSpacing:".3px", margin:"0 0 10px" }}>
+                Insurance Cover Notes on File ({coverNotes.length})
+              </p>
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {coverNotes.map(cn => (
+                  <div key={cn.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", border:"1px solid #f3f4f6", borderRadius:8, padding:"8px 12px" }}>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:600 }}>{cn.insurerName || "Unknown insurer"}{cn.coverNoteNumber ? ` · ${cn.coverNoteNumber}` : ""}</div>
+                      <div style={{ fontSize:11.5, color:"#888" }}>
+                        {cn.startDate ? `${fmtDate(cn.startDate)} – ` : ""}{fmtDate(cn.expiryDate)} · Uploaded by {cn.uploadedBy}
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", gap:10, flexShrink:0 }}>
+                      <a href={cn.fileUrl} target="_blank" rel="noreferrer" style={{ fontSize:12, fontWeight:600, color:"var(--sc-blue,#04519B)" }}>View</a>
+                      <a href={`${cn.fileUrl}&download=1`} style={{ fontSize:12, fontWeight:600, color:"var(--sc-blue,#04519B)" }}>Download</a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
