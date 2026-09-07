@@ -49,6 +49,62 @@ function fuelVal(val) {
   return s;
 }
 
+// Popup viewer for the current cover note — View (iframe), Download, and
+// Share (native share sheet with the actual PDF file when supported, e.g.
+// WhatsApp/email on mobile; falls back to copying the link on desktop
+// browsers that don't support sharing files).
+function CoverNotePopup({ coverNote, plate, onClose }) {
+  const [sharing, setSharing] = useState(false);
+  const [shareMsg, setShareMsg] = useState("");
+  const filename = `${plate} - Cover Note.pdf`;
+
+  const handleShare = async () => {
+    setSharing(true); setShareMsg("");
+    try {
+      const res = await fetch(coverNote.fileUrl);
+      const blob = await res.blob();
+      const file = new File([blob], filename, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename, text: `Insurance cover note for ${plate}` });
+      } else if (navigator.share) {
+        await navigator.share({ title: filename, url: coverNote.fileUrl });
+      } else {
+        await navigator.clipboard.writeText(coverNote.fileUrl);
+        setShareMsg("Link copied to clipboard");
+      }
+    } catch (e) {
+      if (e.name !== "AbortError") setShareMsg("Could not share — try Download instead.");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:14,width:"min(92vw, 720px)",height:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.25)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ padding:"1rem 1.25rem",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #f3f4f6" }}>
+          <div>
+            <p style={{ fontSize:15,fontWeight:700,margin:0 }}>Cover Note — {plate}</p>
+            {coverNote.insurerName && <p style={{ fontSize:12,color:"#888",margin:"2px 0 0" }}>{coverNote.insurerName}{coverNote.coverNoteNumber ? ` · ${coverNote.coverNoteNumber}` : ""}</p>}
+          </div>
+          <button type="button" onClick={onClose} style={{ background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#888" }}>✕</button>
+        </div>
+        <iframe title="Cover note" src={coverNote.fileUrl} style={{ flex:1,border:"none",width:"100%" }} />
+        <div style={{ padding:"0.85rem 1.25rem",borderTop:"1px solid #f3f4f6",display:"flex",gap:8,alignItems:"center" }}>
+          <a href={`${coverNote.fileUrl}&download=1`} style={{ flex:1,textAlign:"center",padding:"9px",fontSize:13,fontWeight:600,color:"#fff",background:"var(--sc-blue,#04519B)",borderRadius:8,textDecoration:"none" }}>
+            ⬇ Download
+          </a>
+          <button type="button" disabled={sharing} onClick={handleShare}
+            style={{ flex:1,padding:"9px",fontSize:13,fontWeight:600,color:"#4338ca",background:"#eef2ff",border:"1.5px solid #c7d2fe",borderRadius:8,cursor:"pointer",opacity:sharing?0.65:1 }}>
+            {sharing ? "Preparing…" : "📤 Share"}
+          </button>
+        </div>
+        {shareMsg && <p style={{ fontSize:12,color:"#888",textAlign:"center",margin:"0 0 10px" }}>{shareMsg}</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function CarProfilePage({ staffName, role }) {
   const { plate }  = useParams();
   const navigate   = useNavigate();
@@ -65,6 +121,7 @@ export default function CarProfilePage({ staffName, role }) {
   const [savingNote, setSavingNote] = useState(false);
   const [noteToast,  setNoteToast]  = useState("");
   const [activeTab,  setActiveTab]  = useState("overview");
+  const [showCoverNotePopup, setShowCoverNotePopup] = useState(false);
 
   const load = async () => {
     setLoading(true); setError("");
@@ -181,14 +238,12 @@ export default function CarProfilePage({ staffName, role }) {
       {car.photosUrl
         ? <a href={car.photosUrl} target="_blank" rel="noopener noreferrer" style={large ? {...S.docBtnLarge,background:"#eff6ff",color:"#2563eb",borderColor:"#bfdbfe"} : {...S.docBtn,background:"#eff6ff",color:"#2563eb",borderColor:"#bfdbfe"}}>📷 {large?"Car Photos":"Photos"}</a>
         : <span style={large ? S.docBtnLargeOff : S.docBtnDisabled}>📷 No Photos</span>}
-      <button style={large ? {...S.docBtnLarge,background:"#fff7ed",color:"#c2410c",borderColor:"#fed7aa",cursor:"pointer",border:"1.5px solid #fed7aa"} : {...S.docBtn,background:"#fff7ed",color:"#c2410c",borderColor:"#fed7aa",cursor:"pointer"}}
-        onClick={() => { navigator.clipboard.writeText(car.plate).catch(()=>{}); window.open("https://tms.tpf.go.tz","_blank"); }}>
-        🚔 {large?"Check TMS Fines":"TMS Fines"}
-      </button>
-      <button style={large ? {...S.docBtnLarge,background:"#fefce8",color:"#854d0e",borderColor:"#fde68a",cursor:"pointer",border:"1.5px solid #fde68a"} : {...S.docBtn,background:"#fefce8",color:"#854d0e",borderColor:"#fde68a",cursor:"pointer"}}
-        onClick={() => { navigator.clipboard.writeText(car.plate).catch(()=>{}); window.open("https://tausi.tamisemi.go.tz/#/taxpayer/parking","_blank"); }}>
-        🅿️ {large?"Check Parking Fines":"Parking Fines"}
-      </button>
+      {coverNotes[0]?.fileUrl
+        ? <button style={large ? {...S.docBtnLarge,background:"#eef2ff",color:"#4338ca",borderColor:"#c7d2fe",cursor:"pointer",border:"1.5px solid #c7d2fe"} : {...S.docBtn,background:"#eef2ff",color:"#4338ca",borderColor:"#c7d2fe",cursor:"pointer"}}
+            onClick={() => setShowCoverNotePopup(true)}>
+            🛡️ {large?"Cover Note":"Cover Note"}
+          </button>
+        : <span style={large ? S.docBtnLargeOff : S.docBtnDisabled}>🛡️ No Cover Note</span>}
     </>
   );
 
@@ -237,6 +292,9 @@ export default function CarProfilePage({ staffName, role }) {
             </div>
           )}
         </div>
+        {showCoverNotePopup && coverNotes[0] && (
+          <CoverNotePopup coverNote={coverNotes[0]} plate={car.plate} onClose={() => setShowCoverNotePopup(false)} />
+        )}
       </div>
     );
   }
@@ -499,6 +557,9 @@ export default function CarProfilePage({ staffName, role }) {
       )}
 
       {activeTab==="tracking" && <div style={S.tabContent}><TrackingTab plate={decodedPlate} /></div>}
+      {showCoverNotePopup && coverNotes[0] && (
+        <CoverNotePopup coverNote={coverNotes[0]} plate={car.plate} onClose={() => setShowCoverNotePopup(false)} />
+      )}
     </div>
   );
 }
