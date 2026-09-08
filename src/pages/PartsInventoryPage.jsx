@@ -3,6 +3,12 @@ import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
 import { SupplierPicker } from "./MaintenancePage";
 
+const invStyles = {
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+  th:    { padding: "10px 12px", fontSize: 11, fontWeight: 600, color: "var(--text-muted)", borderBottom: "1px solid var(--border)", background: "var(--bg)", textTransform: "uppercase", letterSpacing: ".4px", whiteSpace: "nowrap" },
+  td:    { padding: "10px 12px", verticalAlign: "middle", borderBottom: "1px solid var(--border-light)" },
+};
+
 function fmtMoney(n) {
   return Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
@@ -87,48 +93,56 @@ export default function PartsInventoryPage({ staffName, role }) {
           {search || lowStockOnly ? "No matching parts." : "No parts in inventory yet."}
         </p>
       ) : (
-        <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
-          {filtered.map(p => {
-            const low = isLowStock(p);
-            return (
-              <div key={p.id} style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
-                padding: "10px 14px", borderBottom: "1px solid var(--border-light)",
-                background: low ? "var(--amber-bg)" : "var(--surface)", opacity: p.active ? 1 : 0.6,
-              }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontWeight: 700, fontSize: 13.5 }}>{p.name}</span>
-                    {low && <span style={{ fontSize: 10, fontWeight: 700, color: "#d97706" }}>⚠ LOW STOCK</span>}
-                    {!p.active && <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-faint)", background: "var(--border-light)", borderRadius: 10, padding: "1px 8px" }}>Inactive</span>}
-                  </div>
-                  <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "3px 0 0" }}>
-                    {p.category || "—"} · {vendorName(p.vendorId)}
-                  </p>
-                </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: low ? "#d97706" : "var(--text)" }}>
-                    {p.quantityOnHand} in stock
-                  </p>
-                  <p style={{ fontSize: 11.5, color: "var(--text-faint)", margin: "2px 0 0" }}>TZS {fmtMoney(p.unitCost)} / unit</p>
-                </div>
-                {canEdit && (
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    <button type="button" onClick={() => setEditing(p)}
-                      style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer",
-                        border: "1.5px solid var(--sc-blue)", background: "var(--surface)", color: "var(--sc-blue)" }}>
-                      Edit
-                    </button>
-                    <button type="button" onClick={() => handleDelete(p)}
-                      style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer",
-                        border: "1.5px solid var(--red)", background: "var(--surface)", color: "var(--red)" }}>
-                      Delete
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <div className="table-wrap">
+          <table style={invStyles.table}>
+            <thead>
+              <tr>
+                {["Item", "Category / Supplier", "In Stock", "Price / Unit", ...(canEdit ? ["Actions"] : [])].map(h =>
+                  <th key={h} data-label={h} style={{ ...invStyles.th, textAlign: (h === "In Stock" || h === "Price / Unit" || h === "Actions") ? "right" : "left" }}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(p => {
+                const low = isLowStock(p);
+                return (
+                  <tr key={p.id} style={{ background: low ? "var(--amber-bg)" : "transparent", opacity: p.active ? 1 : 0.6 }}>
+                    <td data-label="Item" style={invStyles.td}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 700, fontSize: 13.5 }}>{p.name}</span>
+                        {low && <span style={{ fontSize: 10, fontWeight: 700, color: "#d97706" }}>⚠ LOW STOCK</span>}
+                        {!p.active && <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-faint)", background: "var(--border-light)", borderRadius: 10, padding: "1px 8px" }}>Inactive</span>}
+                      </div>
+                    </td>
+                    <td data-label="Category / Supplier" style={{ ...invStyles.td, fontSize: 12, color: "var(--text-muted)" }}>
+                      {p.category || "—"} · {vendorName(p.vendorId)}
+                    </td>
+                    <td data-label="In Stock" style={{ ...invStyles.td, textAlign: "right", fontWeight: 700, color: low ? "#d97706" : "var(--text)" }}>
+                      {p.quantityOnHand}
+                    </td>
+                    <td data-label="Price / Unit" style={{ ...invStyles.td, textAlign: "right", color: "var(--text-faint)", fontSize: 12.5 }}>
+                      TZS {fmtMoney(p.unitCost)}
+                    </td>
+                    {canEdit && (
+                      <td data-label="Actions" style={{ ...invStyles.td, textAlign: "right" }}>
+                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                          <button type="button" onClick={() => setEditing(p)}
+                            style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer",
+                              border: "1.5px solid var(--sc-blue)", background: "var(--surface)", color: "var(--sc-blue)" }}>
+                            Edit
+                          </button>
+                          <button type="button" onClick={() => handleDelete(p)}
+                            style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer",
+                              border: "1.5px solid var(--red)", background: "var(--surface)", color: "var(--red)" }}>
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
