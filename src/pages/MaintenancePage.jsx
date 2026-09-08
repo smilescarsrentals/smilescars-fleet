@@ -594,8 +594,33 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
   const [selectedPartId, setSelectedPartId] = useState("");
   const [newItem, setNewItem] = useState({ itemName: "", quantity: "1", unitCost: "", supplierVendorId: "", supplierLocation: "" });
   const [err, setErr] = useState("");
+  const [priceHint, setPriceHint] = useState(false); // true while the shown unit cost is an auto-fill, not user-typed
 
   useEffect(() => { load(); }, [workOrderId]);
+
+  // "From Supplier" items don't have a fixed catalog price like stock parts
+  // do — auto-fill the last price actually paid to this exact supplier for
+  // this exact item name, so staff aren't guessing/re-typing something
+  // that's already on record. Debounced since itemName is free-typed;
+  // never overwrites a cost the user has already entered themselves.
+  useEffect(() => {
+    if (fromStock) return;
+    if (!newItem.supplierVendorId || !newItem.itemName.trim()) return;
+    if (newItem.unitCost && !priceHint) return; // user typed their own value — leave it alone
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.getPreviousSupplierPrice(newItem.supplierVendorId, newItem.itemName);
+        if (res?.unitCost != null) {
+          setNewItem(n => ({ ...n, unitCost: String(res.unitCost) }));
+          setPriceHint(true);
+        } else {
+          setPriceHint(false);
+        }
+      } catch { /* silent — this is a convenience, not a required step */ }
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newItem.supplierVendorId, newItem.itemName, fromStock]);
 
   async function load() {
     setLoading(true);
@@ -691,7 +716,7 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
             {[["stock","From Stock"],["free","From Supplier"]].map(([val,lab]) => (
               <button key={val} type="button"
-                onClick={() => { setFromStock(val==="stock"); setSelectedPartId(""); setNewItem({ itemName:"", quantity:"1", unitCost:"", supplierVendorId:"", supplierLocation:"" }); setErr(""); }}
+                onClick={() => { setFromStock(val==="stock"); setSelectedPartId(""); setNewItem({ itemName:"", quantity:"1", unitCost:"", supplierVendorId:"", supplierLocation:"" }); setErr(""); setPriceHint(false); }}
                 style={{ flex:1, padding:"6px 0", fontSize:11.5, fontWeight:600, borderRadius:6, cursor:"pointer", fontFamily:"inherit",
                   border:`1.5px solid ${(val==="stock")===fromStock ? "var(--sc-blue)" : "var(--border)"}`,
                   background: (val==="stock")===fromStock ? "var(--blue-bg)" : "var(--surface)",
@@ -729,8 +754,11 @@ function JobCardItems({ workOrderId, totalCost, canEdit, staffName, onChanged })
               onChange={e => setNewItem(n => ({ ...n, quantity: e.target.value }))} />
             <input style={{ ...S.input, flex: 1 }} type="number" min="0" placeholder="Unit cost (TZS)" value={newItem.unitCost}
               disabled={fromStock && !!selectedPart}
-              onChange={e => setNewItem(n => ({ ...n, unitCost: e.target.value }))} />
+              onChange={e => { setPriceHint(false); setNewItem(n => ({ ...n, unitCost: e.target.value })); }} />
           </div>
+          {!fromStock && priceHint && newItem.unitCost && (
+            <p style={{ fontSize: 10.5, color: "var(--sc-blue)", margin: "3px 0 0" }}>Filled from the last price paid to this supplier for this item — edit if it's changed.</p>
+          )}
           {err && <p style={S.err}>{err}</p>}
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: "6px 0", fontSize: 12 }} onClick={() => { setAdding(false); setErr(""); setSelectedPartId(""); }}>Cancel</button>

@@ -122,6 +122,7 @@ export default function CarProfilePage({ staffName, role }) {
   const [noteToast,  setNoteToast]  = useState("");
   const [activeTab,  setActiveTab]  = useState("overview");
   const [showCoverNotePopup, setShowCoverNotePopup] = useState(false);
+  const [jumpToWorkOrder, setJumpToWorkOrder] = useState(null);
 
   const load = async () => {
     setLoading(true); setError("");
@@ -168,7 +169,7 @@ export default function CarProfilePage({ staffName, role }) {
   }, [history]);
 
   const rentalHistory     = useMemo(() => history.filter(h => ["Checked Out","Returned","Booking Extended"].includes(h.action)), [history]);
-  const maintenanceHistory = useMemo(() => history.filter(h => ["Sent to Maintenance","Marked Available","Garage Changed"].includes(h.action)), [history]);
+  const maintenanceHistory = useMemo(() => history.filter(h => ["Sent to Maintenance","Sent to Maintenance (Mid-Rental)","Marked Available","Returned to Client from Garage","Garage Changed"].includes(h.action)), [history]);
   const noteHistory        = useMemo(() => history.filter(h => h.action === "Note Added"), [history]);
 
   // Average KM per fueling: gap between consecutive odometer readings across
@@ -502,10 +503,16 @@ export default function CarProfilePage({ staffName, role }) {
                 <tbody>
                   {maintenanceHistory.map((h,i) => {
                     const ac = ACTION_COLORS[h.action]||{bg:"#f3f4f6",color:"#374151"};
+                    const linked = !!h.workOrderId;
                     return (
-                      <tr key={i} style={{ borderBottom:"1px solid #f3f4f6" }}>
+                      <tr key={i} style={{ borderBottom:"1px solid #f3f4f6", cursor:linked?"pointer":"default" }}
+                        title={linked?"View this in Garage Updates":"No linked work order (older record)"}
+                        onClick={() => { if (linked) { setJumpToWorkOrder(h.workOrderId); setActiveTab("garage"); } }}>
                         <td data-label="Date" style={{ ...S.td,fontSize:12,color:"#888" }}>{fmtDateTime(h.timestamp)}</td>
-                        <td data-label="Action" style={S.td}><span style={{ ...S.badge,background:ac.bg,color:ac.color }}>{h.action}</span></td>
+                        <td data-label="Action" style={S.td}>
+                          <span style={{ ...S.badge,background:ac.bg,color:ac.color }}>{h.action}</span>
+                          {linked && <span style={{ marginLeft:6,fontSize:11,color:"#04519B" }}>↗</span>}
+                        </td>
                         <td data-label="Garage" style={{ ...S.td,color:"#c2410c",fontWeight:500 }}>{h.garage||"—"}</td>
                         <td data-label="Location" style={S.td}>{h.location||"—"}</td>
                         <td data-label="Remarks" style={{ ...S.td,fontSize:12,color:"#777" }}>{h.remarks||"—"}</td>
@@ -522,7 +529,7 @@ export default function CarProfilePage({ staffName, role }) {
 
       {activeTab==="garage" && (
         <div style={S.tabContent}>
-          <CarMaintenanceTab plate={decodedPlate} />
+          <CarMaintenanceTab plate={decodedPlate} jumpToWorkOrder={jumpToWorkOrder} onJumped={() => setJumpToWorkOrder(null)} />
         </div>
       )}
 
@@ -687,7 +694,7 @@ const WORK_ORDER_STATUS_COLORS = {
 // the Maintenance dashboard itself. Filters the full work order list down
 // to this plate client-side (dataset is small; no dedicated by-plate
 // endpoint needed for this).
-function CarMaintenanceTab({ plate }) {
+function CarMaintenanceTab({ plate, jumpToWorkOrder, onJumped }) {
   const [orders, setOrders] = useState([]);
   const [checklists, setChecklists] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -705,6 +712,17 @@ function CarMaintenanceTab({ plate }) {
       setChecklists(checklistRes?.data || []);
     }).finally(() => setLoading(false));
   }, [plate]);
+
+  // Jumped here from a Maintenance Log row — expand the matching work
+  // order and scroll it into view, then clear the request so re-clicking
+  // the same row still works.
+  useEffect(() => {
+    if (!jumpToWorkOrder || orders.length === 0) return;
+    setExpanded(jumpToWorkOrder);
+    const el = document.getElementById(`work-order-${jumpToWorkOrder}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    onJumped?.();
+  }, [jumpToWorkOrder, orders]);
 
   if (loading) return <p style={S.empty}>Loading maintenance history…</p>;
   if (orders.length === 0 && checklists.length === 0) return <p style={S.empty}>No maintenance history yet.</p>;
@@ -758,7 +776,7 @@ function CarMaintenanceTab({ plate }) {
           {checklists.length > 0 && <p style={{ fontSize: 11.5, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: ".3px", margin: "0 0 8px" }}>Work Orders</p>}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {orders.map(o => (
-        <div key={o.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden" }}>
+        <div key={o.id} id={`work-order-${o.id}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden" }}>
           <div onClick={() => setExpanded(expanded === o.id ? null : o.id)}
             style={{ padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
             <div>
