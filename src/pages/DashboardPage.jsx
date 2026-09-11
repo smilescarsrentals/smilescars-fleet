@@ -80,6 +80,7 @@ export default function DashboardPage({ staffName, role }) {
 
     const upcomingThisWeek = reservations.filter(r => {
       if (!r.pickupDate) return false;
+      if (r.status === "Fulfilled" || r.status === "Cancelled") return false;
       const diff = daysDiff(r.pickupDate, now);
       return diff >= 0 && diff <= 7;
     });

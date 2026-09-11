@@ -225,16 +225,18 @@ export default function ReservationsPage({ staffName, role }) {
                     const isTransfer = r.bookingType === "Transfer";
                     const isUrgent = urgentReservations.some(u => u.id === r.id);
                     const isCancelled = r.status === "Cancelled";
+                    const isFulfilled = r.status === "Fulfilled";
                     return (
                       <div key={r.id} style={{ ...S.card,
-                        borderLeft:`3px solid ${isCancelled ? "#7f1d1d" : isUrgent ? "var(--red)" : isTransfer ? "var(--purple, #8b5cf6)" : colorFor(r.plate||r.client)}`,
+                        borderLeft:`3px solid ${isCancelled ? "#7f1d1d" : isFulfilled ? "var(--green)" : isUrgent ? "var(--red)" : isTransfer ? "var(--purple, #8b5cf6)" : colorFor(r.plate||r.client)}`,
                         background: isCancelled ? "#7f1d1d" : isUrgent ? "var(--red-bg)" : "var(--bg)",
                         color: isCancelled ? "#fff" : undefined,
-                        opacity: isCancelled ? 0.9 : 1 }}
+                        opacity: isCancelled ? 0.9 : isFulfilled ? 0.65 : 1 }}
                         onClick={() => setShowDetail(r)}>
                         {isCancelled && <span title="Cancelled" style={{ fontWeight:700 }}>✕</span>}
-                        {!isCancelled && isUrgent && <span title="No car assigned — urgent!">🚨</span>}
-                        {!isCancelled && isTransfer && <span title="Transfer">🔀</span>}
+                        {!isCancelled && isFulfilled && <span title="Picked up — reconciled with Fleet checkout" style={{ color:"var(--green)" }}>✓</span>}
+                        {!isCancelled && !isFulfilled && isUrgent && <span title="No car assigned — urgent!">🚨</span>}
+                        {!isCancelled && !isFulfilled && isTransfer && <span title="Transfer">🔀</span>}
                         <span style={{ fontWeight:600,fontSize:12, textDecoration: isCancelled ? "line-through" : "none" }}>{r.client}</span>
                         {isTransfer ? (
                           <>

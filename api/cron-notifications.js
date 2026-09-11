@@ -9,7 +9,7 @@
 // Secured with CRON_SECRET so this can't be hit by anyone who finds the
 // URL — Vercel Cron sends this automatically as a Bearer token when the
 // env var is set; see https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs
-import { checkReservationReminders, checkUnpaidCustomerJobs, checkDisabledTriggers, checkStorageUsage, checkDriverDocumentExpiry, checkCoverNoteExpiry } from "../lib/notificationTriggers.js";
+import { checkReservationReminders, checkUnpaidCustomerJobs, checkDisabledTriggers, checkStorageUsage, checkDriverDocumentExpiry, checkCoverNoteExpiry, reconcileFulfilledReservations } from "../lib/notificationTriggers.js";
 import { run } from "../lib/core.js";
 import crypto from "node:crypto";
 
@@ -33,16 +33,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [reminders, unpaid, disabledTriggers, storage, driverDocs, coverNotes] = await Promise.all([
+    const [reminders, unpaid, disabledTriggers, storage, driverDocs, coverNotes, reconciled] = await Promise.all([
       checkReservationReminders(),
       checkUnpaidCustomerJobs(),
       checkDisabledTriggers(),
       checkStorageUsage(),
       checkDriverDocumentExpiry(),
       checkCoverNoteExpiry(),
+      reconcileFulfilledReservations(),
     ]);
-    await logHealth("success", `reminders:${reminders.created} unpaid:${unpaid.created} disabledTriggers:${disabledTriggers.created} storageMB:${storage.mb.toFixed(0)} driverDocs:${driverDocs.created} coverNotes:${coverNotes.created}`);
-    return res.status(200).json({ success: true, reminders, unpaid, disabledTriggers, storage, driverDocs, coverNotes });
+    await logHealth("success", `reminders:${reminders.created} unpaid:${unpaid.created} disabledTriggers:${disabledTriggers.created} storageMB:${storage.mb.toFixed(0)} driverDocs:${driverDocs.created} coverNotes:${coverNotes.created} reconciled:${reconciled.fulfilled}`);
+    return res.status(200).json({ success: true, reminders, unpaid, disabledTriggers, storage, driverDocs, coverNotes, reconciled });
   } catch (err) {
     console.error("Cron notifications error:", err);
     await logHealth("failure", err.message);
