@@ -57,6 +57,13 @@ function parseJsonOrThrow(text, status, action) {
 
 export const api = {
   getFleet:              ()      => get("getFleet"),
+  getAccidents:          ()      => get("getAccidents"),
+  getAccidentById:       (id)    => get("getAccidentById", { id }),
+  addAccident:           (body)  => post({ action: "addAccident", ...body }),
+  editAccident:          (body)  => post({ action: "editAccident", ...body }),
+  addAccidentFile:       (body)  => post({ action: "addAccidentFile", ...body }),
+  deleteAccidentFile:    (body)  => post({ action: "deleteAccidentFile", ...body }),
+  deleteAccident:        (body)  => post({ action: "deleteAccident", ...body }),
   getMonthlyRevenue:     (params) => get("getMonthlyRevenue", params),
   getHistory:            ()      => get("getHistory"),
   getConfig:             ()      => get("getConfig"),

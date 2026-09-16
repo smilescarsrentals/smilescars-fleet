@@ -17,6 +17,7 @@ import logo from "./assets/logo.js";
 const FleetPage        = lazy(() => import("./pages/FleetPage"));
 const HistoryPage      = lazy(() => import("./pages/HistoryPage"));
 const SoldPage         = lazy(() => import("./pages/SoldPage"));
+const AccidentsPage    = lazy(() => import("./pages/AccidentsPage"));
 const SubHirePage      = lazy(() => import("./pages/SubHirePage"));
 const ClientsPage      = lazy(() => import("./pages/ClientsPage"));
 const CarProfilePage   = lazy(() => import("./pages/CarProfilePage"));
@@ -86,6 +87,7 @@ export default function App() {
             <Route path="/garage"       element={<GaragePage staffName={staffName} role={role} />} />
             <Route path="/garage/:tab"  element={<GaragePage staffName={staffName} role={role} />} />
             <Route path="/sold"         element={<SoldPage />} />
+            <Route path="/accidents"    element={<AccidentsPage staffName={staffName} role={role} />} />
             <Route path="/blacklist"    element={<BlacklistPage staffName={staffName} role={role} />} />
             <Route path="/drivers"      element={<DriversPage staffName={staffName} role={role} />} />
             <Route path="/my-hr"        element={<MyHRPage staffName={staffName} role={role} />} />

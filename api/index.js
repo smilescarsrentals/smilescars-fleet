@@ -25,6 +25,8 @@ const LEGACY = process.env.LEGACY_SCRIPT_URL || "";
 // GET action -> handler(params). Params come from the query string.
 const READS = {
   getFleet: reads.getFleet,
+  getAccidents: reads.getAccidents,
+  getAccidentById: reads.getAccidentById,
   getHistory: reads.getHistory,
   getConfig: reads.getConfig,
   getSold: reads.getSold,
@@ -213,6 +215,11 @@ const WRITES = {
   bulkAddDrivers: writes.bulkAddDrivers,
   bulkAddDriverDocuments: writes.bulkAddDriverDocuments,
   editDriver: writes.editDriver,
+  addAccident: writes.addAccident,
+  editAccident: writes.editAccident,
+  addAccidentFile: writes.addAccidentFile,
+  deleteAccidentFile: writes.deleteAccidentFile,
+  deleteAccident: writes.deleteAccident,
   setDriverPhoto: writes.setDriverPhoto,
   addDriverDocument: writes.addDriverDocument,
   editDriverDocument: writes.editDriverDocument,
