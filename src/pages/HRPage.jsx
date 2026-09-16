@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../lib/api";
+import DriversPage from "./DriversPage";
 
 const overlayStyle = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 };
 const modalStyle = { background: "#fff", borderRadius: 12, padding: 20, maxHeight: "85vh", overflowY: "auto" };
@@ -10,7 +11,7 @@ const secondaryBtnStyle = { padding: "8px 16px", fontSize: 13, color: "#666", ba
 const closeBtnStyle = { background: "none", border: "none", fontSize: 16, cursor: "pointer", color: "#888" };
 const sectionHeaderStyle = { fontSize: 12.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".3px", color: "#555", margin: 0 };
 const hrStyle = { border: "none", borderTop: "1px solid #eee", margin: "16px 0 12px" };
-const LEAVE_TYPES = ["Annual", "Sick", "Unpaid", "Compassionate"];
+const LEAVE_TYPES = ["Annual", "Sick", "Unpaid", "Compassionate", "Maternity"];
 const DISCIPLINARY_TYPES = ["Verbal", "Written", "Suspension", "Other"];
 const ANNUAL_LEAVE_DAYS = 28;
 
@@ -153,6 +154,38 @@ function AddLeaveOnBehalfForm({ staffName, targetName, onClose, onSaved }) {
   );
 }
 
+// Inline date correction on an existing leave record — recomputes
+// days_requested from the new range on save (see editLeaveRequestDates).
+function EditLeaveDatesForm({ staffName, record, onClose, onSaved }) {
+  const [startDate, setStartDate] = useState(record.startDate ? record.startDate.slice(0, 10) : "");
+  const [endDate, setEndDate] = useState(record.endDate ? record.endDate.slice(0, 10) : "");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const submit = async () => {
+    setSaving(true); setErr("");
+    try {
+      await api.editLeaveRequestDates({ staffName, requestId: record.id, startDate, endDate });
+      onSaved();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 8, marginTop: 4, background: "#fafafa" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 6 }}>
+        <div><label style={labelStyle}>Start Date</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inputStyle(true)} /></div>
+        <div><label style={labelStyle}>End Date</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={inputStyle(true)} /></div>
+      </div>
+      {err && <p style={{ color: "#dc2626", fontSize: 11, margin: "0 0 6px" }}>{err}</p>}
+      <div style={{ display: "flex", gap: 6 }}>
+        <button type="button" disabled={saving} onClick={submit} style={{ ...primaryBtnStyle, padding: "5px 10px", fontSize: 11.5, opacity: saving ? 0.65 : 1 }}>{saving ? "Saving…" : "Save"}</button>
+        <button type="button" onClick={onClose} style={{ ...secondaryBtnStyle, padding: "5px 10px", fontSize: 11.5 }}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 // Combines what used to be three separate staff-list tabs (Profile,
 // Disciplinary, Leave) into one per-person view, reached by clicking a
 // card — per Ramzanali's redesign.
@@ -161,6 +194,7 @@ function StaffDetailModal({ staffName, target, editable, onClose }) {
   const [leaveRequests, setLeaveRequests] = useState(null);
   const [disciplinary, setDisciplinary] = useState(null);
   const [showAddLeave, setShowAddLeave] = useState(false);
+  const [editingLeaveId, setEditingLeaveId] = useState(null);
   const [showAddDisc, setShowAddDisc] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -278,9 +312,20 @@ function StaffDetailModal({ staffName, target, editable, onClose }) {
                 <div key={r.id} style={{ border: "1px solid #f0f0f0", borderRadius: 8, padding: 8 }}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 12, fontWeight: 600 }}>{r.leaveType} — {fmtDate(r.startDate)} to {fmtDate(r.endDate)}</span>
-                    <StatusBadge status={r.status} />
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <StatusBadge status={r.status} />
+                      {editable && editingLeaveId !== r.id && (
+                        <button type="button" onClick={() => setEditingLeaveId(r.id)}
+                          style={{ fontSize: 10, fontWeight: 700, color: "var(--sc-blue, #04519B)", background: "var(--blue-bg, #eaf2fb)", border: "none", borderRadius: 999, padding: "2px 9px", cursor: "pointer" }}>
+                          Edit
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div style={{ fontSize: 10.5, color: "#888" }}>{r.daysRequested} day{r.daysRequested === 1 ? "" : "s"}{r.addedBy ? ` · recorded by ${r.addedBy}` : ""}</div>
+                  {editingLeaveId === r.id && (
+                    <EditLeaveDatesForm staffName={staffName} record={r} onClose={() => setEditingLeaveId(null)} onSaved={() => { setEditingLeaveId(null); loadLeave(); }} />
+                  )}
                 </div>
               ))}
             </div>
@@ -319,19 +364,73 @@ function StaffDetailModal({ staffName, target, editable, onClose }) {
   );
 }
 
+// Adding a staff member from here auto-tags them Dar es Salaam so they
+// show up immediately in this same list — Admin Panel's own Add Staff
+// doesn't set a location, since it's used for staff anywhere.
+function AddStaffModal({ staffName, onClose, onSaved }) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState("Staff");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const submit = async () => {
+    if (!name.trim()) { setErr("Name is required."); return; }
+    setSaving(true); setErr("");
+    try {
+      await api.addStaff({ staffName, name: name.trim(), phone, role, location: "Dar es Salaam" });
+      onSaved();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={{ ...modalStyle, width: 380 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Add Staff</h3>
+          <button type="button" onClick={onClose} style={closeBtnStyle}>✕</button>
+        </div>
+        <label style={labelStyle}>Name</label>
+        <input value={name} onChange={e => setName(e.target.value)} style={{ ...inputStyle(true), marginBottom: 10 }} autoFocus />
+        <label style={labelStyle}>Phone</label>
+        <input value={phone} onChange={e => setPhone(e.target.value)} style={{ ...inputStyle(true), marginBottom: 10 }} />
+        <label style={labelStyle}>Role</label>
+        <select value={role} onChange={e => setRole(e.target.value)} style={{ ...inputStyle(true), marginBottom: 12 }}>
+          <option value="Staff">Staff</option>
+          <option value="Manager">Manager</option>
+          <option value="Garage Manager">Garage Manager</option>
+        </select>
+        {err && <p style={{ color: "#dc2626", fontSize: 12, margin: "0 0 10px" }}>{err}</p>}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" disabled={saving} onClick={submit} style={{ ...primaryBtnStyle, opacity: saving ? 0.65 : 1 }}>{saving ? "Adding…" : "Add Staff"}</button>
+          <button type="button" onClick={onClose} style={secondaryBtnStyle}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProfilesTab({ staffName, editable }) {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [target, setTarget] = useState(null);
+  const [showAddStaff, setShowAddStaff] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
     api.getHRStaffList(staffName).then(res => setStaff(res.staff || [])).catch(() => {}).finally(() => setLoading(false));
-  }, [staffName]);
+  };
+  useEffect(load, [staffName]);
 
   if (loading) return <p style={{ fontSize: 13, color: "#888" }}>Loading…</p>;
 
   return (
     <div>
+      {editable && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <button type="button" onClick={() => setShowAddStaff(true)} style={{ ...primaryBtnStyle, padding: "7px 14px", fontSize: 12.5 }}>+ Add Staff</button>
+        </div>
+      )}
       {staff.length === 0 ? (
         <p style={{ fontSize: 13, color: "#888" }}>No Dar es Salaam staff found.</p>
       ) : (
@@ -340,6 +439,110 @@ function ProfilesTab({ staffName, editable }) {
         )} />
       )}
       {target && <StaffDetailModal staffName={staffName} target={target} editable={editable} onClose={() => setTarget(null)} />}
+      {showAddStaff && <AddStaffModal staffName={staffName} onClose={() => setShowAddStaff(false)} onSaved={() => { setShowAddStaff(false); load(); }} />}
+    </div>
+  );
+}
+
+// Unified entry point for HR/Admin to log leave for either a staff member
+// or a driver — type to search across both lists, then the type-specific
+// fields appear once someone's picked. Routes to addLeaveOnBehalf (staff,
+// computed against the 28-day policy) or addDriverLeaveRecord (driver,
+// decrements their running balance) depending on which was selected.
+function LogLeaveModal({ staffName, onClose, onSaved }) {
+  const [query, setQuery] = useState("");
+  const [staffList, setStaffList] = useState([]);
+  const [driverList, setDriverList] = useState([]);
+  const [loadingLists, setLoadingLists] = useState(true);
+  const [selected, setSelected] = useState(null); // { type: "staff"|"driver", name, id? }
+  const [leaveType, setLeaveType] = useState("Annual");
+  const today = new Date().toISOString().slice(0, 10);
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    Promise.all([
+      api.getHRStaffList(staffName).catch(() => ({ staff: [] })),
+      api.getDriversV2().catch(() => ({ data: [] })),
+    ]).then(([staffRes, driverRes]) => {
+      setStaffList((staffRes.staff || []).filter(s => s.active));
+      setDriverList((driverRes.data || []).filter(d => d.active));
+    }).finally(() => setLoadingLists(false));
+  }, [staffName]);
+
+  const q = query.trim().toLowerCase();
+  const matches = q ? [
+    ...staffList.filter(s => s.name.toLowerCase().includes(q)).map(s => ({ type: "staff", name: s.name })),
+    ...driverList.filter(d => d.name.toLowerCase().includes(q)).map(d => ({ type: "driver", name: d.name, id: d.id })),
+  ].slice(0, 8) : [];
+
+  const submit = async () => {
+    if (!selected) { setErr("Search and select a staff member or driver."); return; }
+    setSaving(true); setErr("");
+    try {
+      if (selected.type === "staff") {
+        await api.addLeaveOnBehalf({ staffName, targetStaffName: selected.name, leaveType, startDate, endDate, reason });
+      } else {
+        await api.addDriverLeaveRecord({ staffName, driverId: selected.id, leaveType, date: startDate, endDate, notes: reason });
+      }
+      onSaved();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={{ ...modalStyle, width: 420 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Log Leave</h3>
+          <button type="button" onClick={onClose} style={closeBtnStyle}>✕</button>
+        </div>
+
+        {!selected ? (
+          <>
+            <label style={labelStyle}>Staff or Driver Name</label>
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Type to search…" style={{ ...inputStyle(true), marginBottom: 8 }} autoFocus />
+            {loadingLists ? <p style={{ fontSize: 12, color: "#888" }}>Loading…</p> : q && (
+              matches.length === 0 ? <p style={{ fontSize: 12, color: "#888" }}>No match found.</p> : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 180, overflowY: "auto" }}>
+                  {matches.map(m => (
+                    <button key={`${m.type}-${m.name}`} type="button" onClick={() => setSelected(m)}
+                      style={{ textAlign: "left", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 7, background: "#fff", cursor: "pointer", fontFamily: "inherit" }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{m.name}</span>
+                      <span style={{ fontSize: 10.5, color: "#888", marginLeft: 6, textTransform: "uppercase" }}>{m.type}</span>
+                    </button>
+                  ))}
+                </div>
+              )
+            )}
+          </>
+        ) : (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, padding: "8px 10px", background: "#f9fafb", borderRadius: 7 }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{selected.name} <span style={{ fontSize: 10.5, color: "#888", textTransform: "uppercase", fontWeight: 500 }}>({selected.type})</span></span>
+              <button type="button" onClick={() => setSelected(null)} style={{ fontSize: 11, color: "var(--sc-blue, #04519B)", background: "none", border: "none", cursor: "pointer" }}>Change</button>
+            </div>
+            <label style={labelStyle}>Leave Type</label>
+            <select value={leaveType} onChange={e => setLeaveType(e.target.value)} style={{ ...inputStyle(true), marginBottom: 8 }}>
+              {LEAVE_TYPES.map(t => <option key={t}>{t}</option>)}
+            </select>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <div><label style={labelStyle}>Start Date</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inputStyle(true)} /></div>
+              <div><label style={labelStyle}>End Date</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={inputStyle(true)} /></div>
+            </div>
+            <label style={labelStyle}>Reason</label>
+            <textarea value={reason} onChange={e => setReason(e.target.value)} style={{ ...inputStyle(true), minHeight: 50, marginBottom: 8 }} />
+            {err && <p style={{ color: "#dc2626", fontSize: 12, margin: "0 0 10px" }}>{err}</p>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" disabled={saving} onClick={submit} style={{ ...primaryBtnStyle, opacity: saving ? 0.65 : 1 }}>{saving ? "Saving…" : "Log Leave"}</button>
+              <button type="button" onClick={onClose} style={secondaryBtnStyle}>Cancel</button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -349,6 +552,7 @@ function LeaveRequestsTab({ staffName, canReviewHR, isCoo }) {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [notesDraft, setNotesDraft] = useState({});
+  const [showLogLeave, setShowLogLeave] = useState(false);
 
   const canDelete = canReviewHR || isCoo;
 
@@ -378,50 +582,61 @@ function LeaveRequestsTab({ staffName, canReviewHR, isCoo }) {
   };
 
   if (loading) return <p style={{ fontSize: 13, color: "#888" }}>Loading…</p>;
-  if (requests.length === 0) return <p style={{ fontSize: 13, color: "#888" }}>No leave requests yet.</p>;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {requests.map(r => {
-        const canActHR = canReviewHR && r.status === "Pending HR";
-        const canActCoo = isCoo && r.status === "Pending COO";
-        return (
-          <div key={r.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{r.staffName} — {r.leaveType}</div>
-                <div style={{ fontSize: 11.5, color: "#888" }}>{fmtDate(r.startDate)} to {fmtDate(r.endDate)} · {r.daysRequested} day{r.daysRequested === 1 ? "" : "s"}</div>
-                {r.reason && <div style={{ fontSize: 11.5, color: "#888", marginTop: 2 }}>{r.reason}</div>}
-                {r.addedBy && <div style={{ fontSize: 10.5, color: "#aaa", marginTop: 2 }}>Recorded by {r.addedBy}</div>}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <StatusBadge status={r.status} />
-                {canDelete && (
-                  <button type="button" disabled={busyId === r.id} onClick={() => remove(r.id)} title="Delete this request permanently"
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 13, padding: 0 }}>
-                    🗑
-                  </button>
+    <div>
+      {canReviewHR && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <button type="button" onClick={() => setShowLogLeave(true)} style={{ ...primaryBtnStyle, padding: "7px 14px", fontSize: 12.5 }}>+ Log Leave</button>
+        </div>
+      )}
+      {requests.length === 0 ? (
+        <p style={{ fontSize: 13, color: "#888" }}>No leave requests yet.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {requests.map(r => {
+            const canActHR = canReviewHR && r.status === "Pending HR";
+            const canActCoo = isCoo && r.status === "Pending COO";
+            return (
+              <div key={r.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{r.staffName} — {r.leaveType}</div>
+                    <div style={{ fontSize: 11.5, color: "#888" }}>{fmtDate(r.startDate)} to {fmtDate(r.endDate)} · {r.daysRequested} day{r.daysRequested === 1 ? "" : "s"}</div>
+                    {r.reason && <div style={{ fontSize: 11.5, color: "#888", marginTop: 2 }}>{r.reason}</div>}
+                    {r.addedBy && <div style={{ fontSize: 10.5, color: "#aaa", marginTop: 2 }}>Recorded by {r.addedBy}</div>}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <StatusBadge status={r.status} />
+                    {canDelete && (
+                      <button type="button" disabled={busyId === r.id} onClick={() => remove(r.id)} title="Delete this request permanently"
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 13, padding: 0 }}>
+                        🗑
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {r.hrReviewedBy && <p style={{ fontSize: 11, color: "#888", margin: "6px 0 0" }}>HR: {r.hrReviewedBy}{r.hrNotes ? ` — ${r.hrNotes}` : ""}</p>}
+                {r.cooReviewedBy && <p style={{ fontSize: 11, color: "#888", margin: "2px 0 0" }}>COO: {r.cooReviewedBy}{r.cooNotes ? ` — ${r.cooNotes}` : ""}</p>}
+                {r.status === "Cancelled" && r.cancelledBy && <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>Revoked by {r.cancelledBy}</p>}
+                {(canActHR || canActCoo) && (
+                  <div style={{ marginTop: 8 }}>
+                    <input placeholder="Optional note" value={notesDraft[r.id] || ""} onChange={e => setNotesDraft(d => ({ ...d, [r.id]: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 9px", fontSize: 12, border: "1.5px solid #e5e7eb", borderRadius: 6, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button type="button" disabled={busyId === r.id} onClick={() => decide(r.id, canActHR ? "HR" : "COO", "Approve")}
+                        style={{ ...primaryBtnStyle, padding: "6px 12px", fontSize: 12, background: "#16a34a" }}>Approve</button>
+                      <button type="button" disabled={busyId === r.id} onClick={() => decide(r.id, canActHR ? "HR" : "COO", "Reject")}
+                        style={{ ...primaryBtnStyle, padding: "6px 12px", fontSize: 12, background: "#dc2626" }}>Reject</button>
+                    </div>
+                  </div>
                 )}
               </div>
-            </div>
-            {r.hrReviewedBy && <p style={{ fontSize: 11, color: "#888", margin: "6px 0 0" }}>HR: {r.hrReviewedBy}{r.hrNotes ? ` — ${r.hrNotes}` : ""}</p>}
-            {r.cooReviewedBy && <p style={{ fontSize: 11, color: "#888", margin: "2px 0 0" }}>COO: {r.cooReviewedBy}{r.cooNotes ? ` — ${r.cooNotes}` : ""}</p>}
-            {r.status === "Cancelled" && r.cancelledBy && <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>Revoked by {r.cancelledBy}</p>}
-            {(canActHR || canActCoo) && (
-              <div style={{ marginTop: 8 }}>
-                <input placeholder="Optional note" value={notesDraft[r.id] || ""} onChange={e => setNotesDraft(d => ({ ...d, [r.id]: e.target.value }))}
-                  style={{ width: "100%", padding: "6px 9px", fontSize: 12, border: "1.5px solid #e5e7eb", borderRadius: 6, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button type="button" disabled={busyId === r.id} onClick={() => decide(r.id, canActHR ? "HR" : "COO", "Approve")}
-                    style={{ ...primaryBtnStyle, padding: "6px 12px", fontSize: 12, background: "#16a34a" }}>Approve</button>
-                  <button type="button" disabled={busyId === r.id} onClick={() => decide(r.id, canActHR ? "HR" : "COO", "Reject")}
-                    style={{ ...primaryBtnStyle, padding: "6px 12px", fontSize: 12, background: "#dc2626" }}>Reject</button>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
+            );
+          })}
+        </div>
+      )}
+      {showLogLeave && <LogLeaveModal staffName={staffName} onClose={() => setShowLogLeave(false)} onSaved={() => { setShowLogLeave(false); load(); }} />}
     </div>
   );
 }
@@ -523,6 +738,7 @@ export default function HRPage({ staffName, role }) {
   const [loading, setLoading] = useState(true);
   const [access, setAccess] = useState(role === "Admin" ? "Edit" : "None");
   const [isCoo, setIsCoo] = useState(role === "Admin");
+  const [canManageDrivers, setCanManageDrivers] = useState(role === "Admin");
   const [tab, setTab] = useState("profiles");
 
   useEffect(() => {
@@ -532,6 +748,7 @@ export default function HRPage({ staffName, role }) {
       const a = me?.hrAccess || "None";
       setAccess(a);
       setIsCoo(!!me?.isCoo);
+      setCanManageDrivers(!!me?.canManageDrivers);
       setTab(a !== "None" ? "profiles" : "leave");
     }).catch(() => setAccess("None")).finally(() => setLoading(false));
   }, [staffName, role]);
@@ -540,8 +757,12 @@ export default function HRPage({ staffName, role }) {
 
   const canSeeProfiles = access !== "None";
   const canSeeLeave = access !== "None" || isCoo;
+  // Drivers moved here from its own nav item — kept visible to anyone who
+  // could already manage drivers before this move (can_manage_drivers),
+  // not just hr_access holders, so nobody loses access they had.
+  const canSeeDrivers = canSeeProfiles || canManageDrivers;
 
-  if (!canSeeProfiles && !canSeeLeave) {
+  if (!canSeeProfiles && !canSeeLeave && !canSeeDrivers) {
     return (
       <div style={{ padding: 24 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>HR Management</h2>
@@ -555,13 +776,15 @@ export default function HRPage({ staffName, role }) {
       <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>HR Management</h2>
       {access === "View" && <p style={{ fontSize: 11.5, color: "#888", margin: "0 0 14px" }}>View-only access.</p>}
       <div style={{ display: "flex", marginBottom: 16, borderBottom: "1px solid #e5e7eb" }}>
-        {canSeeProfiles && <TabButton active={tab === "profiles"} onClick={() => setTab("profiles")}>Profiles</TabButton>}
-        {canSeeLeave && <TabButton active={tab === "leave"} onClick={() => setTab("leave")}>Leave Requests</TabButton>}
+        {canSeeProfiles && <TabButton active={tab === "profiles"} onClick={() => setTab("profiles")}>Staffs</TabButton>}
+        {canSeeLeave && <TabButton active={tab === "leave"} onClick={() => setTab("leave")}>Leave</TabButton>}
         {canSeeProfiles && <TabButton active={tab === "onboarding"} onClick={() => setTab("onboarding")}>Onboarding</TabButton>}
+        {canSeeDrivers && <TabButton active={tab === "drivers"} onClick={() => setTab("drivers")}>Drivers</TabButton>}
       </div>
       {tab === "profiles" && canSeeProfiles && <ProfilesTab staffName={staffName} editable={access === "Edit"} />}
       {tab === "leave" && canSeeLeave && <LeaveRequestsTab staffName={staffName} canReviewHR={access === "Edit"} isCoo={isCoo} />}
       {tab === "onboarding" && canSeeProfiles && <OnboardingTab staffName={staffName} editable={access === "Edit"} />}
+      {tab === "drivers" && canSeeDrivers && <DriversPage staffName={staffName} role={role} />}
     </div>
   );
 }

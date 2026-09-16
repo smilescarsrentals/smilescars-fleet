@@ -262,12 +262,12 @@ function StaffTab({ staffName }) {
         </div>
       )}
 
-      {showAdd && <AddStaffModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
+      {showAdd && <AddStaffModal staffName={staffName} onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
     </div>
   );
 }
 
-function AddStaffModal({ onClose, onSaved }) {
+function AddStaffModal({ staffName, onClose, onSaved }) {
   const [name,     setName]     = useState("");
   const [password, setPassword] = useState("");
   const [role,     setRole]     = useState("Staff");
@@ -277,7 +277,7 @@ function AddStaffModal({ onClose, onSaved }) {
   const save = async () => {
     if (!name.trim()) { setErr("Name is required."); return; }
     setSaving(true); setErr("");
-    try { await api.addStaff({ name: name.trim(), password, role }); onSaved(); }
+    try { await api.addStaff({ staffName, name: name.trim(), password, role }); onSaved(); }
     catch (e) { setErr(e.message); }
     finally { setSaving(false); }
   };
