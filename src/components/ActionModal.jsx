@@ -304,7 +304,7 @@ export function GarageLocationPicker({ serviceLocationType, internalLocation, ex
   );
 }
 
-export default function ActionModal({ car, action, locations, garages, drivers, staff, staffName, role, blacklist, onConfirm, onClose, loading, embedded }) {
+export default function ActionModal({ car, action, locations, garages, drivers, staff, staffName, role, blacklist, clients, onConfirm, onClose, loading, embedded }) {
   const today = new Date().toISOString().split("T")[0];
   const nowHHMM = new Date().toTimeString().slice(0, 5);
   const canAddLocGarage = role === "Admin" || role === "Manager";
@@ -319,6 +319,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
 
   const [client,        setClient]       = useState(car.currentClient || "");
   const [clientPhone,   setClientPhone]  = useState(car.clientPhone || "");
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const [bookedFrom,    setBookedFrom]   = useState(today);
   const [transferTime,  setTransferTime] = useState(nowHHMM); // actual time a Transfer happened, since it's often logged well after the fact
   // Extra legs for "same car, same client, several trips today" — logged
@@ -499,8 +500,30 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 ))}
               </div>
             </div>
-            <div style={S.field}><label style={S.label}>Client Name *</label>
-              <input style={S.input} value={client} onChange={e => setClient(e.target.value)} onBlur={e => setClient(toTitleCase(e.target.value))} placeholder="Full name" autoFocus /></div>
+            <div style={{ ...S.field, position: "relative" }}><label style={S.label}>Client Name *</label>
+              <input style={S.input} value={client}
+                onChange={e => setClient(e.target.value)}
+                onFocus={() => setShowClientSuggestions(true)}
+                onBlur={e => { setClient(toTitleCase(e.target.value)); setTimeout(() => setShowClientSuggestions(false), 150); }}
+                placeholder="Full name" autoFocus autoComplete="off" />
+              {showClientSuggestions && client.trim().length >= 2 && (() => {
+                const q = client.trim().toLowerCase();
+                const matches = (clients || []).filter(c => c.name.toLowerCase().includes(q)).slice(0, 6);
+                if (matches.length === 0) return null;
+                return (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, marginTop: 2, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", maxHeight: 180, overflowY: "auto" }}>
+                    {matches.map(c => (
+                      <button type="button" key={c.name}
+                        onMouseDown={() => { setClient(c.name); if (c.phone) setClientPhone(c.phone); setShowClientSuggestions(false); }}
+                        style={{ display: "flex", justifyContent: "space-between", width: "100%", textAlign: "left", padding: "8px 10px", background: "none", border: "none", borderBottom: "1px solid #f5f5f5", cursor: "pointer", fontFamily: "inherit" }}>
+                        <span style={{ fontSize: 13 }}>{c.name}</span>
+                        <span style={{ fontSize: 11.5, color: "#888" }}>{c.phone || "no phone on file"}</span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
             <div style={S.field}><label style={S.label}>Client Phone</label>
               <input style={S.input} value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="+255..." /></div>
 
