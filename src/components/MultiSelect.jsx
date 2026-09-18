@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 // Reusable multi-select filter dropdown. Looks/behaves like a normal <select>
 // from the outside (same trigger styling passed in via `style`), but opens a
@@ -10,6 +10,23 @@ import { useState } from "react";
 //     selected={fStatus} onChange={setFStatus} style={sel} />
 export default function MultiSelect({ label, options, selected, onChange, style }) {
   const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+
+  // Closing on trigger blur depends on the button actually receiving DOM
+  // focus when clicked, which Safari on macOS doesn't do by default. Listen
+  // for outside clicks/taps instead so this works in every browser.
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [open]);
 
   const toggle = (opt) => {
     if (selected.includes(opt)) onChange(selected.filter(v => v !== opt));
@@ -22,8 +39,7 @@ export default function MultiSelect({ label, options, selected, onChange, style 
     `${selected.length} selected`;
 
   return (
-    <div style={{ position: "relative", display: "inline-block" }}
-      onBlur={() => setTimeout(() => setOpen(false), 150)}>
+    <div ref={rootRef} style={{ position: "relative", display: "inline-block" }}>
       <button type="button" onClick={() => setOpen(o => !o)}
         style={{ ...style, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit", textAlign: "left" }}>
         <span style={{ color: selected.length > 0 ? "#111" : undefined }}>{displayText}</span>
