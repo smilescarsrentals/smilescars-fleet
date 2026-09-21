@@ -71,6 +71,7 @@ export default function FleetPage({ staffName, role }) {
   const [toast,        setToast]        = useState("");
   const [overdueBlock, setOverdueBlock] = useState(false);
   const [page,      setPage]      = useState(1);
+  const [mobileActionCar, setMobileActionCar] = useState(null);
   const PER_PAGE = 25;
 
   const load = async (forceRefresh = false) => {
@@ -348,7 +349,7 @@ export default function FleetPage({ staffName, role }) {
         <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{fleet.length} vehicles across all locations.</div>
       </div>
 
-      <div className="sc-stat-grid sc-fleet-stats">
+      <div className="sc-stat-grid sc-fleet-stats sc-fleet-desktop-only">
         {[
           { label:"Available",        value:stats.available,                      icon:"✓",  chip:"green",  view:"all"      },
           { label:"Rented",           value:stats.rented,                         icon:"🚗", chip:"blue",   view:"all"      },
@@ -377,6 +378,31 @@ export default function FleetPage({ staffName, role }) {
               </div>
               <div className="sc-stat-value">{s.value}</div>
             </div>
+          );
+        })}
+      </div>
+
+      <div className="sc-fleet-mobile-stats">
+        {[
+          { label:"Available",        value:stats.available,                    view:"all"      },
+          { label:"Rented",           value:stats.rented,                       view:"all"      },
+          { label:"Staff Use",        value:stats.staffUse,                     view:"staffuse" },
+          { label:"Maintenance",      value:stats.maintenance,                  view:"all"      },
+          { label:"Expiring/Expired", value:expired.length+expiringSoon.length, view:"expiring" },
+          { label:"Unpaid",           value:unpaid.length,                      view:"unpaid"   },
+        ].map(s => {
+          const active = view===s.view && s.view!=="all" || (s.view==="all" && fStatus.length===1 && fStatus[0]===s.label);
+          return (
+            <button type="button" key={s.label} className="sc-fleet-chip"
+              style={active ? { borderColor:"var(--sc-blue)", background:"var(--blue-bg)" } : undefined}
+              onClick={() => {
+                if (s.view !== "all") { setView(s.view); setFStatus([]); setExpiringFilter("all"); }
+                else { setFStatus(fStatus.length===1 && fStatus[0]===s.label ? [] : [s.label]); setView("all"); }
+                setPage(1);
+              }}>
+              <span className="sc-fleet-chip-count" style={active ? { color:"var(--sc-blue)" } : undefined}>{s.value}</span>
+              <span className="sc-fleet-chip-label" style={active ? { color:"var(--sc-blue)" } : undefined}>{s.label}</span>
+            </button>
           );
         })}
       </div>
@@ -431,7 +457,7 @@ export default function FleetPage({ staffName, role }) {
         </div>
       </div>
 
-      <div className="table-wrap sc-fleet-table">
+      <div className="table-wrap sc-fleet-table sc-fleet-desktop-only">
         <table>
           <thead>
             <tr>{["Plate","Type","Location","Status","Client","Return Date","Payment", ...(view==="unpaid"||view==="expiring"?["Staff"]:[]), "Action"].map(h =>
@@ -520,6 +546,90 @@ export default function FleetPage({ staffName, role }) {
         </table>
       </div>
 
+      <div className="sc-fleet-mobile-list">
+        {paginated.map(car => {
+          const sc = {
+            Available:   { bg:"var(--green-bg)", fg:"var(--green)" },
+            Rented:      { bg:"var(--blue-bg)",  fg:"var(--sc-blue)" },
+            Maintenance: { bg:"var(--amber-bg)", fg:"var(--amber)" },
+            "Staff Use": { bg:"var(--yellow-bg)",fg:"var(--yellow)" },
+          }[car.status] || { bg:"var(--bg)", fg:"var(--text-muted)" };
+          const primaryLabel = { Available:"Check Out", Rented:"Returned", Maintenance:"Mark Available", "Staff Use":"Mark Available" }[car.status] || "Open";
+          const primaryAction = { Available:"checkOut", Rented:"markReturned", Maintenance:"setAvailable", "Staff Use":"setAvailable" }[car.status];
+          const urgent = car.status==="Rented" && daysUntil(car.returnDate)!==null && daysUntil(car.returnDate)<=2;
+          return (
+            <div className="sc-fleet-mcard" key={car.plate}>
+              <div className="sc-fleet-mcard-top">
+                <div onClick={()=>navigate(`/car/${encodeURIComponent(car.plate)}`)} style={{ cursor:"pointer" }}>
+                  <div className="sc-fleet-mcard-plate">{car.plate}</div>
+                  <div className="sc-fleet-mcard-type">{car.type}</div>
+                </div>
+                <span className="sc-fleet-mcard-pill" style={{ background:sc.bg, color:sc.fg }}>{car.status}</span>
+              </div>
+
+              {car.status==="Rented" && car.currentClient && (
+                <div className="sc-fleet-mcard-line">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                  <span style={{ fontWeight:600 }}>{car.currentClient}</span>
+                  {car.returnDate && <><span style={{ color:"var(--text-faint)" }}>·</span><span style={{ fontWeight:700, color:urgent?"var(--red)":"var(--text)" }}>Due {fmtDate(car.returnDate)}</span></>}
+                </div>
+              )}
+              {car.status==="Staff Use" && car.currentClient && (
+                <div className="sc-fleet-mcard-line">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                  <span style={{ fontWeight:600 }}>Assigned to {car.currentClient}</span>
+                </div>
+              )}
+              {car.status==="Maintenance" && car.garage && (
+                <div className="sc-fleet-mcard-line" style={{ color:"var(--amber)", fontWeight:600 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.1-3.1a4 4 0 01-5.3 5.3L7 20 4 17l8.6-8.5a4 4 0 015.3-5.3l-3.1 3.1z"/></svg>
+                  <span>{car.garage}</span>
+                </div>
+              )}
+
+              <div className="sc-fleet-mcard-line" style={{ color:"var(--text-faint)", fontSize:"12.5px" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s7-6.3 7-11.5A7 7 0 105 9.5C5 14.7 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+                <span>{car.location || "—"}</span>
+              </div>
+
+              <div className="sc-fleet-mcard-actions">
+                {primaryAction && (
+                  <button type="button" className="sc-fleet-mcard-primary" onClick={() => {
+                    if (car.status==="Available" && role!=="Admin" && role!=="Manager" && myOverdueCount>=2) { setOverdueBlock(true); return; }
+                    setModal({ car, action: primaryAction });
+                  }}>{primaryLabel}</button>
+                )}
+                <button type="button" className="sc-fleet-mcard-more" aria-label="More actions" onClick={() => setMobileActionCar(car)}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--text-muted)"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {mobileActionCar && (
+        <div className="sc-sheet-overlay" onClick={()=>setMobileActionCar(null)}>
+          <div className="sc-sheet" onClick={e=>e.stopPropagation()}>
+            <div className="sc-sheet-head">
+              <div>
+                <div style={{ fontSize:16, fontWeight:800 }}>{mobileActionCar.plate}</div>
+                <div style={{ fontSize:12.5, color:"var(--text-muted)" }}>{mobileActionCar.type}</div>
+              </div>
+              <button type="button" className="sc-sheet-close" onClick={()=>setMobileActionCar(null)}>✕</button>
+            </div>
+            <div className="sc-sheet-body">
+              <ActionButtons car={mobileActionCar} renderMode="sheet"
+                onAction={(c,a)=>{ setModal({car:c,action:a}); setMobileActionCar(null); }}
+                onMove={c=>{ setMoveCar(c); setMobileActionCar(null); }}
+                onReplace={c=>{ setReplaceCar(c); setMobileActionCar(null); }}
+                onChangeGarage={c=>{ setChangeGarageCar(c); setMobileActionCar(null); }}
+                canSell={canExportOrSell} role={role} myOverdueCount={myOverdueCount} setOverdueBlock={setOverdueBlock} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {totalPages>1 && (
         <div className="pager" style={{ justifyContent:"center", border:"none" }}>
           <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setPage(p=>p-1)} disabled={page===1}>‹ Prev</button>
@@ -578,14 +688,22 @@ export default function FleetPage({ staffName, role }) {
   );
 }
 
-function ActionButtons({ car, onAction, onMove, onReplace, onChangeGarage, canSell, role, myOverdueCount, setOverdueBlock }) {
+function ActionButtons({ car, onAction, onMove, onReplace, onChangeGarage, canSell, role, myOverdueCount, setOverdueBlock, renderMode }) {
   // Garage Manager still can't touch rental-operations actions (Check Out,
   // Extend, Sell, Staff Use, Move, Replace) — that stays view-only. But
   // Maintenance and Mark Available ARE their job now, so those two get
   // through per status rather than blocking everything equally.
   const isGarageManager = role === "Garage Manager";
-  const row = { display:"flex",alignItems:"center",flexWrap:"nowrap",gap:2 };
-  const btn = (label, action, color, bg, onClick) => (
+  const isSheet = renderMode === "sheet";
+  const row = isSheet ? { display:"flex",flexDirection:"column",gap:6 } : { display:"flex",alignItems:"center",flexWrap:"nowrap",gap:2 };
+  // Same action set and same conditionals either way — only the rendered
+  // button differs, so the mobile action sheet can't drift out of sync
+  // with what desktop's inline row actually allows for this role/status.
+  const btn = (label, action, color, bg, onClick) => isSheet ? (
+    <button type="button" key={action} className="sc-sheet-action" style={{ color }} onClick={onClick||(() => onAction(car, action))}>
+      <span>{label}</span>
+    </button>
+  ) : (
     <button type="button" key={action}
       style={{ fontSize:9,padding:"2.5px 5px",borderRadius:5,border:`1px solid ${color}`,background:bg,color,cursor:"pointer",marginRight:2,fontWeight:500,whiteSpace:"nowrap" }}
       onClick={onClick||(() => onAction(car, action))}>
