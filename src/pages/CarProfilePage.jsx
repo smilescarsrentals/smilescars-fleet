@@ -456,6 +456,14 @@ export default function CarProfilePage({ staffName, role }) {
                       <span style={{ color:"#111",textAlign:"right" }}>{val}</span>
                     </div>
                   ))}
+                  {selectedRental.fuelPhotoUrl && (
+                    <div style={{ paddingTop:12 }}>
+                      <span style={{ fontSize:12,fontWeight:600,color:"#888",textTransform:"uppercase",letterSpacing:".3px",display:"block",marginBottom:8 }}>Fuel Gauge Photo</span>
+                      <a href={selectedRental.fuelPhotoUrl} target="_blank" rel="noopener noreferrer">
+                        <img src={selectedRental.fuelPhotoUrl} alt="Fuel gauge at return" style={{ width:"100%", maxHeight:220, objectFit:"cover", borderRadius:8, border:"1.5px solid #e5e7eb" }} />
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

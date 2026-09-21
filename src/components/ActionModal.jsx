@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import { toTitleCase } from "../lib/textFormat";
 import { api } from "../lib/api";
+import { compressImage } from "../lib/imageCompress";
+
+// Mirrors lib/files.js's MAX_FILE_BYTES — checked client-side, before ever
+// attempting an upload, same reasoning as the Accidents/Cover Notes uploads.
+const MAX_FILE_BYTES = 3 * 1024 * 1024;
 
 const ACTIONS = {
   checkOut:       { title: "Check Out Car",      color: "#16a34a", btnLabel: "Confirm Check Out"  },
@@ -359,6 +364,8 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   const [bookingType,   setBookingType]  = useState("Rental"); // "Rental" | "Transfer"
   const [pickupFrom,    setPickupFrom]   = useState("");
   const [dropoffTo,     setDropoffTo]    = useState("");
+  const [fuelPhoto,     setFuelPhoto]    = useState(null); // { base64, mimeType, filename, previewUrl }
+  const [fuelPhotoErr,  setFuelPhotoErr] = useState("");
 
   const cfg = ACTIONS[action] || { title: "", color: "#16a34a", btnLabel: "Confirm" };
   const sel = { ...S.input, fontFamily: "inherit" };
@@ -390,6 +397,18 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
   }]);
   const updateLeg = (i, patch) => setExtraLegs(ls => ls.map((l, j) => j === i ? { ...l, ...patch } : l));
 
+  const pickFuelPhoto = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.size > MAX_FILE_BYTES) {
+      setFuelPhotoErr(`"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)} MB — please use a file under ${MAX_FILE_BYTES / 1024 / 1024} MB.`);
+      e.target.value = ""; return;
+    }
+    setFuelPhotoErr("");
+    const payload = await compressImage(file);
+    setFuelPhoto({ ...payload, previewUrl: URL.createObjectURL(file) });
+  };
+
   const handleSubmit = () => {
     setErr("");
     if (needsClient && !client.trim()) { setErr("Client name is required."); return; }
@@ -411,6 +430,24 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
     if (isMaintenance && !fuelOut) { setErr("Fuel Level is required."); return; }
     if (needsClient && paymentStatus === "Partial Paid" && !amountPaid) { setErr("Please enter amount paid."); return; }
     if (isStaffUse && !assignedTo) { setErr("Please select a staff member."); return; }
+    // Checkout: Fuel Out / KM Out required (both Rental and Transfer).
+    if (needsClient && !fuelOut) { setErr("Fuel Out is required."); return; }
+    if (needsClient && !kmOut.trim()) { setErr("KM Out is required."); return; }
+    // Return: every field on the form is required, including an explicit
+    // fuel-gauge photo. Fines must be an explicit value (0 if none) rather
+    // than left blank, per Ramzanali's call — Payment Status is exempt since
+    // its own "Keep current status" option is itself a deliberate choice.
+    if (isReturn) {
+      if (!actualReturn) { setErr("Returned Date is required."); return; }
+      if (!kmIn.trim()) { setErr("KM In is required."); return; }
+      if (car.bookingType === "Transfer" && !returnTime) { setErr("Actual Time is required."); return; }
+      if (!fuelIn) { setErr("Fuel In is required."); return; }
+      if (policeFine.trim() === "") { setErr("Police Fine is required (enter 0 if none)."); return; }
+      if (parkingFine.trim() === "") { setErr("Parking Fine is required (enter 0 if none)."); return; }
+      if (paymentStatus === "Partial Paid" && !amountPaid) { setErr("Please enter amount paid."); return; }
+      if (!remarks.trim()) { setErr("Remarks / Notes is required."); return; }
+      if (!fuelPhoto) { setErr("A photo of the fuel gauge is required."); return; }
+    }
     const loc = addingLoc    ? newLoc.trim()    : location;
     const driverPhone = richDrivers.find(d => d.name === driver)?.phone || "";
     onConfirm({
@@ -433,6 +470,9 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
       amount: unformat(amount), currency,
       policeFine: unformat(policeFine), parkingFine: unformat(parkingFine),
       paymentStatus, amountPaid: unformat(amountPaid),
+      fuelPhotoBase64: isReturn && fuelPhoto ? fuelPhoto.base64 : undefined,
+      fuelPhotoMimeType: isReturn && fuelPhoto ? fuelPhoto.mimeType : undefined,
+      fuelPhotoFilename: isReturn && fuelPhoto ? fuelPhoto.filename : undefined,
       serviceLocationType, internalLocation, externalVendorId, externalVendorLocation, driver, driverPhone, assignedTo,
       newLocation: addingLoc    ? loc : null,
       bookingType: needsClient ? bookingType : undefined,
@@ -585,13 +625,13 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
               </div>
               <div style={S.three}>
                 {locationField}
-                <div style={S.field}><label style={S.label}>Fuel Out</label>
+                <div style={S.field}><label style={S.label}>Fuel Out *</label>
                   <select style={sel} value={fuelOut} onChange={e => setFuelOut(e.target.value)}>
                     <option value="">— Select —</option>
                     {FUEL_LEVELS.map(f => <option key={f}>{f}</option>)}
                   </select>
                 </div>
-                <div style={S.field}><label style={S.label}>KM Out</label>
+                <div style={S.field}><label style={S.label}>KM Out *</label>
                   <input style={S.input} type="text" inputMode="numeric" value={kmOut} onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" />
                 </div>
               </div>
@@ -693,13 +733,13 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
               </div>
               <div style={S.three}>
                 {locationField}
-                <div style={S.field}><label style={S.label}>Fuel</label>
+                <div style={S.field}><label style={S.label}>Fuel *</label>
                   <select style={sel} value={fuelOut} onChange={e => setFuelOut(e.target.value)}>
                     <option value="">— Select —</option>
                     {FUEL_LEVELS.map(f => <option key={f}>{f}</option>)}
                   </select>
                 </div>
-                <div style={S.field}><label style={S.label}>KM Out</label>
+                <div style={S.field}><label style={S.label}>KM Out *</label>
                   <input style={S.input} type="text" inputMode="numeric" value={kmOut} onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" />
                 </div>
               </div>
@@ -736,15 +776,15 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
           {/* Return */}
           {isReturn && (<>
             <div style={S.two}>
-              <div style={S.field}><label style={S.label}>Returned Date</label>
+              <div style={S.field}><label style={S.label}>Returned Date *</label>
                 <input style={S.input} type="date" value={actualReturn} onChange={e => setActualReturn(e.target.value)} /></div>
-              <div style={S.field}><label style={S.label}>KM In</label>
+              <div style={S.field}><label style={S.label}>KM In *</label>
                 <input style={S.input} type="text" inputMode="numeric" value={kmIn} onChange={e => setKmIn(fmt(e.target.value))} placeholder="e.g. 45,300" />
                 {car.kmOut && <p style={{ fontSize: 11.5, color: "#94a3b8", margin: "4px 0 0" }}>KM Out at checkout: {car.kmOut} km</p>}
               </div>
             </div>
             {car.bookingType === "Transfer" && (
-              <div style={S.field}><label style={S.label}>Actual Time</label>
+              <div style={S.field}><label style={S.label}>Actual Time *</label>
                 <input style={S.input} type="time" value={returnTime} onChange={e => setReturnTime(e.target.value)} />
                 <p style={{ fontSize:11.5, color:"#94a3b8", margin:"4px 0 0" }}>
                   Same idea as the transfer's start time — set this if you're logging the completion later than
@@ -753,7 +793,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
               </div>
             )}
             <div style={S.two}>
-              <div style={S.field}><label style={S.label}>Fuel In</label>
+              <div style={S.field}><label style={S.label}>Fuel In *</label>
                 <select style={sel} value={fuelIn} onChange={e => setFuelIn(e.target.value)}>
                   <option value="">— Select —</option>
                   {FUEL_LEVELS.map(f => <option key={f}>{f}</option>)}
@@ -770,8 +810,19 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
               </div>
             </div>
             <div style={S.two}>
-              <FineInput label="Police Fine (on return)"  value={policeFine}  onChange={setPoliceFine}  />
-              <FineInput label="Parking Fine (on return)" value={parkingFine} onChange={setParkingFine} />
+              <FineInput label="Police Fine (on return) *"  value={policeFine}  onChange={setPoliceFine}  />
+              <FineInput label="Parking Fine (on return) *" value={parkingFine} onChange={setParkingFine} />
+            </div>
+            <div style={S.field}>
+              <label style={S.label}>Fuel Gauge Photo *</label>
+              <input type="file" accept="image/*" capture="environment" onChange={pickFuelPhoto} style={S.input} />
+              {fuelPhotoErr && <p style={{ color: "#dc2626", fontSize: 12, margin: "6px 0 0" }}>{fuelPhotoErr}</p>}
+              {fuelPhoto && (
+                <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10 }}>
+                  <img src={fuelPhoto.previewUrl} alt="Fuel gauge" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1.5px solid #e5e7eb" }} />
+                  <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>✓ Photo attached</span>
+                </div>
+              )}
             </div>
           </>)}
 
@@ -859,7 +910,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
           {/* Location for other actions */}
           {!isSold && !needsClient && !isStaffUse && locationField}
 
-          <div style={S.field}><label style={S.label}>Remarks / Notes</label>
+          <div style={S.field}><label style={S.label}>Remarks / Notes{isReturn ? " *" : ""}</label>
             <textarea style={S.textarea} rows={2} value={remarks} onChange={e => setRemarks(e.target.value)}
               placeholder={
                 isTransfer                  ? "e.g. Client requested early pickup" :
