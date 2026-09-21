@@ -1247,7 +1247,36 @@ tbody tr:hover td { background: #fafaf8; }
      since the two experiences now genuinely differ in what fields show and
      how actions are triggered, not just layout density. */
   .sc-fleet-stats.sc-fleet-desktop-only,
-  .table-wrap.sc-fleet-table.sc-fleet-desktop-only { display: none; }
+  .table-wrap.sc-fleet-table.sc-fleet-desktop-only,
+  .sc-filter-row.sc-fleet-desktop-only { display: none; }
+
+  .sc-fleet-fab {
+    position: fixed; right: 18px; bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 40;
+    height: 48px; padding: 0 18px; border-radius: 999px; border: none;
+    background: var(--sc-blue); color: #fff; font-size: 14px; font-weight: 700; font-family: inherit;
+    display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 14px rgba(4,81,155,0.35);
+  }
+
+
+  .sc-fleet-mobile-searchbar {
+    display: flex; gap: 8px; align-items: center; padding: 12px 16px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .sc-fleet-mobile-searchbar input[type="text"], .sc-fleet-mobile-searchbar input:not([type]) {
+    flex: 1 1 auto; min-width: 0; height: 40px; padding: 0 12px; font-size: 14px;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text);
+    font-family: inherit; box-sizing: border-box;
+  }
+  .sc-fleet-filter-btn {
+    position: relative; flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: center;
+  }
+  .sc-fleet-filter-badge {
+    position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--red); border: 2px solid var(--surface);
+  }
+  .sc-fleet-mobile-resultcount { padding: 0 16px 10px; font-size: 12px; color: var(--text-muted); background: var(--surface); }
+
 
   .sc-fleet-mobile-stats {
     display: flex; gap: 8px; padding: 12px 16px; overflow-x: auto;
@@ -1310,7 +1339,8 @@ tbody tr:hover td { background: #fafaf8; }
 }
 
 @media (min-width: 769px) {
-  .sc-fleet-mobile-stats, .sc-fleet-mobile-list, .sc-sheet-overlay { display: none !important; }
+  .sc-fleet-mobile-stats, .sc-fleet-mobile-list, .sc-sheet-overlay,
+  .sc-fleet-mobile-searchbar, .sc-fleet-mobile-resultcount, .sc-fleet-fab { display: none !important; }
 }
 
 

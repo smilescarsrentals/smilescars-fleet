@@ -72,6 +72,7 @@ export default function FleetPage({ staffName, role }) {
   const [overdueBlock, setOverdueBlock] = useState(false);
   const [page,      setPage]      = useState(1);
   const [mobileActionCar, setMobileActionCar] = useState(null);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const PER_PAGE = 25;
 
   const load = async (forceRefresh = false) => {
@@ -382,6 +383,74 @@ export default function FleetPage({ staffName, role }) {
         })}
       </div>
 
+      <div className="sc-fleet-mobile-searchbar">
+        <input value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} placeholder="Search plate, type or client…" />
+        <button type="button" className="sc-fleet-filter-btn" aria-label="Filters" onClick={()=>setShowMobileFilters(true)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+          {(fStatus.length||fLocation.length||fType.length||fReturnFrom||fReturnTo) > 0 && <span className="sc-fleet-filter-badge" />}
+        </button>
+      </div>
+      <div className="sc-fleet-mobile-resultcount">
+        {(search||fStatus.length||fLocation.length||fType.length||fReturnFrom||fReturnTo||view!=="all")
+          ? `${filtered.length} matching`
+          : `${fleet.length} cars total`}
+      </div>
+
+      {showMobileFilters && (
+        <div className="sc-sheet-overlay" onClick={()=>setShowMobileFilters(false)}>
+          <div className="sc-sheet" onClick={e=>e.stopPropagation()}>
+            <div className="sc-sheet-head">
+              <div style={{ fontSize:16, fontWeight:800 }}>Filters</div>
+              <button type="button" className="sc-sheet-close" onClick={()=>setShowMobileFilters(false)}>✕</button>
+            </div>
+            <div className="sc-sheet-body">
+              {[
+                { title:"Status", options:["Available","Rented","Staff Use","Maintenance"], selected:fStatus, setter:setFStatus },
+                { title:"Location", options:locations, selected:fLocation, setter:setFLocation },
+                { title:"Vehicle Type", options:types, selected:fType, setter:setFType },
+              ].map(group => (
+                <div key={group.title} style={{ marginBottom:20 }}>
+                  <div style={{ fontSize:12.5, fontWeight:800, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:".4px", marginBottom:9 }}>{group.title}</div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                    {group.options.map(opt => {
+                      const active = group.selected.includes(opt);
+                      return (
+                        <button type="button" key={opt}
+                          onClick={() => { group.setter(active ? group.selected.filter(v=>v!==opt) : [...group.selected, opt]); setPage(1); }}
+                          style={{ padding:"9px 15px", borderRadius:999, fontSize:13, fontWeight:700, fontFamily:"inherit",
+                            border:`1.5px solid ${active?"var(--sc-blue)":"var(--border)"}`, background:active?"var(--blue-bg)":"var(--surface)", color:active?"var(--sc-blue)":"var(--text-muted)" }}>
+                          {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <div>
+                <div style={{ fontSize:12.5, fontWeight:800, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:".4px", marginBottom:9 }}>Returning Between</div>
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <input type="date" value={fReturnFrom} onChange={e=>{setFReturnFrom(e.target.value);setPage(1);}}
+                    style={{ flex:1, padding:"9px 10px", fontSize:13, border:"1.5px solid var(--border)", borderRadius:9, fontFamily:"inherit" }} />
+                  <span style={{ fontSize:12, color:"var(--text-muted)" }}>to</span>
+                  <input type="date" value={fReturnTo} onChange={e=>{setFReturnTo(e.target.value);setPage(1);}}
+                    style={{ flex:1, padding:"9px 10px", fontSize:13, border:"1.5px solid var(--border)", borderRadius:9, fontFamily:"inherit" }} />
+                </div>
+              </div>
+            </div>
+            <div style={{ flexShrink:0, display:"flex", gap:10, padding:"14px 18px 22px", borderTop:"1px solid var(--border-light)" }}>
+              <button type="button" onClick={()=>{setSearch("");setFStatus([]);setFLocation([]);setFType([]);setFReturnFrom("");setFReturnTo("");setPage(1);}}
+                style={{ flex:1, height:46, borderRadius:12, border:"1.5px solid var(--border)", background:"var(--surface)", fontSize:14, fontWeight:700, color:"var(--text-muted)", fontFamily:"inherit" }}>
+                Clear All
+              </button>
+              <button type="button" onClick={()=>setShowMobileFilters(false)}
+                style={{ flex:1.4, height:46, borderRadius:12, border:"none", background:"var(--sc-blue)", fontSize:14, fontWeight:700, color:"#fff", fontFamily:"inherit" }}>
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="sc-fleet-mobile-stats">
         {[
           { label:"Available",        value:stats.available,                    view:"all"      },
@@ -430,7 +499,7 @@ export default function FleetPage({ staffName, role }) {
         </div>
       )}
 
-      <div className="sc-filter-row">
+      <div className="sc-filter-row sc-fleet-desktop-only">
         <input style={sel} className="sc-search" placeholder="Search plate, type or client…"
           value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} />
 
@@ -607,6 +676,13 @@ export default function FleetPage({ staffName, role }) {
           );
         })}
       </div>
+
+      {canExportOrSell && (
+        <button type="button" className="sc-fleet-fab" onClick={()=>setShowAddCar(true)}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Add Car
+        </button>
+      )}
 
       {mobileActionCar && (
         <div className="sc-sheet-overlay" onClick={()=>setMobileActionCar(null)}>
