@@ -815,7 +815,7 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
             </div>
             <div style={S.field}>
               <label style={S.label}>Fuel Gauge Photo *</label>
-              <input type="file" accept="image/*" capture="environment" onChange={pickFuelPhoto} style={S.input} />
+              <input type="file" accept="image/*" onChange={pickFuelPhoto} style={S.input} />
               {fuelPhotoErr && <p style={{ color: "#dc2626", fontSize: 12, margin: "6px 0 0" }}>{fuelPhotoErr}</p>}
               {fuelPhoto && (
                 <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10 }}>
