@@ -1336,6 +1336,46 @@ tbody tr:hover td { background: #fafaf8; }
     padding: 0 14px; border-radius: 12px; border: none; background: var(--bg);
     font-size: 14.5px; font-weight: 700; text-align: left; font-family: inherit; margin-bottom: 6px;
   }
+
+  /* ---- Reservations mobile redesign (design system: SmilesCars Fleet) ----
+     Desktop's "every day of the month, even empty ones" agenda list is
+     replaced by a real calendar grid + a list scoped to whichever date is
+     selected, per the mockup approved with Ramzanali. Same reservations
+     data, byDay grouping and urgent-reservation logic as desktop — just a
+     different way to get to a given day's list. */
+  .sc-resv-desktop-only { display: none; }
+
+  .sc-resv-mobile-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 0 10px;
+  }
+  .sc-resv-mobile-monthnav {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    padding: 10px 0; background: var(--surface); border-radius: 12px; margin-bottom: 10px;
+  }
+  .sc-resv-cal {
+    padding: 12px 10px 4px; background: var(--surface); border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(20,23,26,0.06); margin-bottom: 14px;
+  }
+  .sc-resv-cal-weekdays, .sc-resv-cal-week { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .sc-resv-cal-weekdays { margin-bottom: 6px; }
+  .sc-resv-cal-week { margin-bottom: 4px; }
+  .sc-resv-cal-wd { text-align: center; font-size: 10px; font-weight: 800; color: var(--text-faint); padding: 4px 0; }
+  .sc-resv-cal-cell {
+    position: relative; height: 40px; border: none; border-radius: 10px; background: transparent;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    font-family: inherit;
+  }
+  .sc-resv-cal-dot { width: 4px; height: 4px; border-radius: 50%; }
+  .sc-resv-daylist { display: flex; flex-direction: column; gap: 8px; padding-bottom: 24px; }
+  .sc-resv-mcard {
+    text-align: left; background: var(--surface); border: none; border-radius: 14px; padding: 12px 13px;
+    box-shadow: 0 1px 3px rgba(20,23,26,0.06); display: flex; flex-direction: column; gap: 6px; width: 100%; box-sizing: border-box;
+  }
+}
+
+@media (min-width: 769px) {
+  .sc-resv-mobile-topbar, .sc-resv-mobile-monthnav, .sc-resv-cal, .sc-resv-daylist { display: none !important; }
 }
 
 @media (min-width: 769px) {

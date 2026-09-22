@@ -84,6 +84,7 @@ export default function ReservationsPage({ staffName, role }) {
   const [urgentExpanded, setUrgentExpanded] = useState(false);
   const [showDetail,   setShowDetail]   = useState(null);
   const [showEdit,     setShowEdit]     = useState(null);
+  const [mobileSelectedDate, setMobileSelectedDate] = useState(today.getDate());
 
   // Arriving from Leads -> "Convert to Reservation": jump the calendar to
   // the lead's relevant date and open the Add form pre-filled with its
@@ -151,13 +152,129 @@ export default function ReservationsPage({ staffName, role }) {
     return map;
   }, [reservations, year, month]);
 
-  const prevMonth = () => { if (month===1){setMonth(12);setYear(y=>y-1);}else setMonth(m=>m-1); };
-  const nextMonth = () => { if (month===12){setMonth(1);setYear(y=>y+1);}else setMonth(m=>m+1); };
+  // Calendar grid for the mobile view — real date math (leading/trailing
+  // blanks so weekdays line up), reusing the same byDay/urgentReservations
+  // data desktop's agenda list uses, just grouped for a grid instead of a
+  // day-by-day list.
+  const mobileWeeks = useMemo(() => {
+    const firstDow = new Date(year, month - 1, 1).getDay();
+    const flat = [];
+    for (let i = 0; i < firstDow; i++) flat.push(null);
+    for (let d = 1; d <= days; d++) flat.push(d);
+    while (flat.length % 7 !== 0) flat.push(null);
+    const weeks = [];
+    for (let i = 0; i < flat.length; i += 7) weeks.push(flat.slice(i, i + 7));
+    return weeks;
+  }, [year, month, days]);
+
+  const prevMonth = () => { if (month===1){setMonth(12);setYear(y=>y-1);}else setMonth(m=>m-1); setMobileSelectedDate(null); };
+  const nextMonth = () => { if (month===12){setMonth(1);setYear(y=>y+1);}else setMonth(m=>m+1); setMobileSelectedDate(null); };
   const todayDay  = today.getFullYear()===year && today.getMonth()+1===month ? today.getDate() : null;
 
   return (
     <div>
-      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",flexWrap:"wrap",gap:12 }}>
+      <div className="sc-resv-mobile-topbar">
+        <div>
+          <div style={{ fontSize:20,fontWeight:800,color:"var(--text)" }}>Reservations</div>
+          <div style={{ fontSize:12,color:"var(--text-muted)",marginTop:2 }}>{reservations.length} this month</div>
+        </div>
+        <button type="button" className="btn btn-add" onClick={() => setShowAdd(today.getMonth()+1===month && today.getFullYear()===year ? today.getDate() : 1)}>+ New</button>
+      </div>
+
+      <div className="sc-resv-mobile-monthnav">
+        <button type="button" onClick={prevMonth} aria-label="Previous month" style={{ width:30,height:30,border:"none",background:"none",borderRadius:8,color:"var(--text-muted)",fontSize:17 }}>‹</button>
+        <span style={{ fontSize:13.5,fontWeight:800,minWidth:120,textAlign:"center" }}>{MONTHS[month-1]} {year}</span>
+        <button type="button" onClick={nextMonth} aria-label="Next month" style={{ width:30,height:30,border:"none",background:"none",borderRadius:8,color:"var(--text-muted)",fontSize:17 }}>›</button>
+        <button type="button" onClick={()=>{setMonth(today.getMonth()+1);setYear(today.getFullYear());setMobileSelectedDate(today.getDate());}}
+          style={{ marginLeft:6,height:28,padding:"0 11px",border:"1.5px solid var(--border)",borderRadius:999,background:"var(--surface)",fontSize:11,fontWeight:700,color:"var(--text-muted)" }}>Today</button>
+      </div>
+
+      {urgentReservations.length > 0 && (
+        <div style={{ background:"var(--red-bg)",border:"1.5px solid var(--red-border)",borderRadius:12,padding:"10px 13px",marginBottom:10 }}>
+          <button type="button" onClick={() => setUrgentExpanded(v => !v)}
+            style={{ width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"none",border:"none",padding:0,fontFamily:"inherit" }}>
+            <span style={{ fontSize:12.5,fontWeight:800,color:"var(--red)" }}>🚨 {urgentReservations.length} need{urgentReservations.length===1?"s":""} a car assigned</span>
+            <span style={{ fontSize:10.5,fontWeight:700,color:"var(--red)" }}>{urgentExpanded ? "Hide ▲" : "Show ▼"}</span>
+          </button>
+          {urgentExpanded && (
+            <div style={{ marginTop:7,display:"flex",flexDirection:"column",gap:5 }}>
+              {urgentReservations.map(u => {
+                const [uy,um,ud] = u.pickupDate.split("-").map(Number);
+                return (
+                  <button type="button" key={u.id}
+                    onClick={() => { setYear(uy); setMonth(um); setMobileSelectedDate(ud); }}
+                    style={{ display:"flex",justifyContent:"space-between",fontSize:11.5,background:"none",border:"none",padding:0,textAlign:"left",fontFamily:"inherit" }}>
+                    <span style={{ fontWeight:700,color:"var(--text)" }}>{u.client} <span style={{ fontWeight:600,color:"var(--text-muted)" }}>({u.carType||"Any"})</span></span>
+                    <span style={{ fontWeight:700,color:"var(--red)" }}>{fmtDate(u.pickupDate)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="sc-resv-cal">
+        <div className="sc-resv-cal-weekdays">
+          {["S","M","T","W","T","F","S"].map((wd,i) => <div key={i} className="sc-resv-cal-wd">{wd}</div>)}
+        </div>
+        {mobileWeeks.map((week,wi) => (
+          <div key={wi} className="sc-resv-cal-week">
+            {week.map((day,di) => {
+              if (!day) return <div key={di} style={{ height:40 }} />;
+              const items = byDay[day] || [];
+              const hasUrgentHere = items.some(r => urgentReservations.some(u => u.id === r.id));
+              const isToday = day === todayDay;
+              const isSelected = day === mobileSelectedDate;
+              return (
+                <button type="button" key={di} className="sc-resv-cal-cell"
+                  style={{ background: isSelected ? "var(--sc-blue)" : isToday ? "var(--green-bg)" : "transparent" }}
+                  onClick={() => setMobileSelectedDate(day)}>
+                  <span style={{ fontSize:12.5, fontWeight: (isSelected||isToday) ? 800 : 600, color: isSelected ? "#fff" : isToday ? "var(--green)" : "var(--text)" }}>{day}</span>
+                  {items.length > 0 && <span className="sc-resv-cal-dot" style={{ background: hasUrgentHere ? "var(--red)" : "var(--sc-blue)" }} />}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      <div className="sc-resv-daylist">
+        <div style={{ fontSize:14,fontWeight:800,marginBottom:2 }}>
+          {mobileSelectedDate ? `${MONTHS[month-1]} ${mobileSelectedDate}, ${year}` : "Select a date"}
+        </div>
+        {(byDay[mobileSelectedDate] || []).length === 0 ? (
+          <div style={{ textAlign:"center",padding:"28px 0",color:"var(--text-faint)",fontSize:13 }}>No reservations on this date.</div>
+        ) : (byDay[mobileSelectedDate] || []).map(r => {
+          const isTransfer = r.bookingType === "Transfer";
+          const isUrgent = urgentReservations.some(u => u.id === r.id);
+          const isCancelled = r.status === "Cancelled";
+          const isFulfilled = r.status === "Fulfilled";
+          const pill = isCancelled ? { bg:"#7f1d1d", fg:"#fff", label:"Cancelled" }
+            : isFulfilled ? { bg:"var(--green-bg)", fg:"var(--green)", label:"Picked Up" }
+            : isUrgent ? { bg:"var(--red-bg)", fg:"var(--red)", label:"Needs Car" }
+            : isTransfer ? { bg:"#f3e8ff", fg:"#7c3aed", label:"Transfer" }
+            : { bg:"var(--blue-bg)", fg:"var(--sc-blue)", label:"Confirmed" };
+          return (
+            <button type="button" key={r.id} className="sc-resv-mcard" onClick={() => setShowDetail(r)}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10 }}>
+                <div>
+                  <div style={{ fontSize:14,fontWeight:800,textDecoration:isCancelled?"line-through":"none" }}>{r.client}</div>
+                  <div style={{ fontSize:12,fontWeight:600,color:"var(--text-muted)",marginTop:1 }}>
+                    {r.plate || r.carType || "Any"}{isTransfer && r.dropOffTo ? ` → ${r.dropOffTo}` : ""}
+                  </div>
+                </div>
+                <span style={{ flexShrink:0,padding:"4px 10px",borderRadius:999,fontSize:10.5,fontWeight:800,background:pill.bg,color:pill.fg }}>{pill.label}</span>
+              </div>
+              {!isTransfer && r.returnDate && (
+                <div style={{ fontSize:11.5,color:"var(--text-faint)" }}>Return {fmtDate(r.returnDate)}</div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="sc-resv-desktop-only" style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",flexWrap:"wrap",gap:12 }}>
         <div>
           <div style={{ fontSize:22,fontWeight:700,color:"var(--text)" }}>Reservations</div>
           <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{reservations.length} reservations this month</div>
@@ -174,7 +291,7 @@ export default function ReservationsPage({ staffName, role }) {
       </div>
 
       {urgentReservations.length > 0 && (
-        <div style={{ background:"var(--red-bg)",border:"1.5px solid var(--red-border)",borderRadius:10,padding:"12px 16px",marginBottom:"1rem" }}>
+        <div className="sc-resv-desktop-only" style={{ background:"var(--red-bg)",border:"1.5px solid var(--red-border)",borderRadius:10,padding:"12px 16px",marginBottom:"1rem" }}>
           <button type="button" onClick={() => setUrgentExpanded(v => !v)}
             style={{ display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit" }}>
             <span style={{ fontWeight:700,color:"var(--red)",fontSize:14 }}>
@@ -207,6 +324,7 @@ export default function ReservationsPage({ staffName, role }) {
         </div>
       )}
 
+      <div className="sc-resv-desktop-only">
       {loading ? <div style={S.center}>Loading…</div> : (
         <div style={S.board}>
           {Array.from({length:days},(_,i)=>i+1).map(day => {
@@ -260,6 +378,7 @@ export default function ReservationsPage({ staffName, role }) {
           })}
         </div>
       )}
+      </div>
 
       {showAdd    && <AddModal    day={showAdd}    month={month} year={year} staffName={staffName} fleet={fleet} fleetTypes={fleetTypes} prefillLead={prefillLead} onClose={()=>{setShowAdd(null);setPrefillLead(null);}}    onSaved={()=>{setShowAdd(null);setPrefillLead(null);load();}} />}
       {showDetail && <DetailModal res={showDetail} canEdit={canEdit} staffName={staffName} role={role}
