@@ -639,8 +639,8 @@ export default function FleetPage({ staffName, role }) {
               {car.status==="Rented" && car.currentClient && (
                 <div className="sc-fleet-mcard-line">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-                  <span style={{ fontWeight:600 }}>{car.currentClient}</span>
-                  {car.returnDate && <><span style={{ color:"var(--text-faint)" }}>·</span><span style={{ fontWeight:700, color:urgent?"var(--red)":"var(--text)" }}>Due {fmtDate(car.returnDate)}</span></>}
+                  <span style={{ fontWeight:600 }}>Rented to {car.currentClient}</span>
+                  {car.returnDate && <><span style={{ color:"var(--text-faint)" }}> • </span><span style={{ fontWeight:700, color:urgent?"var(--red)":"var(--text)" }}>Due {fmtDate(car.returnDate)}</span></>}
                 </div>
               )}
               {car.status==="Staff Use" && car.currentClient && (
@@ -656,7 +656,7 @@ export default function FleetPage({ staffName, role }) {
                 </div>
               )}
 
-              <div className="sc-fleet-mcard-line" style={{ color:"var(--text-faint)", fontSize:"12.5px" }}>
+              <div className="sc-fleet-mcard-line sc-fleet-mcard-location" style={{ color:"var(--text-faint)" }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s7-6.3 7-11.5A7 7 0 105 9.5C5 14.7 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
                 <span>{car.location || "—"}</span>
               </div>
