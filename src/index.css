@@ -1248,7 +1248,7 @@ tbody tr:hover td { background: #fafaf8; }
      how actions are triggered, not just layout density. */
   .sc-fleet-stats.sc-fleet-desktop-only,
   .table-wrap.sc-fleet-table.sc-fleet-desktop-only,
-  .sc-filter-row.sc-fleet-desktop-only { display: none; }
+  .sc-filter-row.sc-fleet-desktop-only { display: none !important; }
 
   .sc-fleet-fab {
     position: fixed; right: 18px; bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 40;
@@ -1343,7 +1343,7 @@ tbody tr:hover td { background: #fafaf8; }
      selected, per the mockup approved with Ramzanali. Same reservations
      data, byDay grouping and urgent-reservation logic as desktop — just a
      different way to get to a given day's list. */
-  .sc-resv-desktop-only { display: none; }
+  .sc-resv-desktop-only { display: none !important; }
 
   .sc-resv-mobile-topbar {
     display: flex; align-items: center; justify-content: space-between;
