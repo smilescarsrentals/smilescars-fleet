@@ -629,9 +629,9 @@ export default function FleetPage({ staffName, role }) {
           return (
             <div className="sc-fleet-mcard" key={car.plate}>
               <div className="sc-fleet-mcard-top">
-                <div onClick={()=>navigate(`/car/${encodeURIComponent(car.plate)}`)} style={{ cursor:"pointer" }}>
-                  <div className="sc-fleet-mcard-plate">{car.plate}</div>
-                  <div className="sc-fleet-mcard-type">{car.type}</div>
+                <div className="sc-fleet-mcard-header-group" onClick={()=>navigate(`/car/${encodeURIComponent(car.plate)}`)} style={{ cursor:"pointer" }}>
+                  <span className="sc-fleet-mcard-plate">{car.plate}</span>
+                  <span className="sc-fleet-mcard-type">{car.type}</span>
                 </div>
                 <span className="sc-fleet-mcard-pill" style={{ background:sc.bg, color:sc.fg }}>{car.status}</span>
               </div>
