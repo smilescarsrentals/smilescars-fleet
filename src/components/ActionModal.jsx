@@ -3,9 +3,18 @@ import { toTitleCase } from "../lib/textFormat";
 import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
 
-// Mirrors lib/files.js's MAX_FILE_BYTES — checked client-side, before ever
-// attempting an upload, same reasoning as the Accidents/Cover Notes uploads.
-const MAX_FILE_BYTES = 3 * 1024 * 1024;
+// This is checked BEFORE compressImage runs, on the raw camera file — not
+// lib/files.js's MAX_FILE_BYTES, which is the actual stored-file limit
+// after compression and is correctly calibrated to Vercel's real ~4.5MB
+// serverless request cap (a 3MB raw file becomes ~4MB once base64-encoded).
+// compressImage resizes to 1600px/quality 0.82 regardless of input size,
+// reliably landing around 200-400KB, so a raw phone photo of 8-15MB
+// compresses down just as easily as one of 2MB would — there's no reason
+// to reject the sizes a modern phone camera actually produces. This limit
+// is just a sanity ceiling against something absurd (a video file, a
+// multi-page scan) reaching the browser's canvas decode step at all, not
+// a proxy for the real upload constraint.
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
 const ACTIONS = {
   checkOut:       { title: "Check Out Car",      color: "#16a34a", btnLabel: "Confirm Check Out"  },
@@ -430,9 +439,10 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
     if (isMaintenance && !fuelOut) { setErr("Fuel Level is required."); return; }
     if (needsClient && paymentStatus === "Partial Paid" && !amountPaid) { setErr("Please enter amount paid."); return; }
     if (isStaffUse && !assignedTo) { setErr("Please select a staff member."); return; }
-    // Checkout: Fuel Out / KM Out required (both Rental and Transfer).
+    // Checkout: Fuel Out / KM Out / Fuel Gauge Photo required (both Rental and Transfer).
     if (needsClient && !fuelOut) { setErr("Fuel Out is required."); return; }
     if (needsClient && !kmOut.trim()) { setErr("KM Out is required."); return; }
+    if (needsClient && !fuelPhoto) { setErr("Fuel Gauge Photo is required."); return; }
     // Return: every field on the form is required, including an explicit
     // fuel-gauge photo. Fines must be an explicit value (0 if none) rather
     // than left blank, per Ramzanali's call — Payment Status is exempt since
@@ -470,9 +480,9 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
       amount: unformat(amount), currency,
       policeFine: unformat(policeFine), parkingFine: unformat(parkingFine),
       paymentStatus, amountPaid: unformat(amountPaid),
-      fuelPhotoBase64: isReturn && fuelPhoto ? fuelPhoto.base64 : undefined,
-      fuelPhotoMimeType: isReturn && fuelPhoto ? fuelPhoto.mimeType : undefined,
-      fuelPhotoFilename: isReturn && fuelPhoto ? fuelPhoto.filename : undefined,
+      fuelPhotoBase64: fuelPhoto ? fuelPhoto.base64 : undefined,
+      fuelPhotoMimeType: fuelPhoto ? fuelPhoto.mimeType : undefined,
+      fuelPhotoFilename: fuelPhoto ? fuelPhoto.filename : undefined,
       serviceLocationType, internalLocation, externalVendorId, externalVendorLocation, driver, driverPhone, assignedTo,
       newLocation: addingLoc    ? loc : null,
       bookingType: needsClient ? bookingType : undefined,
@@ -634,6 +644,17 @@ export default function ActionModal({ car, action, locations, garages, drivers, 
                 <div style={S.field}><label style={S.label}>KM Out *</label>
                   <input style={S.input} type="text" inputMode="numeric" value={kmOut} onChange={e => setKmOut(fmt(e.target.value))} placeholder="e.g. 45,000" />
                 </div>
+              </div>
+              <div style={S.field}>
+                <label style={S.label}>Fuel Gauge Photo *</label>
+                <input type="file" accept="image/*" onChange={pickFuelPhoto} style={S.input} />
+                {fuelPhotoErr && <p style={{ color: "#dc2626", fontSize: 12, margin: "6px 0 0" }}>{fuelPhotoErr}</p>}
+                {fuelPhoto && (
+                  <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10 }}>
+                    <img src={fuelPhoto.previewUrl} alt="Fuel gauge" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1.5px solid #e5e7eb" }} />
+                    <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>✓ Photo attached</span>
+                  </div>
+                )}
               </div>
               <div style={S.two}>
                 <FineInput label="Police Fine"  value={policeFine}  onChange={setPoliceFine}  />

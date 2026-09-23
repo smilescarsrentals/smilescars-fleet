@@ -10,13 +10,19 @@ const primaryBtnStyle = { padding: "9px 16px", fontSize: 13, fontWeight: 600, co
 const secondaryBtnStyle = { padding: "9px 16px", fontSize: 13, color: "#666", background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 7, cursor: "pointer" };
 const closeBtnStyle = { background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#888" };
 
-// Mirrors lib/files.js's MAX_FILE_BYTES — checked client-side, before ever
-// attempting an upload, same reasoning as the Workflows/Cover Notes uploads:
-// a large file base64-encoded can push the request past what Vercel's
-// serverless functions accept, surfacing a bare, unhelpful error otherwise.
-const MAX_FILE_BYTES = 3 * 1024 * 1024;
-function checkFileSize(file) {
-  if (file.size > MAX_FILE_BYTES) return `"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)} MB — please use a file under ${MAX_FILE_BYTES / 1024 / 1024} MB.`;
+// Docs (PDFs, etc.) go up as-is — no compression step for those, so this
+// stays calibrated to lib/files.js's real stored-file limit / Vercel's
+// ~4.5MB request cap. Photos go through compressImage first, which
+// resizes to 1600px/quality 0.82 regardless of input size and reliably
+// lands around 200-400KB — so the raw phone photo a staff member picks
+// (often 5-15MB straight off the camera) never actually needs to be that
+// small itself; this is just a sanity ceiling against something absurd
+// reaching the browser's canvas decode step, not the real constraint.
+const MAX_DOC_BYTES = 3 * 1024 * 1024;
+const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
+function checkFileSize(file, isPhoto) {
+  const max = isPhoto ? MAX_PHOTO_BYTES : MAX_DOC_BYTES;
+  if (file.size > max) return `"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)} MB — please use a file under ${max / 1024 / 1024} MB.`;
   return null;
 }
 
@@ -130,9 +136,9 @@ function AddAccidentModal({ staffName, plates, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
-  const pickFiles = (setter) => (e) => {
+  const pickFiles = (setter, isPhoto) => (e) => {
     const files = Array.from(e.target.files || []);
-    const sizeErr = files.map(checkFileSize).find(Boolean);
+    const sizeErr = files.map(f => checkFileSize(f, isPhoto)).find(Boolean);
     if (sizeErr) { setErr(sizeErr); e.target.value = ""; return; }
     setErr("");
     setter(files);
@@ -195,12 +201,12 @@ function AddAccidentModal({ staffName, plates, onClose, onSaved }) {
           </div>
           <div style={{ marginBottom: 10 }}>
             <label style={labelStyle}>Upload Photos</label>
-            <input type="file" accept="image/*" multiple onChange={pickFiles(setPhotoFiles)} style={inputStyle} />
+            <input type="file" accept="image/*" multiple onChange={pickFiles(setPhotoFiles, true)} style={inputStyle} />
             {photoFiles.length > 0 && <p style={{ fontSize: 11, color: "#888", margin: "4px 0 0" }}>{photoFiles.length} photo{photoFiles.length === 1 ? "" : "s"} selected</p>}
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={labelStyle}>Upload Docs</label>
-            <input type="file" multiple onChange={pickFiles(setDocFiles)} style={inputStyle} />
+            <input type="file" multiple onChange={pickFiles(setDocFiles, false)} style={inputStyle} />
             {docFiles.length > 0 && <p style={{ fontSize: 11, color: "#888", margin: "4px 0 0" }}>{docFiles.length} document{docFiles.length === 1 ? "" : "s"} selected</p>}
           </div>
           {err && <p style={{ color: "#dc2626", fontSize: 12, margin: "0 0 10px" }}>{err}</p>}
