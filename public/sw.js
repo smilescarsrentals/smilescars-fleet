@@ -1,4 +1,4 @@
-const CACHE = "smilescars-v3";
+const CACHE = "smilescars-v4";
 const ASSETS = ["/", "/index.html"];
 
 self.addEventListener("install", e => {
@@ -19,6 +19,25 @@ self.addEventListener("fetch", e => {
   // The API is same-origin now (/api -> Supabase). Never cache it: a stale
   // fleet list served from the cache would look like data loss to staff.
   if (new URL(e.request.url).pathname.startsWith("/api")) return;
+
+  const url = new URL(e.request.url);
+  const isShell = url.pathname === "/" || url.pathname === "/index.html" || e.request.mode === "navigate";
+  if (isShell) {
+    // The shell is what references each deploy's hashed JS/CSS filenames --
+    // if IT goes stale, the app silently keeps running an old build no
+    // matter how "fresh" everything downstream of it is. cache: "no-store"
+    // bypasses the browser's own HTTP cache too, not just this SW's Cache
+    // Storage, since a plain fetch() here would otherwise still be subject
+    // to it even in a "network-first" strategy -- exactly the gap that let
+    // a stale build survive normal reloads while chasing this bug.
+    e.respondWith(
+      fetch(e.request, { cache: "no-store" })
+        .then(res => { const clone = res.clone(); caches.open(CACHE).then(c => c.put(e.request, clone)); return res; })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
   e.respondWith(
     fetch(e.request)
       .then(res => { const clone = res.clone(); caches.open(CACHE).then(c => c.put(e.request, clone)); return res; })
