@@ -24,6 +24,7 @@ export default function TrackingPage({ staffName }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [sortByDistance, setSortByDistance] = useState(false);
+  const [manualMatchPlate, setManualMatchPlate] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -94,6 +95,17 @@ export default function TrackingPage({ staffName }) {
       load();
     } catch (e) {
       alert(e.message || "Couldn't remove match.");
+    }
+  };
+
+  const handleManualMatch = async (device) => {
+    if (!manualMatchPlate) return;
+    try {
+      await api.confirmTrackerMatches({ staffName, matches: [{ imei: device.imei, deviceName: device.deviceName, plate: manualMatchPlate }] });
+      setManualMatchPlate(null);
+      load();
+    } catch (e) {
+      alert(e.message || "Couldn't save this match.");
     }
   };
 
@@ -313,7 +325,20 @@ export default function TrackingPage({ staffName }) {
         {unmatchedFleetPlates.length === 0 ? (
           <Empty>Every Fleet car has a tracker.</Empty>
         ) : (
-          <p style={{ fontSize: 13, color: "#475569", lineHeight: 1.7, margin: 0 }}>{unmatchedFleetPlates.join(", ")}</p>
+          <>
+            <p style={{ fontSize: 12.5, color: "#475569", margin: "0 0 10px" }}>
+              No TrackSolid device name resembled these plates closely enough to suggest automatically. Search and pick the right tracker manually for each one.
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {unmatchedFleetPlates.map((plate) => (
+                <button key={plate} type="button" onClick={() => setManualMatchPlate(plate)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 11px", fontSize: 13, fontWeight: 600, color: "#334155", background: "#fff", border: "1.5px solid #e2e8f0", borderRadius: 8, cursor: "pointer" }}>
+                  {plate}
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--sc-blue)" }}>Match →</span>
+                </button>
+              ))}
+            </div>
+          </>
         )}
       </CollapsibleSection>
 
@@ -333,11 +358,55 @@ export default function TrackingPage({ staffName }) {
           </Table>
         </CollapsibleSection>
       )}
+
+      {manualMatchPlate && (
+        <ManualMatchModal plate={manualMatchPlate} devices={unmatchedDevices} onClose={() => setManualMatchPlate(null)} onPick={handleManualMatch} />
+      )}
     </div>
   );
 }
 
 // ── Small local building blocks ─────────────────────────────────────────
+function ManualMatchModal({ plate, devices, onClose, onPick }) {
+  const [q, setQ] = useState("");
+  const filtered = q.trim()
+    ? devices.filter((d) => (d.deviceName || "").toLowerCase().includes(q.trim().toLowerCase()) || (d.imei || "").includes(q.trim()))
+    : devices;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }} onClick={onClose}>
+      <div style={{ background: "#fff", borderRadius: 12, width: 440, maxHeight: "80vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #f0f0f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Match a tracker to {plate}</p>
+            <p style={{ fontSize: 12, color: "#888", margin: "2px 0 0" }}>{devices.length} unmatched tracker{devices.length === 1 ? "" : "s"} to choose from</p>
+          </div>
+          <button type="button" onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#888" }}>✕</button>
+        </div>
+        <div style={{ padding: "0.9rem 1.25rem 0" }}>
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by tracker name or IMEI…"
+            style={{ width: "100%", padding: "8px 10px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 8, boxSizing: "border-box" }} />
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "0.75rem 1.25rem 1.25rem" }}>
+          {filtered.length === 0 ? (
+            <p style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "1.5rem 0" }}>No unmatched trackers match that search.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {filtered.map((d) => (
+                <button key={d.imei} type="button" onClick={() => onPick(d)}
+                  style={{ textAlign: "left", padding: "9px 11px", border: "1.5px solid #e5e7eb", borderRadius: 8, background: "#fff", cursor: "pointer", fontFamily: "inherit" }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{d.deviceName || "(no name)"}</div>
+                  <div style={{ fontSize: 11.5, color: "#94a3b8", fontFamily: "monospace" }}>{d.imei}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Section({ title, tint, border, action, children }) {
   return (
     <div style={{ background: tint, border: `1.5px solid ${border}`, borderRadius: 12, padding: "1.1rem 1.25rem", marginBottom: "1.1rem" }}>
