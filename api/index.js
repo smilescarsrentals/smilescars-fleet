@@ -95,6 +95,7 @@ const READS = {
   getVehicleMileageDaily: reads.getVehicleMileageDaily,
   getMileageAlertSummary: reads.getMileageAlertSummary,
   getTrackerOverviewTable: reads.getTrackerOverviewTable,
+  getAvailableMileageDays: reads.getAvailableMileageDays,
   // Files, signatures, agreements — formerly Google Drive
   getSignature: files.getSignature,
   getStaffSignature: files.getStaffSignature,

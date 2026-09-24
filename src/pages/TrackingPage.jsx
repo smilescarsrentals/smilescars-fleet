@@ -25,17 +25,21 @@ export default function TrackingPage({ staffName }) {
   const [pageSize, setPageSize] = useState(25);
   const [sortByDistance, setSortByDistance] = useState(false);
   const [manualMatchPlate, setManualMatchPlate] = useState(null);
+  const [viewDay, setViewDay] = useState(null); // null = latest/today; else "YYYY-MM-DD"
+  const [availableDays, setAvailableDays] = useState([]);
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const [overviewRes, matchesRes] = await Promise.all([
-        api.getTrackerOverviewTable(),
+      const [overviewRes, matchesRes, daysRes] = await Promise.all([
+        api.getTrackerOverviewTable(viewDay),
         api.getTrackerMatchSuggestions(),
+        api.getAvailableMileageDays(),
       ]);
       setOverview(overviewRes);
       setMatches(matchesRes);
+      setAvailableDays(daysRes.days || []);
       const initChecked = {};
       (matchesRes.suggested || []).forEach((s) => { initChecked[s.imei] = true; });
       setChecked(initChecked);
@@ -45,7 +49,7 @@ export default function TrackingPage({ staffName }) {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [viewDay]);
 
   const toggle = (imei) => setChecked((c) => ({ ...c, [imei]: !c[imei] }));
 
@@ -187,6 +191,13 @@ export default function TrackingPage({ staffName }) {
 
       {/* Filter row — same visual pattern as Fleet */}
       <div className="sc-filter-row">
+        <input type="date" value={viewDay || (availableDays[0] || "")}
+          min={availableDays[availableDays.length - 1] || undefined} max={availableDays[0] || undefined}
+          onChange={(e) => setViewDay(e.target.value)}
+          style={{ padding: "7px 10px", fontSize: 13, border: "1.5px solid #e5e7eb", borderRadius: 8 }} />
+        {viewDay && viewDay !== availableDays[0] && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setViewDay(null)}>Back to latest</button>
+        )}
         <input className="sc-search" placeholder="Search plate…" value={search} onChange={(e) => setSearch(e.target.value)} />
         <MultiSelect label="All cars" options={["Over 100km", "No movement recorded", "Currently moving"]} selected={fStatus} onChange={setFStatus} />
         <button type="button" className={`btn btn-sm ${sortByDistance ? "btn-primary" : "btn-ghost"}`} onClick={() => setSortByDistance((v) => !v)}>
@@ -198,7 +209,7 @@ export default function TrackingPage({ staffName }) {
         <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
           {search || fStatus.length ? `${filtered.length} of ${rows.length} tracked cars` : `${rows.length} tracked cars`}
         </span>
-        <button type="button" onClick={handleSyncNow} disabled={syncing} className="btn btn-primary btn-sm">
+        <button type="button" onClick={handleSyncNow} disabled={syncing || !overview?.isLatestDay} title={!overview?.isLatestDay ? "Switch to the latest day to sync — a past day can't be re-synced." : undefined} className="btn btn-primary btn-sm">
           {syncing ? "Syncing…" : "↻ Sync now"}
         </button>
       </div>
@@ -207,11 +218,16 @@ export default function TrackingPage({ staffName }) {
       <div className="table-wrap sc-fleet-table">
         <table>
           <thead>
-            <tr>{["Plate", "KM Driven (prev day)", "Current Location", ""].map((h) => <th key={h} data-label={h}>{h}</th>)}</tr>
+            <tr>{[
+              "Plate",
+              `KM Driven (${overview?.mileageDay ? new Date(overview.mileageDay).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"})`,
+              ...(overview?.isLatestDay ? ["Current Location"] : []),
+              "",
+            ].map((h) => <th key={h} data-label={h}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={4} style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-faint)", fontSize: 14 }}>No cars match your filters.</td></tr>
+              <tr><td colSpan={overview?.isLatestDay ? 4 : 3} style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-faint)", fontSize: 14 }}>No cars match your filters.</td></tr>
             )}
             {pageRows.map((c) => (
               <tr key={c.plate} style={c.overLimit ? { background: "var(--red-bg, #fef2f2)" } : {}}>
@@ -221,20 +237,22 @@ export default function TrackingPage({ staffName }) {
                     {c.plate}
                   </span>
                 </td>
-                <td data-label="KM Driven (prev day)">
+                <td data-label="KM Driven">
                   {c.distanceKm != null ? (
                     <span style={{ fontWeight: c.overLimit ? 700 : 400, color: c.overLimit ? "#dc2626" : "inherit" }}>
                       {c.distanceKm.toFixed(1)} km{c.overLimit && " ⚠️"}
                     </span>
-                  ) : <span style={{ color: "var(--text-faint)", fontStyle: "italic" }} title="TrackSolid didn't log a trip for this car yesterday — either it genuinely didn't move, or its tracker had no signal that day. We can't tell which from this data.">No movement recorded</span>}
+                  ) : <span style={{ color: "var(--text-faint)", fontStyle: "italic" }} title="TrackSolid didn't log a trip for this car that day — either it genuinely didn't move, or its tracker had no signal. We can't tell which from this data.">No movement recorded</span>}
                 </td>
-                <td data-label="Current Location">
-                  {c.lat != null ? (
-                    <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noreferrer" style={{ color: "var(--sc-blue)" }}>
-                      View on map ↗
-                    </a>
-                  ) : <span style={{ color: "var(--text-faint)" }}>—</span>}
-                </td>
+                {overview?.isLatestDay && (
+                  <td data-label="Current Location">
+                    {c.lat != null ? (
+                      <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noreferrer" style={{ color: "var(--sc-blue)" }}>
+                        View on map ↗
+                      </a>
+                    ) : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                  </td>
+                )}
                 <td data-label="">
                   <button onClick={() => handleRemoveMatch(c.plate)} title="Remove tracker match" aria-label="Remove tracker match" style={btnX}>×</button>
                 </td>
