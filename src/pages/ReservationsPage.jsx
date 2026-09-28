@@ -124,10 +124,13 @@ export default function ReservationsPage({ staffName, role }) {
   const days = daysInMonth(year, month);
   const fleetTypes = useMemo(() => [...new Set(fleet.map(c => c.type).filter(Boolean))].sort(), [fleet]);
 
-  // Urgent = no plate assigned + pickup within 5 days
+  // Urgent = no plate assigned + pickup within 5 days. Cancelled and
+  // Fulfilled bookings never count: a fulfilled one got its car (possibly
+  // auto-resolved when the car went out), and a cancelled one needs nothing.
   const urgentReservations = useMemo(() => {
     const now = new Date(); now.setHours(0,0,0,0);
     return reservations.filter(r => {
+      if (r.status === "Cancelled" || r.status === "Fulfilled") return false;
       if (r.bookingType === "Transfer") return false; // Transfers don't need a plate assigned
       if (r.plate) return false; // already has a car assigned
       if (!r.pickupDate) return false;

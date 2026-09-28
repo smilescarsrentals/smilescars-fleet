@@ -11,6 +11,7 @@
 // env var is set; see https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs
 import { checkReservationReminders, checkUnpaidCustomerJobs, checkDisabledTriggers, checkStorageUsage, checkDriverDocumentExpiry, checkCoverNoteExpiry, reconcileFulfilledReservations } from "../lib/notificationTriggers.js";
 import { run } from "../lib/core.js";
+import { reconcileUnassignedReservations } from "../lib/reservationResolve.js";
 import crypto from "node:crypto";
 
 async function logHealth(status, detail) {
@@ -33,6 +34,14 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Runs first, on its own: a reservation it resolves shouldn't still get a
+    // "no car assigned yet" reminder from checkReservationReminders in this
+    // same pass. Isolated with a catch so a problem here can never take down
+    // the other checks below.
+    const unassigned = await reconcileUnassignedReservations().catch((err) => {
+      console.error("reconcileUnassignedReservations failed:", err);
+      return { resolved: 0, examined: 0, error: err.message };
+    });
     const [reminders, unpaid, disabledTriggers, storage, driverDocs, coverNotes, reconciled] = await Promise.all([
       checkReservationReminders(),
       checkUnpaidCustomerJobs(),
@@ -42,8 +51,8 @@ export default async function handler(req, res) {
       checkCoverNoteExpiry(),
       reconcileFulfilledReservations(),
     ]);
-    await logHealth("success", `reminders:${reminders.created} unpaid:${unpaid.created} disabledTriggers:${disabledTriggers.created} storageMB:${storage.mb.toFixed(0)} driverDocs:${driverDocs.created} coverNotes:${coverNotes.created} reconciled:${reconciled.fulfilled}`);
-    return res.status(200).json({ success: true, reminders, unpaid, disabledTriggers, storage, driverDocs, coverNotes, reconciled });
+    await logHealth("success", `reminders:${reminders.created} unpaid:${unpaid.created} disabledTriggers:${disabledTriggers.created} storageMB:${storage.mb.toFixed(0)} driverDocs:${driverDocs.created} coverNotes:${coverNotes.created} reconciled:${reconciled.fulfilled} unassignedResolved:${unassigned.resolved}`);
+    return res.status(200).json({ success: true, reminders, unpaid, disabledTriggers, storage, driverDocs, coverNotes, reconciled, unassigned });
   } catch (err) {
     console.error("Cron notifications error:", err);
     await logHealth("failure", err.message);

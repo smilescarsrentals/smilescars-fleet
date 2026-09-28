@@ -439,9 +439,14 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
         setReservationsData(reservations);
         const now = new Date(); now.setHours(0,0,0,0);
 
-        // Nav badge (assign-car urgency, unchanged trigger): no plate + pickup within 5 days.
+        // Nav badge (assign-car urgency): no plate + pickup within 5 days.
+        // Same definition as the Reservations page's own banner — cancelled
+        // and fulfilled bookings never count, and Transfers don't need a
+        // plate — so the badge and the page can no longer disagree.
         // Admin/Manager see the org-wide total; Staff only see their own.
         const assignUrgent = reservations.filter(r => {
+          if (r.status === "Cancelled" || r.status === "Fulfilled") return false;
+          if (r.bookingType === "Transfer") return false;
           if (r.plate) return false;
           if (!r.pickupDate) return false;
           const diff = Math.ceil((parseLocalDate(r.pickupDate) - now) / (1000*60*60*24));
@@ -464,6 +469,7 @@ export default function Layout({ children, staffName, role, onSignOut, logo }) {
         // "Within 24h" — reservation data only stores a date (no time), so this is
         // approximated at day granularity: pickup is today or tomorrow.
         const within24h = reservations.filter(r => {
+          if (r.status === "Cancelled" || r.status === "Fulfilled") return false;
           if (!r.pickupDate) return false;
           const diff = Math.ceil((parseLocalDate(r.pickupDate) - now) / (1000*60*60*24));
           return diff >= 0 && diff <= 1 && !isCheckedOut(r);
