@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import MultiSelect from "../components/MultiSelect";
@@ -49,7 +49,23 @@ export default function TrackingPage({ staffName }) {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, [viewDay]);
+  // Picking a different date only changes the mileage table. Re-running the
+  // whole load would also re-check the TrackSolid device list (a live API
+  // call whenever its cache is stale) for no reason — and TrackSolid
+  // rate-limits, so needless calls have a real cost.
+  const loadOverviewOnly = async () => {
+    try {
+      setOverview(await api.getTrackerOverviewTable(viewDay));
+      setError("");
+    } catch (e) {
+      setError(e.message || "Couldn't load tracking data.");
+    }
+  };
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; load(); return; }
+    loadOverviewOnly();
+  }, [viewDay]);
 
   const toggle = (imei) => setChecked((c) => ({ ...c, [imei]: !c[imei] }));
 
