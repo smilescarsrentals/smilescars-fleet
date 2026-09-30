@@ -134,7 +134,7 @@ export default function TrackingPage({ staffName }) {
     try {
       const res = await api.runTrackerSyncNow({ staffName });
       await load();
-      let msg = `Synced ${res.day}: ${res.saved} cars' mileage updated, ${res.overLimit} over 100km, ${res.locationsUpdated} locations refreshed.`;
+      let msg = `Synced ${res.day}: ${res.saved} cars' mileage updated, ${res.overLimit} over 100km, ${res.locationsUpdated} locations refreshed (${res.locationsGeocoded || 0} addresses looked up, the rest reused a cached one).`;
       if (res.batchErrors && res.batchErrors.length) {
         msg += `\n\n${res.batchErrors.length} batch(es) failed:\n` + res.batchErrors.map((e) => `• ${e}`).join("\n");
       }
@@ -263,9 +263,12 @@ export default function TrackingPage({ staffName }) {
                 {overview?.isLatestDay && (
                   <td data-label="Current Location">
                     {c.lat != null ? (
-                      <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noreferrer" style={{ color: "var(--sc-blue)" }}>
-                        View on map ↗
-                      </a>
+                      <div>
+                        {c.address && <div style={{ fontSize: 12.5, marginBottom: 2 }}>{c.address}</div>}
+                        <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noreferrer" style={{ color: "var(--sc-blue)", fontSize: 12 }}>
+                          View on map ↗
+                        </a>
+                      </div>
                     ) : <span style={{ color: "var(--text-faint)" }}>—</span>}
                   </td>
                 )}
