@@ -106,6 +106,29 @@ export default function ReservationsPage({ staffName, role }) {
     navigate(location.pathname, { replace: true, state: {} });
   }, []); // run once on mount only — router state is consumed immediately above
 
+  // Arriving from Fleet's "Reserved" indicator (?id=...): jump straight to
+  // that reservation's own detail view. Fetched directly by ID rather than
+  // relying on the normal month-scoped list, since the reservation could be
+  // in a month that isn't loaded (or even visible) yet — this way the
+  // calendar only ever has to jump to a month once we already know it's the
+  // right one, instead of guessing. Cleared from the URL immediately so a
+  // refresh doesn't reopen the same reservation every time.
+  useEffect(() => {
+    const id = new URLSearchParams(location.search).get("id");
+    if (!id) return;
+    navigate(location.pathname, { replace: true });
+    api.getReservationById(id).then((res) => {
+      if (!res.success || !res.data) return;
+      const r = res.data;
+      const relevantDate = r.pickupDate || r.transferDate;
+      if (relevantDate) {
+        const [y, m, d] = relevantDate.split("-").map(Number);
+        setYear(y); setMonth(m); setMobileSelectedDate(d);
+      }
+      setShowDetail(r);
+    }).catch(() => {});
+  }, []); // run once on mount only — the id is consumed and stripped immediately above
+
   const load = async () => {
     setLoading(true);
     try {

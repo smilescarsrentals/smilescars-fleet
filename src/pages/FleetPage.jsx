@@ -50,7 +50,6 @@ export default function FleetPage({ staffName, role }) {
   const [config,       setConfig]       = useState({ staff:[], locations:[], garages:[], drivers:[] });
   const [blacklist,    setBlacklist]    = useState([]);
   const [clients,      setClients]      = useState([]);
-  const [reservations, setReservations] = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [error,     setError]     = useState("");
   const [search,    setSearch]    = useState("");
@@ -83,9 +82,9 @@ export default function FleetPage({ staffName, role }) {
     }
     setLoading(true); setError("");
     try {
-      const [f, c, bl, cl, rv] = await Promise.all([api.getFleet(), api.getConfig(), api.getBlacklist(), api.getClients(), api.getAllReservations()]);
+      const [f, c, bl, cl] = await Promise.all([api.getFleet(), api.getConfig(), api.getBlacklist(), api.getClients()]);
       const fleetData = f.data || [];
-      setFleet(fleetData); setConfig(c); setBlacklist(bl.data || []); setClients(cl.data || []); setReservations(rv.data || []);
+      setFleet(fleetData); setConfig(c); setBlacklist(bl.data || []); setClients(cl.data || []);
       cache.set("fleet", fleetData); cache.set("config", c);
     } catch (e) { setError("Failed to load fleet: " + e.message); }
     finally { setLoading(false); }
@@ -102,18 +101,6 @@ export default function FleetPage({ staffName, role }) {
       daysUntil(c.returnDate) < 0
     ).length;
   }, [fleet, staffName, role]);
-
-  const todayStr2 = `${new Date().getFullYear()}-${pad(new Date().getMonth()+1)}-${pad(new Date().getDate())}`;
-
-  const reservationFor = (plate) => {
-    if (!plate) return null;
-    const norm = plate.trim().toLowerCase().replace(/\s/g,"");
-    return reservations.find(r => {
-      const rNorm = (r.plate||"").trim().toLowerCase().replace(/\s/g,"");
-      return rNorm === norm && r.pickupDate && r.returnDate &&
-        (r.pickupDate >= todayStr2 || (r.pickupDate <= todayStr2 && r.returnDate >= todayStr2));
-    }) || null;
-  };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500); };
 
@@ -556,17 +543,13 @@ export default function FleetPage({ staffName, role }) {
                     <div>
                       <span className={`badge ${badgeClass}`}>{car.status}</span>
                       {car.status==="Maintenance"&&car.garage&&<div style={{ fontSize:11,color:"var(--amber)",marginTop:3,fontWeight:500 }}>🔧 {car.garage}</div>}
-                      {car.status==="Available" && (() => {
-                        const res = reservationFor(car.plate);
-                        if (!res) return null;
-                        const isActive = res.pickupDate <= todayStr2 && res.returnDate >= todayStr2;
-                        return (
-                          <div title={`Reserved for ${res.client} · ${res.pickupDate} → ${res.returnDate}`}
-                            style={{ fontSize:10,fontWeight:600,padding:"2px 7px",marginTop:4,borderRadius:99,display:"inline-block",background:isActive?"var(--yellow-bg)":"var(--yellow-bg)",color:"var(--sc-blue)",border:"1px solid var(--blue-border)",whiteSpace:"nowrap" }}>
-                            {isActive ? "🟣 Reserved" : `📅 Rsv ${res.pickupDate}`}
-                          </div>
-                        );
-                      })()}
+                      {car.status==="Available" && car.upcomingReservation && (
+                        <div onClick={()=>navigate(`/reservations?id=${encodeURIComponent(car.upcomingReservation.id)}`)}
+                          title="Open this reservation"
+                          style={{ fontSize:11,fontWeight:600,padding:"3px 8px",marginTop:4,borderRadius:99,display:"inline-flex",alignItems:"center",gap:4,cursor:"pointer",background:"#f3e8ff",color:"#7c3aed",border:"1px solid #d8b4fe",whiteSpace:"nowrap" }}>
+                          🟣 Reserved: {car.upcomingReservation.client} · {fmtDate(car.upcomingReservation.pickupDate)} →
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td data-label="Client">
@@ -617,7 +600,13 @@ export default function FleetPage({ staffName, role }) {
 
       <div className="sc-fleet-mobile-list">
         {paginated.map(car => {
-          const sc = {
+          // "Reserved" isn't a real fleet.status — it's an Available car
+          // staff have already pre-assigned to an upcoming reservation
+          // (getFleet's upcomingReservation join). Shown as an override only
+          // while the car is genuinely Available; a Rented/Maintenance car
+          // already has its own status line to show.
+          const isReserved = car.status === "Available" && !!car.upcomingReservation;
+          const sc = isReserved ? { bg:"#f3e8ff", fg:"#7c3aed" } : {
             Available:   { bg:"var(--green-bg)", fg:"var(--green)" },
             Rented:      { bg:"var(--blue-bg)",  fg:"var(--sc-blue)" },
             Maintenance: { bg:"var(--amber-bg)", fg:"var(--amber)" },
@@ -633,8 +622,19 @@ export default function FleetPage({ staffName, role }) {
                   <span className="sc-fleet-mcard-plate">{car.plate}</span>
                   <span className="sc-fleet-mcard-type">{car.type}</span>
                 </div>
-                <span className="sc-fleet-mcard-pill" style={{ background:sc.bg, color:sc.fg }}>{car.status}</span>
+                <span className="sc-fleet-mcard-pill" style={{ background:sc.bg, color:sc.fg }}>{isReserved ? "Reserved" : car.status}</span>
               </div>
+
+              {isReserved && (
+                <div className="sc-fleet-mcard-line" style={{ cursor:"pointer" }}
+                  onClick={()=>navigate(`/reservations?id=${encodeURIComponent(car.upcomingReservation.id)}`)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                  <span style={{ fontWeight:600, color:"#7c3aed" }}>Reserved for {car.upcomingReservation.client}</span>
+                  <span style={{ color:"var(--text-faint)" }}> • </span>
+                  <span style={{ fontWeight:700 }}>Pickup {fmtDate(car.upcomingReservation.pickupDate)}</span>
+                  <span style={{ marginLeft:"auto", color:"#7c3aed", fontWeight:700 }}>→</span>
+                </div>
+              )}
 
               {car.status==="Rented" && car.currentClient && (
                 <div className="sc-fleet-mcard-line">

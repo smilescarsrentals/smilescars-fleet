@@ -40,6 +40,7 @@ const READS = {
   getFuel: reads.getFuel,
   getFuelByPlate: reads.getFuelByPlate,
   getReservations: reads.getReservations,
+  getReservationById: reads.getReservationById,
   getAllReservations: () => reads.getReservations({}),
   getBlacklist: reads.getBlacklist,
   getMaintenanceLog: reads.getMaintenanceLog,
