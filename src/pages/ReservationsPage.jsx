@@ -482,40 +482,78 @@ function TypeSearch({ fleetTypes, value, onChange }) {
 }
 
 // ── Add Modal ────────────────────────────────────────────────
+// One reservation row per car in the database — a client booking several
+// cars still means several separate reservations. This just makes filling
+// them in one trip: client details entered once, one block per car, each
+// submitted as its own addReservation call (sequentially — the backend
+// numbers each new ID off the highest one it sees that month, so two calls
+// in flight at once could both compute the same next number).
+const blankCar = (dateStr) => ({ plate: "", carType: "", pickupDate: dateStr, returnDate: "", pickUpCity: "", pickUpFrom: "" });
+
 function AddModal({ day, month, year, staffName, fleet, fleetTypes, prefillLead, onClose, onSaved }) {
   const dateStr = `${year}-${pad(month)}-${pad(day)}`;
   const [bookingType, setBookingType] = useState(prefillLead?.bookingType === "Transfer" ? "Transfer" : "Rental");
-  const [form, setForm] = useState({
-    client: prefillLead?.clientName || "", phone: prefillLead?.phone || "", plate: "", carType: prefillLead?.vehicle || "",
-    pickupDate: prefillLead?.pickupDate || dateStr, returnDate: prefillLead?.returnDate || "",
-    pickUpCity: "", pickUpFrom: prefillLead?.pickUpLocation || "", remarks: prefillLead?.notes || "",
+  const [client, setClient] = useState(prefillLead?.clientName || "");
+  const [phone,  setPhone]  = useState(prefillLead?.phone || "");
+  const [remarks, setRemarks] = useState(prefillLead?.notes || "");
+  const [cars, setCars] = useState([{
+    ...blankCar(prefillLead?.pickupDate || dateStr),
+    carType: prefillLead?.vehicle || "", returnDate: prefillLead?.returnDate || "", pickUpFrom: prefillLead?.pickUpLocation || "",
+  }]);
+  const [transferForm, setTransferForm] = useState({
+    plate: "", carType: prefillLead?.vehicle || "", pickUpCity: "", pickUpFrom: prefillLead?.pickUpLocation || "",
     dropOffCity: "", dropOffTo: "", transferDate: prefillLead?.pickupDate || dateStr,
   });
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState("");
-  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const setTransfer = (k,v) => setTransferForm(f=>({...f,[k]:v}));
+  const setCar = (i,k,v) => setCars(cs => cs.map((c,idx) => idx===i ? {...c,[k]:v} : c));
+  const addCar = () => setCars(cs => [...cs, blankCar(cs[cs.length-1]?.pickupDate || dateStr)]);
+  const removeCar = (i) => setCars(cs => cs.length > 1 ? cs.filter((_,idx) => idx!==i) : cs);
 
   const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const displayDate = `${pad(day)} ${MONTHS_SHORT[month-1]} ${year}`;
 
   const handleSave = async () => {
-    if (!form.client.trim())   { setErr("Client name is required."); return; }
+    if (!client.trim())   { setErr("Client name is required."); return; }
     if (bookingType === "Transfer") {
-      if (!form.transferDate)  { setErr("Transfer date is required."); return; }
+      if (!transferForm.transferDate)  { setErr("Transfer date is required."); return; }
     } else {
-      if (!form.carType.trim())  { setErr("Car type is required."); return; }
-      if (!form.pickupDate)      { setErr("Pickup date is required."); return; }
-      if (!form.returnDate)      { setErr("Return date is required."); return; }
-      if (form.returnDate <= form.pickupDate) { setErr("Return date must be after pickup date."); return; }
+      for (let i = 0; i < cars.length; i++) {
+        const c = cars[i];
+        const label = cars.length > 1 ? `Car ${i+1}: ` : "";
+        if (!c.carType.trim())  { setErr(`${label}Car type is required.`); return; }
+        if (!c.pickupDate)      { setErr(`${label}Pickup date is required.`); return; }
+        if (!c.returnDate)      { setErr(`${label}Return date is required.`); return; }
+        if (c.returnDate <= c.pickupDate) { setErr(`${label}Return date must be after pickup date.`); return; }
+      }
     }
     setSaving(true); setErr("");
     try {
-      const res = await api.addReservation({ ...form, bookingType, staffName });
-      if (prefillLead && res?.id) {
+      const shared = { client, phone, remarks, bookingType, staffName };
+      let firstId = null;
+      if (bookingType === "Transfer") {
+        const res = await api.addReservation({ ...shared, ...transferForm });
+        firstId = res?.id;
+      } else {
+        // Sequential on purpose (see blankCar comment above) — also means a
+        // failure partway through is reported against the specific car that
+        // caused it, with the ones before it already safely saved rather
+        // than lost.
+        for (let i = 0; i < cars.length; i++) {
+          try {
+            const res = await api.addReservation({ ...shared, ...cars[i] });
+            if (i === 0) firstId = res?.id;
+          } catch (e) {
+            throw new Error(cars.length > 1 ? `Car ${i+1} of ${cars.length} failed — the ${i} before it were saved. ${e.message}` : e.message);
+          }
+        }
+      }
+      if (prefillLead && firstId) {
         // Link back to the lead so its record shows what it became — best
-        // effort: the reservation is already saved at this point, so a
+        // effort: the reservation(s) are already saved at this point, so a
         // failure here shouldn't block the user or look like the save failed.
-        api.editLead({ id: prefillLead.id, convertedReservationId: res.id }).catch(() => {});
+        api.editLead({ id: prefillLead.id, convertedReservationId: firstId }).catch(() => {});
       }
       onSaved();
     } catch(e) { setErr(e.message); }
@@ -548,63 +586,79 @@ function AddModal({ day, month, year, staffName, fleet, fleetTypes, prefillLead,
           <div style={S.field}><label style={S.label}>Staff</label><div style={S.readOnly}>{staffName}</div></div>
 
           <div style={S.field}><label style={S.label}>Client Name *</label>
-            <input style={S.input} value={form.client} onChange={e=>set("client",e.target.value)} onBlur={e=>set("client",toTitleCase(e.target.value))} placeholder="Full name" autoFocus /></div>
+            <input style={S.input} value={client} onChange={e=>setClient(e.target.value)} onBlur={e=>setClient(toTitleCase(e.target.value))} placeholder="Full name" autoFocus /></div>
           <div style={S.field}><label style={S.label}>Contact No.</label>
-            <input style={S.input} value={form.phone} onChange={e=>set("phone",e.target.value)} placeholder="+255..." /></div>
+            <input style={S.input} value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+255..." /></div>
 
           <div style={{ height:1,background:"var(--border-light)",margin:"4px 0 12px" }} />
 
           {bookingType === "Rental" ? (
             <>
-              <div style={S.field}><label style={S.label}>Plate No. <span style={{ color:"var(--text-faint)",fontWeight:400 }}>(optional)</span></label>
-                <PlateSearch fleet={fleet} value={form.plate} carType={form.carType}
-                  onChange={(plate,type) => { set("plate",plate); if(type) set("carType",type); }} />
-              </div>
-              <div style={S.field}><label style={S.label}>Car Type *</label>
-                <TypeSearch fleetTypes={fleetTypes||[]} value={form.carType}
-                  onChange={type => set("carType", type)} />
-              </div>
+              {cars.map((c, i) => (
+                <div key={i} style={cars.length > 1 ? { border:"1.5px solid var(--border-light)", borderRadius:9, padding:"12px 12px 4px", marginBottom:14, position:"relative" } : undefined}>
+                  {cars.length > 1 && (
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                      <span style={{ fontSize:12.5, fontWeight:700, color:"var(--sc-blue)" }}>Car {i+1}</span>
+                      <button type="button" onClick={()=>removeCar(i)} title="Remove this car"
+                        style={{ background:"none", border:"none", color:"var(--text-faint)", fontSize:13, cursor:"pointer", padding:"2px 6px" }}>✕ Remove</button>
+                    </div>
+                  )}
+                  <div style={S.field}><label style={S.label}>Plate No. <span style={{ color:"var(--text-faint)",fontWeight:400 }}>(optional)</span></label>
+                    <PlateSearch fleet={fleet} value={c.plate} carType={c.carType}
+                      onChange={(plate,type) => { setCar(i,"plate",plate); if(type) setCar(i,"carType",type); }} />
+                  </div>
+                  <div style={S.field}><label style={S.label}>Car Type *</label>
+                    <TypeSearch fleetTypes={fleetTypes||[]} value={c.carType}
+                      onChange={type => setCar(i,"carType", type)} />
+                  </div>
 
-              <div style={S.two}>
-                <div style={S.field}><label style={S.label}>Pickup Date *</label>
-                  <input style={S.input} type="date" value={form.pickupDate} onChange={e=>set("pickupDate",e.target.value)} /></div>
-                <div style={S.field}><label style={S.label}>Return Date *</label>
-                  <input style={S.input} type="date" value={form.returnDate} min={form.pickupDate} onChange={e=>set("returnDate",e.target.value)} /></div>
-              </div>
+                  <div style={S.two}>
+                    <div style={S.field}><label style={S.label}>Pickup Date *</label>
+                      <input style={S.input} type="date" value={c.pickupDate} onChange={e=>setCar(i,"pickupDate",e.target.value)} /></div>
+                    <div style={S.field}><label style={S.label}>Return Date *</label>
+                      <input style={S.input} type="date" value={c.returnDate} min={c.pickupDate} onChange={e=>setCar(i,"returnDate",e.target.value)} /></div>
+                  </div>
 
-              <div style={S.field}><label style={S.label}>Pick Up Location</label>
-                <LocationPicker city={form.pickUpCity} location={form.pickUpFrom}
-                  onCityChange={c => set("pickUpCity", c)} onLocationChange={l => set("pickUpFrom", l)} /></div>
+                  <div style={S.field}><label style={S.label}>Pick Up Location</label>
+                    <LocationPicker city={c.pickUpCity} location={c.pickUpFrom}
+                      onCityChange={city => setCar(i,"pickUpCity", city)} onLocationChange={l => setCar(i,"pickUpFrom", l)} /></div>
+                </div>
+              ))}
+              <button type="button" onClick={addCar}
+                style={{ width:"100%", padding:"9px 0", marginBottom:14, fontSize:13, fontWeight:600, borderRadius:7, cursor:"pointer", fontFamily:"inherit",
+                  border:"1.5px dashed var(--border)", background:"var(--surface)", color:"var(--sc-blue)" }}>
+                + Add Another Car for {client.trim() || "this client"}
+              </button>
             </>
           ) : (
             <>
               <div style={S.field}><label style={S.label}>Plate No. <span style={{ color:"var(--text-faint)",fontWeight:400 }}>(optional)</span></label>
-                <PlateSearch fleet={fleet} value={form.plate} carType={form.carType}
-                  onChange={(plate,type) => { set("plate",plate); if(type) set("carType",type); }} />
+                <PlateSearch fleet={fleet} value={transferForm.plate} carType={transferForm.carType}
+                  onChange={(plate,type) => { setTransfer("plate",plate); if(type) setTransfer("carType",type); }} />
               </div>
               <div style={S.field}><label style={S.label}>Car Type</label>
-                <TypeSearch fleetTypes={fleetTypes||[]} value={form.carType}
-                  onChange={type => set("carType", type)} />
+                <TypeSearch fleetTypes={fleetTypes||[]} value={transferForm.carType}
+                  onChange={type => setTransfer("carType", type)} />
               </div>
 
               <div style={S.field}><label style={S.label}>Pick Up From</label>
-                <LocationPicker city={form.pickUpCity} location={form.pickUpFrom}
-                  onCityChange={c => set("pickUpCity", c)} onLocationChange={l => set("pickUpFrom", l)} /></div>
+                <LocationPicker city={transferForm.pickUpCity} location={transferForm.pickUpFrom}
+                  onCityChange={c => setTransfer("pickUpCity", c)} onLocationChange={l => setTransfer("pickUpFrom", l)} /></div>
               <div style={S.field}><label style={S.label}>Drop Off To</label>
-                <LocationPicker city={form.dropOffCity} location={form.dropOffTo}
-                  onCityChange={c => set("dropOffCity", c)} onLocationChange={l => set("dropOffTo", l)} /></div>
+                <LocationPicker city={transferForm.dropOffCity} location={transferForm.dropOffTo}
+                  onCityChange={c => setTransfer("dropOffCity", c)} onLocationChange={l => setTransfer("dropOffTo", l)} /></div>
 
               <div style={S.field}><label style={S.label}>Transfer Date *</label>
-                <input style={S.input} type="date" value={form.transferDate} onChange={e=>set("transferDate",e.target.value)} /></div>
+                <input style={S.input} type="date" value={transferForm.transferDate} onChange={e=>setTransfer("transferDate",e.target.value)} /></div>
             </>
           )}
 
           <div style={S.field}><label style={S.label}>Remarks</label>
-            <textarea style={S.textarea} rows={2} value={form.remarks} onChange={e=>set("remarks",e.target.value)} placeholder="Any special notes…" /></div>
+            <textarea style={S.textarea} rows={2} value={remarks} onChange={e=>setRemarks(e.target.value)} placeholder="Any special notes…" /></div>
 
           {err && <p style={S.err}>{err}</p>}
           <button type="button" style={{ ...S.btn,background:"var(--sc-blue)",opacity:saving?0.65:1 }} onClick={handleSave} disabled={saving}>
-            {saving?"Saving…":"Add Reservation"}
+            {saving ? "Saving…" : (bookingType === "Rental" && cars.length > 1) ? `Add ${cars.length} Reservations` : "Add Reservation"}
           </button>
         </div>
       </div>
