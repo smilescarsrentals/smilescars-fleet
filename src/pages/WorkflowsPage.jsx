@@ -26,12 +26,22 @@ function fmtDateTime(iso) {
 }
 // Prefers the PDF-extracted invoice number + client name; falls back to the
 // uploader's own note, then a plain "Invoice" label if neither is present.
+// The ref number itself never changes across a resubmission (see
+// resubmitWorkflowInvoice) — the revision count is shown as its own
+// "(2)"/"(3)" suffix directly on the ref, e.g. "INV-0847 (2) — Acme Co",
+// rather than tacked onto the very end of the whole title.
 function invoiceTitle(inv) {
-  const parts = [];
-  if (inv.invoiceNumber) parts.push(inv.invoiceNumber);
-  if (inv.clientName) parts.push(inv.clientName);
+  const ref = inv.invoiceNumber ? inv.invoiceNumber + (inv.revision > 1 ? ` (${inv.revision})` : "") : "";
+  const parts = [ref, inv.clientName].filter(Boolean);
   if (parts.length) return parts.join(" — ");
   return inv.note || "Invoice";
+}
+
+// "2026-09" -> "September 2026"
+function formatMonth(ym) {
+  if (!/^\d{4}-\d{2}$/.test(ym || "")) return null;
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
 // Mirrors lib/files.js's MAX_FILE_BYTES. Checked client-side, before ever
@@ -166,7 +176,7 @@ function HistoryModal({ staffName, invoice, onClose }) {
     <div style={overlayStyle} onClick={onClose}>
       <div style={modalStyle} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{invoiceTitle(invoice)}{invoice.revision > 1 ? ` (rev ${invoice.revision})` : ""}</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{invoiceTitle(invoice)}</h3>
           <button type="button" onClick={onClose} style={closeBtnStyle}>✕</button>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 0 10px" }}>
@@ -200,20 +210,29 @@ function HistoryModal({ staffName, invoice, onClose }) {
   );
 }
 
+// Default to the current month — the common case, picked less often than
+// typed-and-forgotten.
+function currentMonthValue() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function UploadForm({ staffName, onClose, onSaved }) {
   const [file, setFile] = useState(null);
+  const [month, setMonth] = useState(currentMonthValue());
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
   const submit = async () => {
     if (!file) { setErr("Choose a PDF file first."); return; }
+    if (!month) { setErr("Invoice month is required."); return; }
     const sizeErr = checkFileSize(file);
     if (sizeErr) { setErr(sizeErr); return; }
     setSaving(true); setErr("");
     try {
       const payload = await readFileAsPayload(file);
-      await api.uploadWorkflowInvoice({ staffName, fileBase64: payload.base64, mimeType: payload.mimeType, filename: payload.filename, note });
+      await api.uploadWorkflowInvoice({ staffName, fileBase64: payload.base64, mimeType: payload.mimeType, filename: payload.filename, note, month });
       onSaved();
     } catch (e) { setErr(e.message); }
     finally { setSaving(false); }
@@ -232,8 +251,10 @@ function UploadForm({ staffName, onClose, onSaved }) {
           setFile(f);
           setErr(f ? (checkFileSize(f) || "") : "");
         }} style={{ ...inputStyle, marginBottom: 10 }} />
+        <label style={labelStyle}>Invoice Month *</label>
+        <input type="month" value={month} onChange={e => setMonth(e.target.value)} style={{ ...inputStyle, marginBottom: 10 }} />
         <label style={labelStyle}>Note (optional)</label>
-        <input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. August fuel invoice" style={{ ...inputStyle, marginBottom: 12 }} />
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Fuel station monthly statement" style={{ ...inputStyle, marginBottom: 12 }} />
         {err && <p style={{ color: "#dc2626", fontSize: 12, margin: "0 0 10px" }}>{err}</p>}
         <div style={{ display: "flex", gap: 8 }}>
           <button type="button" onClick={submit} disabled={saving} style={{ ...primaryBtnStyle, opacity: saving ? 0.65 : 1 }}>{saving ? "Uploading…" : "Upload"}</button>
@@ -249,6 +270,7 @@ function UploadForm({ staffName, onClose, onSaved }) {
 // doesn't lose progress on the others.
 function BulkUploadForm({ staffName, onClose, onSaved }) {
   const [files, setFiles] = useState([]); // { file, status: "pending"|"uploading"|"done"|"error", error? }
+  const [month, setMonth] = useState(currentMonthValue()); // one shared month for the whole batch — a bulk upload is assumed to be one month's invoices
   const [uploading, setUploading] = useState(false);
 
   const pickFiles = (fileList) => {
@@ -263,7 +285,7 @@ function BulkUploadForm({ staffName, onClose, onSaved }) {
       setFiles(fs => fs.map((f, idx) => idx === i ? { ...f, status: "uploading" } : f));
       try {
         const payload = await readFileAsPayload(files[i].file);
-        await api.uploadWorkflowInvoice({ staffName, fileBase64: payload.base64, mimeType: payload.mimeType, filename: payload.filename, note: "" });
+        await api.uploadWorkflowInvoice({ staffName, fileBase64: payload.base64, mimeType: payload.mimeType, filename: payload.filename, note: "", month });
         setFiles(fs => fs.map((f, idx) => idx === i ? { ...f, status: "done" } : f));
       } catch (e) {
         setFiles(fs => fs.map((f, idx) => idx === i ? { ...f, status: "error", error: e.message } : f));
@@ -282,6 +304,8 @@ function BulkUploadForm({ staffName, onClose, onSaved }) {
           <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Bulk Upload Invoices</h3>
           {!uploading && <button type="button" onClick={onClose} style={closeBtnStyle}>✕</button>}
         </div>
+        <label style={labelStyle}>Invoice Month * <span style={{ fontWeight: 400 }}>(applies to every file in this batch)</span></label>
+        <input type="month" value={month} disabled={uploading} onChange={e => setMonth(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
         {files.length === 0 ? (
           <>
             <label style={labelStyle}>PDF Files</label>
@@ -345,7 +369,12 @@ function InvoiceCard({ staffName, invoice, canApprove, canUpload, onOpenHistory,
       style={{ padding: "12px 14px", border: "1px solid #e5e7eb", borderRadius: 10, background: "#fff", cursor: "pointer" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{invoiceTitle(invoice)}{invoice.revision > 1 ? ` (rev ${invoice.revision})` : ""}</div>
+          {invoice.invoiceMonth && (
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--sc-blue, #04519B)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 2 }}>
+              {formatMonth(invoice.invoiceMonth)}
+            </div>
+          )}
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{invoiceTitle(invoice)}</div>
           <div style={{ fontSize: 11, color: "#888" }}>{invoice.uploadedBy} · {fmtDateTime(invoice.uploadedAt)}</div>
         </div>
         <StatusBadge status={invoice.status} />
@@ -380,10 +409,32 @@ function InvoiceCard({ staffName, invoice, canApprove, canUpload, onOpenHistory,
   );
 }
 
+const STATUS_FILTERS = ["All", "Pending", "Approved", "Changes Requested"];
+
+// Newest month first; invoices with no month (every invoice uploaded before
+// this field existed) collect into one group at the very end rather than
+// being scattered or hidden.
+const NO_MONTH_KEY = "__no_month__";
+function groupByMonth(invoices) {
+  const groups = new Map();
+  for (const inv of invoices) {
+    const key = inv.invoiceMonth || NO_MONTH_KEY;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(inv);
+  }
+  const keys = [...groups.keys()].sort((a, b) => {
+    if (a === NO_MONTH_KEY) return 1;
+    if (b === NO_MONTH_KEY) return -1;
+    return b.localeCompare(a);
+  });
+  return keys.map((key) => ({ key, label: key === NO_MONTH_KEY ? "No Month Set" : formatMonth(key), items: groups.get(key) }));
+}
+
 export default function WorkflowsPage({ staffName, role }) {
   const [loading, setLoading] = useState(true);
   const [access, setAccess] = useState(role === "Admin" ? "Approve" : "None");
   const [invoices, setInvoices] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("All");
   const [showUpload, setShowUpload] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [historyFor, setHistoryFor] = useState(null);
@@ -417,6 +468,8 @@ export default function WorkflowsPage({ staffName, role }) {
   const canUpload = access === "Upload" || access === "Approve";
   const canApprove = access === "Approve";
   const historyForFresh = historyFor ? invoices.find(i => i.id === historyFor.id) : null;
+  const filtered = statusFilter === "All" ? invoices : invoices.filter(inv => inv.status === statusFilter);
+  const grouped = groupByMonth(filtered);
 
   return (
     <div style={{ padding: 24, maxWidth: 760 }}>
@@ -430,13 +483,36 @@ export default function WorkflowsPage({ staffName, role }) {
         )}
       </div>
 
-      {invoices.length === 0 ? (
-        <p style={{ fontSize: 13, color: "#888" }}>No invoices yet.</p>
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+        {STATUS_FILTERS.map(s => (
+          <button key={s} type="button" onClick={() => setStatusFilter(s)}
+            style={{
+              padding: "5px 12px", fontSize: 12, fontWeight: 600, borderRadius: 999, cursor: "pointer", fontFamily: "inherit",
+              border: `1.5px solid ${statusFilter === s ? "var(--sc-blue, #04519B)" : "#e5e7eb"}`,
+              background: statusFilter === s ? "var(--sc-blue, #04519B)" : "#fff",
+              color: statusFilter === s ? "#fff" : "#555",
+            }}>
+            {s}{s !== "All" && ` (${invoices.filter(i => i.status === s).length})`}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <p style={{ fontSize: 13, color: "#888" }}>{invoices.length === 0 ? "No invoices yet." : `No ${statusFilter.toLowerCase()} invoices.`}</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {invoices.map(inv => (
-            <InvoiceCard key={inv.id} staffName={staffName} invoice={inv} canApprove={canApprove} canUpload={canUpload}
-              onOpenHistory={setHistoryFor} onChanged={loadInvoices} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          {grouped.map(group => (
+            <div key={group.key}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: ".3px", margin: "0 0 8px" }}>
+                {group.label} <span style={{ fontWeight: 500, textTransform: "none" }}>({group.items.length})</span>
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {group.items.map(inv => (
+                  <InvoiceCard key={inv.id} staffName={staffName} invoice={inv} canApprove={canApprove} canUpload={canUpload}
+                    onOpenHistory={setHistoryFor} onChanged={loadInvoices} />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
