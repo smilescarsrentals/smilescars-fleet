@@ -39,7 +39,7 @@ export default async function handler(req, res) {
   try {
     trackerResult = await runFullSync();
     await logHealth("cron-tracker-sync", "success",
-      `day:${trackerResult.day} checked:${trackerResult.carsChecked} saved:${trackerResult.saved} overLimit:${trackerResult.overLimit} skipped:${trackerResult.skipped} locations:${trackerResult.locationsUpdated} geocoded:${trackerResult.locationsGeocoded || 0}`);
+      `day:${trackerResult.day} checked:${trackerResult.carsChecked} saved:${trackerResult.saved} overLimit:${trackerResult.overLimit} skipped:${trackerResult.skipped} locations:${trackerResult.locationsUpdated} geocoded:${trackerResult.locationsGeocoded || 0} geocodeFailed:${trackerResult.locationsGeocodeFailed || 0}`);
   } catch (err) {
     console.error("Cron tracker sync error:", err);
     trackerError = err.message;

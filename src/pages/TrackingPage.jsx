@@ -134,7 +134,10 @@ export default function TrackingPage({ staffName }) {
     try {
       const res = await api.runTrackerSyncNow({ staffName });
       await load();
-      let msg = `Synced ${res.day}: ${res.saved} cars' mileage updated, ${res.overLimit} over 100km, ${res.locationsUpdated} locations refreshed (${res.locationsGeocoded || 0} addresses looked up, the rest reused a cached one).`;
+      let msg = `Synced ${res.day}: ${res.saved} cars' mileage updated, ${res.overLimit} over 100km, ${res.locationsUpdated} locations refreshed (${res.locationsGeocoded || 0} addresses looked up, the rest reused a cached one)`;
+      msg += res.locationsGeocodeFailed
+        ? ` — ${res.locationsGeocodeFailed} address lookup${res.locationsGeocodeFailed === 1 ? "" : "s"} FAILED (not cached — a real error, check with support).`
+        : ".";
       if (res.batchErrors && res.batchErrors.length) {
         msg += `\n\n${res.batchErrors.length} batch(es) failed:\n` + res.batchErrors.map((e) => `• ${e}`).join("\n");
       }
@@ -237,13 +240,13 @@ export default function TrackingPage({ staffName }) {
             <tr>{[
               "Plate",
               `KM Driven (${overview?.mileageDay ? new Date(overview.mileageDay).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"})`,
-              ...(overview?.isLatestDay ? ["Current Location"] : []),
+              ...(overview?.isLatestDay ? ["Address", "Map"] : []),
               "",
             ].map((h) => <th key={h} data-label={h}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={overview?.isLatestDay ? 4 : 3} style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-faint)", fontSize: 14 }}>No cars match your filters.</td></tr>
+              <tr><td colSpan={overview?.isLatestDay ? 5 : 3} style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-faint)", fontSize: 14 }}>No cars match your filters.</td></tr>
             )}
             {pageRows.map((c) => (
               <tr key={c.plate} style={c.overLimit ? { background: "var(--red-bg, #fef2f2)" } : {}}>
@@ -261,16 +264,20 @@ export default function TrackingPage({ staffName }) {
                   ) : <span style={{ color: "var(--text-faint)", fontStyle: "italic" }} title="TrackSolid didn't log a trip for this car that day — either it genuinely didn't move, or its tracker had no signal. We can't tell which from this data.">No movement recorded</span>}
                 </td>
                 {overview?.isLatestDay && (
-                  <td data-label="Current Location">
-                    {c.lat != null ? (
-                      <div>
-                        {c.address && <div style={{ fontSize: 12.5, marginBottom: 2 }}>{c.address}</div>}
-                        <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noreferrer" style={{ color: "var(--sc-blue)", fontSize: 12 }}>
+                  <>
+                    <td data-label="Address">
+                      {c.address ? c.address
+                        : c.lat != null ? <span style={{ color: "var(--text-faint)", fontStyle: "italic" }} title="Coordinates are in, but no street address has been looked up for this car yet.">Not looked up yet</span>
+                        : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                    </td>
+                    <td data-label="Map">
+                      {c.lat != null ? (
+                        <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noreferrer" style={{ color: "var(--sc-blue)" }}>
                           View on map ↗
                         </a>
-                      </div>
-                    ) : <span style={{ color: "var(--text-faint)" }}>—</span>}
-                  </td>
+                      ) : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                    </td>
+                  </>
                 )}
                 <td data-label="">
                   <button onClick={() => handleRemoveMatch(c.plate)} title="Remove tracker match" aria-label="Remove tracker match" style={btnX}>×</button>
